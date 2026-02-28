@@ -12,6 +12,43 @@ interface PinRecord {
   lockUntilEpochMs: number | null;
 }
 
+function canUseLocalStorage(): boolean {
+  return typeof globalThis !== "undefined" && "localStorage" in globalThis;
+}
+
+async function getSecureValue(key: string): Promise<string | null> {
+  try {
+    return await SecureStore.getItemAsync(key);
+  } catch {
+    if (canUseLocalStorage()) {
+      return globalThis.localStorage.getItem(key);
+    }
+    return null;
+  }
+}
+
+async function setSecureValue(key: string, value: string): Promise<void> {
+  try {
+    await SecureStore.setItemAsync(key, value);
+    return;
+  } catch {
+    if (canUseLocalStorage()) {
+      globalThis.localStorage.setItem(key, value);
+    }
+  }
+}
+
+async function deleteSecureValue(key: string): Promise<void> {
+  try {
+    await SecureStore.deleteItemAsync(key);
+    return;
+  } catch {
+    if (canUseLocalStorage()) {
+      globalThis.localStorage.removeItem(key);
+    }
+  }
+}
+
 export interface PinVerifyResult {
   success: boolean;
   lockedUntilEpochMs: number | null;
@@ -36,7 +73,7 @@ async function computeSaltedHash(pin: string, saltHex: string): Promise<string> 
 }
 
 async function readRecord(): Promise<PinRecord | null> {
-  const raw = await SecureStore.getItemAsync(PIN_RECORD_KEY);
+  const raw = await getSecureValue(PIN_RECORD_KEY);
   if (!raw) {
     return null;
   }
@@ -64,7 +101,7 @@ async function readRecord(): Promise<PinRecord | null> {
 }
 
 async function writeRecord(record: PinRecord): Promise<void> {
-  await SecureStore.setItemAsync(PIN_RECORD_KEY, JSON.stringify(record));
+  await setSecureValue(PIN_RECORD_KEY, JSON.stringify(record));
 }
 
 export async function hasPinAsync(): Promise<boolean> {
@@ -73,7 +110,7 @@ export async function hasPinAsync(): Promise<boolean> {
 }
 
 export async function clearPinAsync(): Promise<void> {
-  await SecureStore.deleteItemAsync(PIN_RECORD_KEY);
+  await deleteSecureValue(PIN_RECORD_KEY);
 }
 
 export async function setPinAsync(pin: string): Promise<void> {

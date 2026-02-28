@@ -46,6 +46,43 @@ interface GraphListResponse {
   value?: GraphFolderItem[];
 }
 
+function canUseLocalStorage(): boolean {
+  return typeof globalThis !== "undefined" && "localStorage" in globalThis;
+}
+
+async function getSecureValue(key: string): Promise<string | null> {
+  try {
+    return await SecureStore.getItemAsync(key);
+  } catch {
+    if (canUseLocalStorage()) {
+      return globalThis.localStorage.getItem(key);
+    }
+    return null;
+  }
+}
+
+async function setSecureValue(key: string, value: string): Promise<void> {
+  try {
+    await SecureStore.setItemAsync(key, value);
+    return;
+  } catch {
+    if (canUseLocalStorage()) {
+      globalThis.localStorage.setItem(key, value);
+    }
+  }
+}
+
+async function deleteSecureValue(key: string): Promise<void> {
+  try {
+    await SecureStore.deleteItemAsync(key);
+    return;
+  } catch {
+    if (canUseLocalStorage()) {
+      globalThis.localStorage.removeItem(key);
+    }
+  }
+}
+
 function assertClientId(): string {
   if (!CLIENT_ID || CLIENT_ID.trim().length === 0) {
     throw new Error("OneDrive OAuth is not configured. Set EXPO_PUBLIC_ONEDRIVE_CLIENT_ID.");
@@ -61,7 +98,7 @@ function isTokenExpired(record: OneDriveTokenRecord): boolean {
 }
 
 async function saveTokens(record: OneDriveTokenRecord): Promise<void> {
-  await SecureStore.setItemAsync(TOKEN_KEY, JSON.stringify(record));
+  await setSecureValue(TOKEN_KEY, JSON.stringify(record));
 }
 
 async function getValidAccessToken(): Promise<string> {
@@ -116,12 +153,12 @@ export function getOneDriveRedirectUri(): string {
 }
 
 export async function hasOneDriveConnection(): Promise<boolean> {
-  const existing = await SecureStore.getItemAsync(TOKEN_KEY);
+  const existing = await getSecureValue(TOKEN_KEY);
   return existing !== null;
 }
 
 export async function getStoredOneDriveTokens(): Promise<OneDriveTokenRecord | null> {
-  const existing = await SecureStore.getItemAsync(TOKEN_KEY);
+  const existing = await getSecureValue(TOKEN_KEY);
   if (!existing) {
     return null;
   }
@@ -177,12 +214,12 @@ export async function connectOneDrive(): Promise<OneDriveTokenRecord> {
 }
 
 export async function disconnectOneDrive(): Promise<void> {
-  await SecureStore.deleteItemAsync(TOKEN_KEY);
-  await SecureStore.deleteItemAsync(FOLDER_SELECTION_KEY);
+  await deleteSecureValue(TOKEN_KEY);
+  await deleteSecureValue(FOLDER_SELECTION_KEY);
 }
 
 export async function getSelectedOneDriveFolder(): Promise<OneDriveFolderSelection | null> {
-  const raw = await SecureStore.getItemAsync(FOLDER_SELECTION_KEY);
+  const raw = await getSecureValue(FOLDER_SELECTION_KEY);
   if (!raw) {
     return null;
   }
@@ -199,7 +236,7 @@ export async function getSelectedOneDriveFolder(): Promise<OneDriveFolderSelecti
 }
 
 export async function setSelectedOneDriveFolder(folder: OneDriveFolderSelection): Promise<void> {
-  await SecureStore.setItemAsync(FOLDER_SELECTION_KEY, JSON.stringify(folder));
+  await setSecureValue(FOLDER_SELECTION_KEY, JSON.stringify(folder));
 }
 
 export async function listOneDriveFolders(): Promise<OneDriveFolder[]> {
