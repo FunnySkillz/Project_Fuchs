@@ -1,7 +1,6 @@
 import React from "react";
-import { StyleSheet, TextInput, type TextInputProps } from "react-native";
+import { TextInput, type TextInputProps } from "react-native";
 
-import { UiTokens } from "@/components/ui/tokens";
 import { useTheme } from "@/hooks/use-theme";
 
 export function TextArea(props: TextInputProps) {
@@ -12,20 +11,8 @@ export function TextArea(props: TextInputProps) {
       textAlignVertical="top"
       placeholderTextColor={theme.textSecondary}
       {...props}
-      style={[styles.textArea, { color: theme.text }, props.style]}
+      style={[{ color: theme.text }, props.style]}
+      className="min-h-textarea rounded-ui-md border border-ui-border bg-ui-surface px-ui-md py-ui-sm text-base"
     />
   );
 }
-
-const styles = StyleSheet.create({
-  textArea: {
-    minHeight: UiTokens.minHeight.textarea,
-    borderWidth: UiTokens.borderWidth.thin,
-    borderColor: "#9BA1A6",
-    borderRadius: UiTokens.radius.md,
-    paddingHorizontal: UiTokens.spacing.md,
-    paddingVertical: UiTokens.spacing.sm,
-    fontSize: UiTokens.fontSize.md,
-    backgroundColor: "#FFFFFF",
-  },
-});

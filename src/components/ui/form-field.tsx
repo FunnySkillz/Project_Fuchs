@@ -1,8 +1,7 @@
 import React from "react";
-import { StyleSheet, View, type ViewProps } from "react-native";
+import { View, type ViewProps } from "react-native";
 
 import { ThemedText } from "@/components/themed-text";
-import { UiTokens } from "@/components/ui/tokens";
 
 interface FormFieldProps extends ViewProps {
   label: string;
@@ -12,20 +11,11 @@ interface FormFieldProps extends ViewProps {
 
 export function FormField({ label, error, hint, children, style, ...props }: FormFieldProps) {
   return (
-    <View {...props} style={[styles.base, style]}>
+    <View {...props} style={style} className="gap-ui-xs">
       <ThemedText type="smallBold">{label}</ThemedText>
       {children}
-      {error ? <ThemedText style={styles.error}>{error}</ThemedText> : null}
+      {error ? <ThemedText style={{ color: "#B00020" }}>{error}</ThemedText> : null}
       {!error && hint ? <ThemedText type="small" themeColor="textSecondary">{hint}</ThemedText> : null}
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  base: {
-    gap: UiTokens.spacing.xs,
-  },
-  error: {
-    color: "#B00020",
-  },
-});

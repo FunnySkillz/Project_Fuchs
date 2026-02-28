@@ -1,8 +1,7 @@
 import React, { useMemo, useState } from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { Modal, Pressable, ScrollView, TextInput, View } from "react-native";
 
 import { ThemedText } from "@/components/themed-text";
-import { UiTokens } from "@/components/ui/tokens";
 import { useTheme } from "@/hooks/use-theme";
 
 export interface SelectOption {
@@ -14,50 +13,95 @@ interface SelectProps {
   value: string | null;
   options: SelectOption[];
   placeholder?: string;
+  searchable?: boolean;
   onChange: (nextValue: string) => void;
 }
 
-export function Select({ value, options, placeholder = "Select...", onChange }: SelectProps) {
+export function Select({
+  value,
+  options,
+  placeholder = "Select...",
+  searchable = true,
+  onChange,
+}: SelectProps) {
   const theme = useTheme();
   const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+
   const selectedLabel = useMemo(
     () => options.find((option) => option.value === value)?.label ?? placeholder,
     [options, placeholder, value]
   );
 
+  const filteredOptions = useMemo(() => {
+    const normalized = query.trim().toLowerCase();
+    if (!normalized) {
+      return options;
+    }
+    return options.filter((option) => option.label.toLowerCase().includes(normalized));
+  }, [options, query]);
+
   return (
     <>
       <Pressable
-        style={({ pressed }) => [
-          styles.trigger,
-          { backgroundColor: "#FFFFFF" },
-          pressed && styles.pressed,
-        ]}
-        onPress={() => setOpen(true)}>
+        onPress={() => {
+          setOpen(true);
+          setQuery("");
+        }}
+        accessibilityRole="button"
+        style={({ pressed }) => (pressed ? { opacity: 0.8 } : null)}
+        className="min-h-control rounded-ui-md border border-ui-border bg-ui-surface px-ui-md py-ui-sm justify-center">
         <ThemedText>{selectedLabel}</ThemedText>
       </Pressable>
 
       <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
-        <View style={styles.overlay}>
-          <View style={[styles.sheet, { backgroundColor: theme.background }]}>
-            <ScrollView contentContainerStyle={styles.optionsContainer}>
-              {options.map((option) => (
+        <View className="flex-1 bg-ui-overlay justify-center p-ui-md">
+          <View className="rounded-ui-lg border border-ui-border bg-ui-surface max-h-[70%]">
+            {searchable ? (
+              <View className="p-ui-sm border-b border-ui-borderSoft">
+                <TextInput
+                  value={query}
+                  onChangeText={setQuery}
+                  placeholder="Search..."
+                  placeholderTextColor={theme.textSecondary}
+                  className="min-h-control rounded-ui-md border border-ui-border bg-ui-surface px-ui-md py-ui-sm text-base"
+                  style={{ color: theme.text }}
+                />
+              </View>
+            ) : null}
+
+            <ScrollView contentContainerClassName="p-ui-sm gap-ui-xs">
+              {filteredOptions.map((option) => (
                 <Pressable
                   key={option.value}
-                  style={({ pressed }) => [
-                    styles.optionRow,
-                    pressed && styles.pressed,
-                    option.value === value && { borderColor: theme.text },
-                  ]}
                   onPress={() => {
                     onChange(option.value);
                     setOpen(false);
-                  }}>
+                  }}
+                  accessibilityRole="button"
+                  style={({ pressed }) => (pressed ? { opacity: 0.75 } : null)}
+                  className={`min-h-control rounded-ui-md border px-ui-md py-ui-sm justify-center ${
+                    option.value === value
+                      ? "border-ui-primary bg-blue-50"
+                      : "border-ui-borderSoft bg-ui-surface"
+                  }`}>
                   <ThemedText>{option.label}</ThemedText>
                 </Pressable>
               ))}
+              {filteredOptions.length === 0 ? (
+                <View className="min-h-control rounded-ui-md border border-ui-borderSoft px-ui-md py-ui-sm justify-center">
+                  <ThemedText type="small" themeColor="textSecondary">
+                    No results.
+                  </ThemedText>
+                </View>
+              ) : null}
             </ScrollView>
-            <Pressable style={styles.closeButton} onPress={() => setOpen(false)}>
+
+            <Pressable
+              onPress={() => setOpen(false)}
+              accessibilityRole="button"
+              style={({ pressed }) => (pressed ? { opacity: 0.75 } : null)}
+              className="min-h-control border-t border-ui-borderSoft items-center justify-center">
               <ThemedText type="smallBold">Close</ThemedText>
             </Pressable>
           </View>
@@ -66,47 +110,3 @@ export function Select({ value, options, placeholder = "Select...", onChange }: 
     </>
   );
 }
-
-const styles = StyleSheet.create({
-  trigger: {
-    minHeight: UiTokens.minHeight.control,
-    borderWidth: UiTokens.borderWidth.thin,
-    borderColor: "#9BA1A6",
-    borderRadius: UiTokens.radius.md,
-    justifyContent: "center",
-    paddingHorizontal: UiTokens.spacing.md,
-    paddingVertical: UiTokens.spacing.sm,
-  },
-  overlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.35)",
-    justifyContent: "center",
-    padding: UiTokens.spacing.md,
-  },
-  sheet: {
-    borderRadius: UiTokens.radius.lg,
-    borderWidth: UiTokens.borderWidth.thin,
-    borderColor: "#9BA1A6",
-    maxHeight: "70%",
-  },
-  optionsContainer: {
-    padding: UiTokens.spacing.sm,
-    gap: UiTokens.spacing.xs,
-  },
-  optionRow: {
-    borderWidth: UiTokens.borderWidth.thin,
-    borderColor: "#D6D8DB",
-    borderRadius: UiTokens.radius.md,
-    paddingHorizontal: UiTokens.spacing.md,
-    paddingVertical: UiTokens.spacing.sm,
-  },
-  closeButton: {
-    borderTopWidth: UiTokens.borderWidth.thin,
-    borderColor: "#D6D8DB",
-    alignItems: "center",
-    paddingVertical: UiTokens.spacing.sm,
-  },
-  pressed: {
-    opacity: 0.75,
-  },
-});

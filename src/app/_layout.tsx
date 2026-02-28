@@ -3,6 +3,7 @@ import * as LocalAuthentication from "expo-local-authentication";
 import { Redirect, Slot, useSegments } from "expo-router";
 import React, { useCallback, useEffect, useRef } from "react";
 import { AppState, type AppStateStatus, useColorScheme } from "react-native";
+import "../../global.css";
 
 import { AppLockGate } from "@/components/app-lock-gate";
 import { AnimatedSplashOverlay } from "@/components/animated-icon";

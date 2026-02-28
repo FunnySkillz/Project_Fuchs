@@ -1,28 +1,6 @@
 import React from "react";
-import { StyleSheet, View, type ViewProps } from "react-native";
-
-import { UiTokens } from "@/components/ui/tokens";
-import { useTheme } from "@/hooks/use-theme";
+import { View, type ViewProps } from "react-native";
 
 export function Card({ style, ...props }: ViewProps) {
-  const theme = useTheme();
-  return (
-    <View
-      {...props}
-      style={[
-        styles.base,
-        { backgroundColor: theme.backgroundElement, borderColor: theme.backgroundSelected },
-        style,
-      ]}
-    />
-  );
+  return <View {...props} style={style} className="rounded-ui-lg border border-ui-border bg-ui-card p-ui-md gap-ui-sm" />;
 }
-
-const styles = StyleSheet.create({
-  base: {
-    borderRadius: UiTokens.radius.lg,
-    borderWidth: UiTokens.borderWidth.thin,
-    padding: UiTokens.spacing.md,
-    gap: UiTokens.spacing.sm,
-  },
-});
