@@ -250,6 +250,16 @@ Build preview:
 eas build --profile preview
 ```
 
+Release/internal testing:
+
+```bash
+# Android internal APK
+eas build --platform android --profile preview
+
+# iOS internal/TestFlight candidate
+eas build --platform ios --profile preview
+```
+
 ## Security & Privacy
 
 - No backend
