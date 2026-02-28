@@ -10,6 +10,7 @@ interface ProfileSettingsRow {
   gwgThresholdCents: number;
   applyHalfYearRule: number;
   appLockEnabled: number;
+  uploadToOneDriveAfterExport: number;
   currency: string;
 }
 
@@ -46,6 +47,7 @@ export class SQLiteProfileSettingsRepository implements ProfileSettingsRepositor
         GwgThresholdCents AS gwgThresholdCents,
         ApplyHalfYearRule AS applyHalfYearRule,
         AppLockEnabled AS appLockEnabled,
+        UploadToOneDriveAfterExport AS uploadToOneDriveAfterExport,
         Currency AS currency
       FROM ProfileSettings
       WHERE Id = $id AND DeletedAt IS NULL
@@ -66,6 +68,7 @@ export class SQLiteProfileSettingsRepository implements ProfileSettingsRepositor
       gwgThresholdCents: row.gwgThresholdCents,
       applyHalfYearRule: row.applyHalfYearRule === 1,
       appLockEnabled: row.appLockEnabled === 1,
+      uploadToOneDriveAfterExport: row.uploadToOneDriveAfterExport === 1,
       currency: row.currency === "EUR" ? "EUR" : "EUR",
     });
   }
@@ -87,9 +90,10 @@ export class SQLiteProfileSettingsRepository implements ProfileSettingsRepositor
         GwgThresholdCents,
         ApplyHalfYearRule,
         AppLockEnabled,
+        UploadToOneDriveAfterExport,
         Currency,
         DeletedAt
-      ) VALUES ($id, $taxYearDefault, $marginalRateBps, $defaultWorkPercent, $gwgThresholdCents, $applyHalfYearRule, $appLockEnabled, $currency, NULL)
+      ) VALUES ($id, $taxYearDefault, $marginalRateBps, $defaultWorkPercent, $gwgThresholdCents, $applyHalfYearRule, $appLockEnabled, $uploadToOneDriveAfterExport, $currency, NULL)
       ON CONFLICT(Id) DO UPDATE SET
         TaxYearDefault = excluded.TaxYearDefault,
         MarginalRateBps = excluded.MarginalRateBps,
@@ -97,6 +101,7 @@ export class SQLiteProfileSettingsRepository implements ProfileSettingsRepositor
         GwgThresholdCents = excluded.GwgThresholdCents,
         ApplyHalfYearRule = excluded.ApplyHalfYearRule,
         AppLockEnabled = excluded.AppLockEnabled,
+        UploadToOneDriveAfterExport = excluded.UploadToOneDriveAfterExport,
         Currency = excluded.Currency,
         DeletedAt = NULL;`,
       {
@@ -107,6 +112,7 @@ export class SQLiteProfileSettingsRepository implements ProfileSettingsRepositor
         $gwgThresholdCents: settings.gwgThresholdCents,
         $applyHalfYearRule: settings.applyHalfYearRule ? 1 : 0,
         $appLockEnabled: settings.appLockEnabled ? 1 : 0,
+        $uploadToOneDriveAfterExport: settings.uploadToOneDriveAfterExport ? 1 : 0,
         $currency: settings.currency,
       }
     );

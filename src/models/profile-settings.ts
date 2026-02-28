@@ -5,6 +5,7 @@ export interface ProfileSettings {
   gwgThresholdCents: number;
   applyHalfYearRule: boolean;
   appLockEnabled: boolean;
+  uploadToOneDriveAfterExport: boolean;
   currency: "EUR";
 }
 
@@ -20,6 +21,7 @@ export function createDefaultProfileSettings(now: Date = new Date()): ProfileSet
     gwgThresholdCents: DEFAULT_GWG_THRESHOLD_CENTS,
     applyHalfYearRule: false,
     appLockEnabled: false,
+    uploadToOneDriveAfterExport: false,
     currency: "EUR",
   };
 }

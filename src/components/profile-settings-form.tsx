@@ -17,6 +17,7 @@ export interface ProfileSettingsFormValues {
   gwgThresholdCents: number;
   applyHalfYearRule: boolean;
   appLockEnabled: boolean;
+  uploadToOneDriveAfterExport: boolean;
 }
 
 interface Props {
@@ -60,6 +61,9 @@ export function ProfileSettingsForm({
   );
   const [applyHalfYearRule, setApplyHalfYearRule] = useState(initialValues.applyHalfYearRule);
   const [appLockEnabled, setAppLockEnabled] = useState(initialValues.appLockEnabled);
+  const [uploadToOneDriveAfterExport, setUploadToOneDriveAfterExport] = useState(
+    initialValues.uploadToOneDriveAfterExport
+  );
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
@@ -70,6 +74,7 @@ export function ProfileSettingsForm({
     setGwgThresholdEuros(String((initialValues.gwgThresholdCents / 100).toFixed(2)));
     setApplyHalfYearRule(initialValues.applyHalfYearRule);
     setAppLockEnabled(initialValues.appLockEnabled);
+    setUploadToOneDriveAfterExport(initialValues.uploadToOneDriveAfterExport);
   }, [initialValues]);
 
   const validation = useMemo(() => {
@@ -119,6 +124,7 @@ export function ProfileSettingsForm({
         gwgThresholdCents: Math.round(parsedGwgThresholdEuros * 100),
         applyHalfYearRule,
         appLockEnabled,
+        uploadToOneDriveAfterExport,
       },
     } as const;
   }, [
@@ -128,6 +134,7 @@ export function ProfileSettingsForm({
     gwgThresholdEuros,
     marginalRatePercent,
     taxYearDefault,
+    uploadToOneDriveAfterExport,
   ]);
 
   React.useEffect(() => {
@@ -214,6 +221,13 @@ export function ProfileSettingsForm({
             onPress={() => setAppLockEnabled((current) => !current)}>
             <ThemedText type="smallBold">App Lock</ThemedText>
             <ThemedText>{appLockEnabled ? "Enabled" : "Disabled"}</ThemedText>
+          </Pressable>
+
+          <Pressable
+            style={({ pressed }) => [styles.toggleRow, pressed && styles.pressed]}
+            onPress={() => setUploadToOneDriveAfterExport((current) => !current)}>
+            <ThemedText type="smallBold">Upload to OneDrive After Export</ThemedText>
+            <ThemedText>{uploadToOneDriveAfterExport ? "Enabled" : "Disabled"}</ThemedText>
           </Pressable>
         </>
       )}

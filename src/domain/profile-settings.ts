@@ -67,6 +67,8 @@ export function normalizeProfileSettings(
     ),
     applyHalfYearRule: partial.applyHalfYearRule ?? fallback.applyHalfYearRule,
     appLockEnabled: partial.appLockEnabled ?? fallback.appLockEnabled,
+    uploadToOneDriveAfterExport:
+      partial.uploadToOneDriveAfterExport ?? fallback.uploadToOneDriveAfterExport,
     currency: "EUR",
   };
 }

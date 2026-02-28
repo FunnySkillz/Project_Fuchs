@@ -1,0 +1,3 @@
+export const MIGRATION_0003_UPLOAD_TOGGLE_COLUMN = `
+ALTER TABLE ProfileSettings ADD COLUMN UploadToOneDriveAfterExport INTEGER NOT NULL DEFAULT 0;
+`;
