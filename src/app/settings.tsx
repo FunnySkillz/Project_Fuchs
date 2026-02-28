@@ -1,11 +1,17 @@
 import React, { useEffect, useState } from "react";
-import { ScrollView, StyleSheet, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, TextInput, View } from "react-native";
 
 import { ProfileSettingsForm, type ProfileSettingsFormValues } from "@/components/profile-settings-form";
 import { ThemedText } from "@/components/themed-text";
 import { createDefaultProfileSettings, type ProfileSettings } from "@/models/profile-settings";
 import { getProfileSettingsRepository } from "@/repositories/create-profile-settings-repository";
 import { Spacing } from "@/constants/theme";
+import {
+  hasPinAsync,
+  isValidPin,
+  setPinAsync,
+  verifyPinAsync,
+} from "@/services/pin-auth";
 
 function formatCents(cents: number): string {
   return new Intl.NumberFormat("de-AT", {
@@ -38,6 +44,12 @@ export default function SettingsScreen() {
   const [settings, setSettings] = useState<ProfileSettings | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [draftValues, setDraftValues] = useState<ProfileSettingsFormValues | null>(null);
+  const [pinExists, setPinExists] = useState(false);
+  const [currentPin, setCurrentPin] = useState("");
+  const [newPin, setNewPin] = useState("");
+  const [confirmPin, setConfirmPin] = useState("");
+  const [pinError, setPinError] = useState<string | null>(null);
+  const [pinSuccess, setPinSuccess] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -48,6 +60,8 @@ export default function SettingsScreen() {
         const loaded = await repository.getSettings();
         if (isMounted) {
           setSettings(loaded);
+          const hasPin = await hasPinAsync();
+          setPinExists(hasPin);
         }
       } catch (error) {
         if (isMounted) {
@@ -69,6 +83,36 @@ export default function SettingsScreen() {
     const repository = await getProfileSettingsRepository();
     const updated = await repository.upsertSettings(values);
     setSettings(updated);
+  };
+
+  const handleSavePin = async () => {
+    setPinError(null);
+    setPinSuccess(null);
+
+    if (!isValidPin(newPin)) {
+      setPinError("PIN must be 4 to 6 digits.");
+      return;
+    }
+
+    if (newPin !== confirmPin) {
+      setPinError("PIN confirmation does not match.");
+      return;
+    }
+
+    if (pinExists) {
+      const check = await verifyPinAsync(currentPin);
+      if (!check.success) {
+        setPinError("Current PIN is incorrect.");
+        return;
+      }
+    }
+
+    await setPinAsync(newPin);
+    setPinExists(true);
+    setCurrentPin("");
+    setNewPin("");
+    setConfirmPin("");
+    setPinSuccess("PIN saved successfully.");
   };
 
   const handleReset = async () => {
@@ -129,6 +173,46 @@ export default function SettingsScreen() {
           </ThemedText>
         </View>
       )}
+      <View style={styles.pinCard}>
+        <ThemedText type="smallBold">PIN Fallback</ThemedText>
+        <ThemedText type="small" themeColor="textSecondary">
+          {pinExists ? "PIN is configured. You can change it below." : "Set a PIN fallback for app lock."}
+        </ThemedText>
+        {pinExists && (
+          <TextInput
+            value={currentPin}
+            onChangeText={setCurrentPin}
+            style={styles.pinInput}
+            secureTextEntry
+            keyboardType="number-pad"
+            maxLength={6}
+            placeholder="Current PIN"
+          />
+        )}
+        <TextInput
+          value={newPin}
+          onChangeText={setNewPin}
+          style={styles.pinInput}
+          secureTextEntry
+          keyboardType="number-pad"
+          maxLength={6}
+          placeholder={pinExists ? "New PIN (4-6 digits)" : "PIN (4-6 digits)"}
+        />
+        <TextInput
+          value={confirmPin}
+          onChangeText={setConfirmPin}
+          style={styles.pinInput}
+          secureTextEntry
+          keyboardType="number-pad"
+          maxLength={6}
+          placeholder="Confirm PIN"
+        />
+        {pinError && <ThemedText style={styles.errorText}>{pinError}</ThemedText>}
+        {pinSuccess && <ThemedText style={styles.successText}>{pinSuccess}</ThemedText>}
+        <Pressable style={({ pressed }) => [styles.pinButton, pressed && styles.pressed]} onPress={() => void handleSavePin()}>
+          <ThemedText type="smallBold">{pinExists ? "Change PIN" : "Set PIN"}</ThemedText>
+        </Pressable>
+      </View>
     </ScrollView>
   );
 }
@@ -159,5 +243,36 @@ const styles = StyleSheet.create({
     padding: Spacing.three,
     gap: Spacing.one,
     backgroundColor: "#FFFFFF",
+  },
+  pinCard: {
+    borderWidth: 1,
+    borderColor: "#9BA1A6",
+    borderRadius: 10,
+    padding: Spacing.three,
+    gap: Spacing.two,
+    backgroundColor: "#FFFFFF",
+  },
+  pinInput: {
+    borderWidth: 1,
+    borderColor: "#9BA1A6",
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 16,
+    backgroundColor: "#FFFFFF",
+  },
+  pinButton: {
+    borderWidth: 1,
+    borderColor: "#9BA1A6",
+    borderRadius: 10,
+    alignItems: "center",
+    paddingVertical: 12,
+    backgroundColor: "#ECEDEE",
+  },
+  successText: {
+    color: "#0B7D47",
+  },
+  pressed: {
+    opacity: 0.75,
   },
 });

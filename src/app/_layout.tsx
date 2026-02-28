@@ -9,6 +9,7 @@ import AppTabs from '@/components/app-tabs';
 import { OnboardingFlow } from '@/components/onboarding-flow';
 import { getProfileSettingsRepository } from '@/repositories/create-profile-settings-repository';
 import { type ProfileSettingsFormValues } from '@/components/profile-settings-form';
+import { hasPinAsync, verifyPinAsync } from '@/services/pin-auth';
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
@@ -17,8 +18,23 @@ export default function TabLayout() {
   const [isUnlocked, setIsUnlocked] = React.useState(true);
   const [isAuthenticating, setIsAuthenticating] = React.useState(false);
   const [authError, setAuthError] = React.useState<string | null>(null);
+  const [pinAvailable, setPinAvailable] = React.useState(false);
+  const [showPinEntry, setShowPinEntry] = React.useState(false);
+  const [pinInput, setPinInput] = React.useState("");
   const authInFlightRef = useRef(false);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
+
+  const refreshPinAvailability = useCallback(async () => {
+    const hasPin = await hasPinAsync();
+    setPinAvailable(hasPin);
+    return hasPin;
+  }, []);
+
+  const refreshBiometricAvailability = useCallback(async () => {
+    const hasHardware = await LocalAuthentication.hasHardwareAsync();
+    const isEnrolled = await LocalAuthentication.isEnrolledAsync();
+    return hasHardware && isEnrolled;
+  }, []);
 
   const authenticate = useCallback(async () => {
     if (authInFlightRef.current) {
@@ -28,7 +44,22 @@ export default function TabLayout() {
     authInFlightRef.current = true;
     setIsAuthenticating(true);
     setAuthError(null);
+    setShowPinEntry(false);
     try {
+      const canUseBiometric = await refreshBiometricAvailability();
+      if (!canUseBiometric) {
+        const hasPin = await refreshPinAvailability();
+        if (hasPin) {
+          setIsUnlocked(false);
+          setShowPinEntry(true);
+          return;
+        }
+
+        setIsUnlocked(false);
+        setAuthError("No biometric method available and no PIN configured.");
+        return;
+      }
+
       const result = await LocalAuthentication.authenticateAsync({
         promptMessage: "Unlock SteuerFuchs",
         cancelLabel: "Cancel",
@@ -38,13 +69,18 @@ export default function TabLayout() {
       if (result.success) {
         setIsUnlocked(true);
         setAuthError(null);
+        setPinInput("");
       } else {
+        const hasPin = await refreshPinAvailability();
         setIsUnlocked(false);
         setAuthError(
           result.error === "user_cancel"
             ? "Authentication canceled."
             : "Authentication failed. Please retry."
         );
+        if (hasPin) {
+          setShowPinEntry(true);
+        }
       }
     } catch (error) {
       console.error("Failed during app lock authentication", error);
@@ -54,7 +90,7 @@ export default function TabLayout() {
       authInFlightRef.current = false;
       setIsAuthenticating(false);
     }
-  }, []);
+  }, [refreshBiometricAvailability, refreshPinAvailability]);
 
   const refreshAppLockState = useCallback(async () => {
     const repository = await getProfileSettingsRepository();
@@ -62,6 +98,38 @@ export default function TabLayout() {
     setAppLockEnabled(settings.appLockEnabled);
     return settings.appLockEnabled;
   }, []);
+
+  const handlePinSubmit = useCallback(async () => {
+    if (!pinAvailable) {
+      setAuthError("PIN fallback is not configured.");
+      return;
+    }
+
+    try {
+      const result = await verifyPinAsync(pinInput);
+      if (result.success) {
+        setIsUnlocked(true);
+        setAuthError(null);
+        setPinInput("");
+        return;
+      }
+
+      if (result.lockedUntilEpochMs) {
+        const seconds = Math.max(
+          1,
+          Math.ceil((result.lockedUntilEpochMs - Date.now()) / 1000)
+        );
+        setAuthError(`Too many failed PIN attempts. Try again in ${seconds}s.`);
+      } else {
+        setAuthError(
+          `Incorrect PIN. ${result.remainingAttempts} attempt(s) remaining before delay.`
+        );
+      }
+    } catch (error) {
+      console.error("Failed to verify PIN", error);
+      setAuthError("PIN verification failed. Please retry.");
+    }
+  }, [pinAvailable, pinInput]);
 
   useEffect(() => {
     let isMounted = true;
@@ -84,11 +152,15 @@ export default function TabLayout() {
           return;
         }
 
+        const hasPin = await refreshPinAvailability();
         setAppLockEnabled(settings.appLockEnabled);
         setBootstrapState("ready");
 
         if (settings.appLockEnabled) {
           setIsUnlocked(false);
+          if (hasPin) {
+            setShowPinEntry(false);
+          }
           void authenticate();
         } else {
           setIsUnlocked(true);
@@ -107,7 +179,7 @@ export default function TabLayout() {
     return () => {
       isMounted = false;
     };
-  }, [authenticate]);
+  }, [authenticate, refreshPinAvailability]);
 
   useEffect(() => {
     const subscription = AppState.addEventListener("change", (nextState) => {
@@ -121,6 +193,7 @@ export default function TabLayout() {
       const checkAndMaybeAuthenticate = async () => {
         try {
           const enabled = await refreshAppLockState();
+          await refreshPinAvailability();
           if (!enabled) {
             setIsUnlocked(true);
             setAuthError(null);
@@ -140,11 +213,12 @@ export default function TabLayout() {
     return () => {
       subscription.remove();
     };
-  }, [authenticate, bootstrapState, refreshAppLockState]);
+  }, [authenticate, bootstrapState, refreshAppLockState, refreshPinAvailability]);
 
   const handleOnboardingComplete = async (values: ProfileSettingsFormValues) => {
     const repository = await getProfileSettingsRepository();
     const updated = await repository.upsertSettings(values);
+    await refreshPinAvailability();
     setAppLockEnabled(updated.appLockEnabled);
     setBootstrapState("ready");
     if (updated.appLockEnabled) {
@@ -163,10 +237,21 @@ export default function TabLayout() {
         <AppLockGate
           isAuthenticating={isAuthenticating}
           errorMessage={authError}
+          pinEnabled={pinAvailable}
+          pinValue={pinInput}
+          onPinValueChange={setPinInput}
+          onPinSubmit={() => void handlePinSubmit()}
+          onUsePin={() => setShowPinEntry(true)}
+          onUseBiometric={() => {
+            setShowPinEntry(false);
+            void authenticate();
+          }}
+          showPinEntry={showPinEntry}
           onRetry={() => void authenticate()}
           onCancel={() => {
             setIsUnlocked(false);
             setAuthError("Authentication canceled.");
+            setShowPinEntry(false);
           }}
         />
       )}
