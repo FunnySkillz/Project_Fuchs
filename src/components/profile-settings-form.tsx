@@ -14,11 +14,16 @@ export interface ProfileSettingsFormValues {
   taxYearDefault: number;
   marginalRateBps: number;
   defaultWorkPercent: number;
+  gwgThresholdCents: number;
+  applyHalfYearRule: boolean;
 }
 
 interface Props {
   initialValues: ProfileSettings;
   submitLabel: string;
+  showAdvanced?: boolean;
+  onResetToDefault?: () => Promise<void>;
+  onValuesChange?: (values: ProfileSettingsFormValues | null) => void;
   onSubmit: (values: ProfileSettingsFormValues) => Promise<void>;
 }
 
@@ -36,12 +41,23 @@ function parseNumber(input: string): number | null {
   return parsed;
 }
 
-export function ProfileSettingsForm({ initialValues, submitLabel, onSubmit }: Props) {
+export function ProfileSettingsForm({
+  initialValues,
+  submitLabel,
+  showAdvanced = false,
+  onResetToDefault,
+  onValuesChange,
+  onSubmit,
+}: Props) {
   const [taxYearDefault, setTaxYearDefault] = useState(String(initialValues.taxYearDefault));
   const [marginalRatePercent, setMarginalRatePercent] = useState(
     String(bpsToPercent(initialValues.marginalRateBps))
   );
   const [defaultWorkPercent, setDefaultWorkPercent] = useState(String(initialValues.defaultWorkPercent));
+  const [gwgThresholdEuros, setGwgThresholdEuros] = useState(
+    String((initialValues.gwgThresholdCents / 100).toFixed(2))
+  );
+  const [applyHalfYearRule, setApplyHalfYearRule] = useState(initialValues.applyHalfYearRule);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
@@ -49,6 +65,7 @@ export function ProfileSettingsForm({ initialValues, submitLabel, onSubmit }: Pr
     const parsedTaxYear = parseNumber(taxYearDefault);
     const parsedRate = parseNumber(marginalRatePercent);
     const parsedWorkPercent = parseNumber(defaultWorkPercent);
+    const parsedGwgThresholdEuros = parseNumber(gwgThresholdEuros);
 
     if (parsedTaxYear === null || !Number.isInteger(parsedTaxYear)) {
       return { valid: false, message: "Tax year must be a whole number." } as const;
@@ -74,15 +91,29 @@ export function ProfileSettingsForm({ initialValues, submitLabel, onSubmit }: Pr
       return { valid: false, message: "Default work-use percent must be between 0 and 100%." } as const;
     }
 
+    if (parsedGwgThresholdEuros === null) {
+      return { valid: false, message: "GWG threshold is required." } as const;
+    }
+
+    if (parsedGwgThresholdEuros < 0) {
+      return { valid: false, message: "GWG threshold must be 0 or higher." } as const;
+    }
+
     return {
       valid: true,
       values: {
         taxYearDefault: Math.round(parsedTaxYear),
         marginalRateBps: percentToBps(parsedRate),
         defaultWorkPercent: Math.round(parsedWorkPercent),
+        gwgThresholdCents: Math.round(parsedGwgThresholdEuros * 100),
+        applyHalfYearRule,
       },
     } as const;
-  }, [defaultWorkPercent, marginalRatePercent, taxYearDefault]);
+  }, [applyHalfYearRule, defaultWorkPercent, gwgThresholdEuros, marginalRatePercent, taxYearDefault]);
+
+  React.useEffect(() => {
+    onValuesChange?.(validation.valid ? validation.values : null);
+  }, [onValuesChange, validation]);
 
   const handleSubmit = async () => {
     if (!validation.valid || isSaving) {
@@ -137,6 +168,30 @@ export function ProfileSettingsForm({ initialValues, submitLabel, onSubmit }: Pr
         />
       </View>
 
+      {showAdvanced && (
+        <>
+          <View style={styles.separator} />
+          <ThemedText type="smallBold">Advanced</ThemedText>
+          <View style={styles.field}>
+            <ThemedText type="smallBold">GWG Threshold (EUR)</ThemedText>
+            <TextInput
+              value={gwgThresholdEuros}
+              onChangeText={setGwgThresholdEuros}
+              keyboardType="decimal-pad"
+              style={styles.input}
+              placeholder="1000.00"
+            />
+          </View>
+
+          <Pressable
+            style={({ pressed }) => [styles.toggleRow, pressed && styles.pressed]}
+            onPress={() => setApplyHalfYearRule((current) => !current)}>
+            <ThemedText type="smallBold">Apply Half-Year Rule</ThemedText>
+            <ThemedText>{applyHalfYearRule ? "Enabled" : "Disabled"}</ThemedText>
+          </Pressable>
+        </>
+      )}
+
       {!validation.valid && <ThemedText style={styles.errorText}>{validation.message}</ThemedText>}
       {saveError && <ThemedText style={styles.errorText}>{saveError}</ThemedText>}
 
@@ -146,6 +201,14 @@ export function ProfileSettingsForm({ initialValues, submitLabel, onSubmit }: Pr
         disabled={!validation.valid || isSaving}>
         <ThemedText type="smallBold">{isSaving ? "Saving..." : submitLabel}</ThemedText>
       </Pressable>
+
+      {onResetToDefault && (
+        <Pressable
+          style={({ pressed }) => [styles.resetButton, pressed && styles.pressed]}
+          onPress={() => void onResetToDefault()}>
+          <ThemedText type="smallBold">Reset to Defaults</ThemedText>
+        </Pressable>
+      )}
     </ThemedView>
   );
 }
@@ -168,6 +231,22 @@ const styles = StyleSheet.create({
     fontSize: 16,
     backgroundColor: "#FFFFFF",
   },
+  separator: {
+    height: 1,
+    backgroundColor: "#D6D8DB",
+    marginVertical: Spacing.one,
+  },
+  toggleRow: {
+    borderWidth: 1,
+    borderColor: "#9BA1A6",
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#FFFFFF",
+  },
   submitButton: {
     marginTop: Spacing.one,
     borderWidth: 1,
@@ -182,5 +261,13 @@ const styles = StyleSheet.create({
   },
   errorText: {
     color: "#B00020",
+  },
+  resetButton: {
+    borderWidth: 1,
+    borderColor: "#9BA1A6",
+    borderRadius: 10,
+    alignItems: "center",
+    paddingVertical: 12,
+    backgroundColor: "#FFFFFF",
   },
 });
