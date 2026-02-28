@@ -9,6 +9,7 @@ import AppTabs from '@/components/app-tabs';
 import { OnboardingFlow } from '@/components/onboarding-flow';
 import { getProfileSettingsRepository } from '@/repositories/create-profile-settings-repository';
 import { type ProfileSettingsFormValues } from '@/components/profile-settings-form';
+import { onLocalDataDeleted } from '@/services/app-events';
 import { hasPinAsync, verifyPinAsync } from '@/services/pin-auth';
 
 export default function TabLayout() {
@@ -130,6 +131,22 @@ export default function TabLayout() {
       setAuthError("PIN verification failed. Please retry.");
     }
   }, [pinAvailable, pinInput]);
+
+  useEffect(() => {
+    const unsubscribe = onLocalDataDeleted(() => {
+      setBootstrapState("needs_onboarding");
+      setAppLockEnabled(false);
+      setIsUnlocked(true);
+      setAuthError(null);
+      setPinInput("");
+      setShowPinEntry(false);
+      setPinAvailable(false);
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, []);
 
   useEffect(() => {
     let isMounted = true;

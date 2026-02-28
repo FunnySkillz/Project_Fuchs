@@ -1,7 +1,7 @@
-import { openDatabaseAsync, type SQLiteDatabase } from "expo-sqlite";
+import { deleteDatabaseAsync, openDatabaseAsync, type SQLiteDatabase } from "expo-sqlite";
 import { runMigrations } from "@/db/migrate";
 
-const DATABASE_NAME = "steuerfuchs.db";
+export const DATABASE_NAME = "steuerfuchs.db";
 
 let databasePromise: Promise<SQLiteDatabase> | null = null;
 
@@ -14,4 +14,19 @@ export function getDatabase(): Promise<SQLiteDatabase> {
   }
 
   return databasePromise;
+}
+
+export async function closeDatabase(): Promise<void> {
+  if (!databasePromise) {
+    return;
+  }
+
+  const db = await databasePromise;
+  await db.closeAsync();
+  databasePromise = null;
+}
+
+export async function resetDatabase(): Promise<void> {
+  await closeDatabase();
+  await deleteDatabaseAsync(DATABASE_NAME);
 }

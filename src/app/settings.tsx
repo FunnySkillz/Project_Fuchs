@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, TextInput, View } from "react-native";
+import { Alert, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from "react-native";
 
 import { ProfileSettingsForm, type ProfileSettingsFormValues } from "@/components/profile-settings-form";
 import { ThemedText } from "@/components/themed-text";
 import { createDefaultProfileSettings, type ProfileSettings } from "@/models/profile-settings";
 import { getProfileSettingsRepository } from "@/repositories/create-profile-settings-repository";
 import { Spacing } from "@/constants/theme";
+import { emitLocalDataDeleted } from "@/services/app-events";
+import { deleteAllLocalData } from "@/services/local-data";
 import {
   hasPinAsync,
   isValidPin,
@@ -50,6 +52,7 @@ export default function SettingsScreen() {
   const [confirmPin, setConfirmPin] = useState("");
   const [pinError, setPinError] = useState<string | null>(null);
   const [pinSuccess, setPinSuccess] = useState<string | null>(null);
+  const [dangerError, setDangerError] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -113,6 +116,41 @@ export default function SettingsScreen() {
     setNewPin("");
     setConfirmPin("");
     setPinSuccess("PIN saved successfully.");
+  };
+
+  const confirmDeleteAllData = async (): Promise<boolean> => {
+    if (Platform.OS === "web") {
+      return globalThis.confirm(
+        "Delete all local data? This will permanently remove your items, settings, attachments, and app lock PIN from this device."
+      );
+    }
+
+    return new Promise((resolve) => {
+      Alert.alert(
+        "Delete all local data",
+        "This permanently removes all local app data from this device. This action cannot be undone.",
+        [
+          { text: "Cancel", style: "cancel", onPress: () => resolve(false) },
+          { text: "Delete", style: "destructive", onPress: () => resolve(true) },
+        ]
+      );
+    });
+  };
+
+  const handleDeleteAllLocalData = async () => {
+    setDangerError(null);
+    const confirmed = await confirmDeleteAllData();
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      await deleteAllLocalData();
+      emitLocalDataDeleted();
+    } catch (error) {
+      console.error("Failed to delete local data", error);
+      setDangerError("Could not delete local data. Please try again.");
+    }
   };
 
   const handleReset = async () => {
@@ -213,6 +251,18 @@ export default function SettingsScreen() {
           <ThemedText type="smallBold">{pinExists ? "Change PIN" : "Set PIN"}</ThemedText>
         </Pressable>
       </View>
+      <View style={styles.dangerCard}>
+        <ThemedText type="smallBold">Danger Zone</ThemedText>
+        <ThemedText type="small" themeColor="textSecondary">
+          Deleting all local data permanently removes items, attachments, settings, and app lock PIN from this device.
+        </ThemedText>
+        {dangerError && <ThemedText style={styles.errorText}>{dangerError}</ThemedText>}
+        <Pressable
+          style={({ pressed }) => [styles.dangerButton, pressed && styles.pressed]}
+          onPress={() => void handleDeleteAllLocalData()}>
+          <ThemedText type="smallBold">Delete All Local Data</ThemedText>
+        </Pressable>
+      </View>
     </ScrollView>
   );
 }
@@ -268,6 +318,22 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingVertical: 12,
     backgroundColor: "#ECEDEE",
+  },
+  dangerCard: {
+    borderWidth: 1,
+    borderColor: "#B00020",
+    borderRadius: 10,
+    padding: Spacing.three,
+    gap: Spacing.two,
+    backgroundColor: "#FFF5F5",
+  },
+  dangerButton: {
+    borderWidth: 1,
+    borderColor: "#B00020",
+    borderRadius: 10,
+    alignItems: "center",
+    paddingVertical: 12,
+    backgroundColor: "#FFDCDC",
   },
   successText: {
     color: "#0B7D47",
