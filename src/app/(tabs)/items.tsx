@@ -177,8 +177,9 @@ export default function ItemsRoute() {
       }
 
       if (sortMode === "deductible_desc" && settings) {
-        const rightImpact = computeDeductibleImpactCents(right, settings, categoryMap);
-        const leftImpact = computeDeductibleImpactCents(left, settings, categoryMap);
+        const targetYear = parsedYear ?? settings.taxYearDefault;
+        const rightImpact = computeDeductibleImpactCents(right, settings, categoryMap, targetYear);
+        const leftImpact = computeDeductibleImpactCents(left, settings, categoryMap, targetYear);
         if (rightImpact !== leftImpact) {
           return rightImpact - leftImpact;
         }
@@ -191,7 +192,7 @@ export default function ItemsRoute() {
     });
 
     return sorted;
-  }, [allItems, categoryMap, search, settings, sortMode]);
+  }, [allItems, categoryMap, parsedYear, search, settings, sortMode]);
 
   const hasActiveFilters =
     search.trim().length > 0 ||
@@ -301,7 +302,12 @@ export default function ItemsRoute() {
         renderItem={({ item }) => {
           const categoryName = item.categoryId ? categoryMap.get(item.categoryId)?.name ?? "Unknown" : "None";
           const deductibleImpact = settings
-            ? computeDeductibleImpactCents(item, settings, categoryMap)
+            ? computeDeductibleImpactCents(
+                item,
+                settings,
+                categoryMap,
+                parsedYear ?? settings.taxYearDefault
+              )
             : 0;
 
           return (

@@ -160,7 +160,12 @@ export default function ItemDetailRoute() {
 
     const workShare = resolveWorkShare(item, settings.defaultWorkPercent);
     const workRelevantCents = Math.round(item.totalCents * workShare);
-    const deductibleThisYearCents = computeDeductibleImpactCents(item, settings, categoryMap);
+    const deductibleThisYearCents = computeDeductibleImpactCents(
+      item,
+      settings,
+      categoryMap,
+      settings.taxYearDefault
+    );
     const usefulLifeMonths = resolveUsefulLifeMonths(item, categoryMap);
     const immediate = workRelevantCents <= settings.gwgThresholdCents;
     const estimatedRefundCents = Math.round(

@@ -1,20 +1,7 @@
 import type { Category } from "@/models/category";
 import type { Item } from "@/models/item";
 import type { ProfileSettings } from "@/models/profile-settings";
-
-function resolveWorkShare(item: Item, defaultWorkPercent: number): number {
-  if (item.usageType === "WORK") {
-    return 1;
-  }
-  if (item.usageType === "PRIVATE") {
-    return 0;
-  }
-  if (item.usageType === "MIXED") {
-    const percent = item.workPercent ?? defaultWorkPercent;
-    return Math.max(0, Math.min(100, percent)) / 100;
-  }
-  return 0;
-}
+import { estimateTaxImpact } from "@/domain/calculation-engine";
 
 function resolveUsefulLifeMonths(item: Item, categoryMap: Map<string, Category>): number {
   if (item.usefulLifeMonthsOverride && item.usefulLifeMonthsOverride > 0) {
@@ -32,19 +19,24 @@ function resolveUsefulLifeMonths(item: Item, categoryMap: Map<string, Category>)
 export function computeDeductibleImpactCents(
   item: Item,
   settings: ProfileSettings,
-  categoryMap: Map<string, Category>
+  categoryMap: Map<string, Category>,
+  taxYear: number = new Date().getFullYear()
 ): number {
-  const workShare = resolveWorkShare(item, settings.defaultWorkPercent);
-  const workRelevantCents = Math.round(item.totalCents * workShare);
-  if (workRelevantCents <= 0) {
-    return 0;
-  }
-
-  if (workRelevantCents <= settings.gwgThresholdCents) {
-    return workRelevantCents;
-  }
-
-  const usefulLifeMonths = resolveUsefulLifeMonths(item, categoryMap);
-  const monthsDeductedThisYear = settings.applyHalfYearRule ? 6 : 12;
-  return Math.round((workRelevantCents / usefulLifeMonths) * monthsDeductedThisYear);
+  const result = estimateTaxImpact(
+    {
+      totalCents: item.totalCents,
+      usageType: item.usageType,
+      workPercent: item.workPercent,
+      purchaseDate: item.purchaseDate,
+      usefulLifeMonths: resolveUsefulLifeMonths(item, categoryMap),
+    },
+    {
+      gwgThresholdCents: settings.gwgThresholdCents,
+      applyHalfYearRule: settings.applyHalfYearRule,
+      marginalRateBps: settings.marginalRateBps,
+      defaultWorkPercent: settings.defaultWorkPercent,
+    },
+    taxYear
+  );
+  return result.deductibleThisYearCents;
 }

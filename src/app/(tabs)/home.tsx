@@ -53,7 +53,7 @@ export default function HomeRoute() {
 
       const categoryMap = new Map(categories.map((category) => [category.id, category]));
       const deductibleYtdCents = yearItems.reduce((sum, item) => {
-        return sum + computeDeductibleImpactCents(item, settings, categoryMap);
+        return sum + computeDeductibleImpactCents(item, settings, categoryMap, year);
       }, 0);
 
       setStats({

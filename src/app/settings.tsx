@@ -30,6 +30,7 @@ import {
   setPinAsync,
   verifyPinAsync,
 } from "@/services/pin-auth";
+import { estimateTaxImpact } from "@/domain/calculation-engine";
 
 WebBrowser.maybeCompleteAuthSession();
 const oneDriveAuthProvider = getOneDriveAuthProvider();
@@ -44,20 +45,32 @@ function formatCents(cents: number): string {
 
 function calculatePreview(values: ProfileSettingsFormValues) {
   const sampleItemCents = 150_000;
-  const workShare = values.defaultWorkPercent / 100;
-  const workRelevantCents = Math.round(sampleItemCents * workShare);
-  const immediate = workRelevantCents <= values.gwgThresholdCents;
-  const deductibleThisYearCents = immediate
-    ? workRelevantCents
-    : Math.round((workRelevantCents / 36) * (values.applyHalfYearRule ? 6 : 12));
-  const estimatedRefundCents = Math.round((deductibleThisYearCents * values.marginalRateBps) / 10_000);
+  const estimate = estimateTaxImpact(
+    {
+      totalCents: sampleItemCents,
+      usageType: "MIXED",
+      workPercent: values.defaultWorkPercent,
+      purchaseDate: `${values.taxYearDefault}-07-15`,
+      usefulLifeMonths: 36,
+    },
+    {
+      gwgThresholdCents: values.gwgThresholdCents,
+      applyHalfYearRule: values.applyHalfYearRule,
+      marginalRateBps: values.marginalRateBps,
+      defaultWorkPercent: values.defaultWorkPercent,
+    },
+    values.taxYearDefault
+  );
+  const workRelevantCents = Math.round(
+    (sampleItemCents * values.defaultWorkPercent) / 100
+  );
 
   return {
     sampleItemCents,
     workRelevantCents,
-    deductibleThisYearCents,
-    estimatedRefundCents,
-    immediate,
+    deductibleThisYearCents: estimate.deductibleThisYearCents,
+    estimatedRefundCents: estimate.estimatedRefundThisYearCents,
+    immediate: estimate.scheduleByYear.length === 1,
   };
 }
 
