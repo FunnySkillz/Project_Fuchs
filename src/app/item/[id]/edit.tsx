@@ -22,9 +22,10 @@ import {
 } from "@/services/attachment-storage";
 import { deleteAttachment } from "@/services/attachment-service";
 import { parseEuroInputToCents } from "@/utils/money";
-import { formatYmdFromDateLocal, isValidYmd } from "@/utils/date";
+import { formatYmdFromDateLocal } from "@/utils/date";
 import { friendlyFileErrorMessage } from "@/services/friendly-errors";
 import { attachmentFileExists, resolveAttachmentPreviewUri } from "@/services/attachment-storage";
+import { validateItemInput } from "@/domain/item-validation";
 
 function toSingleParam(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
@@ -111,30 +112,17 @@ export default function ItemEditRoute() {
     return parsed;
   }, [warrantyMonths]);
 
-  const validationMessage = useMemo(() => {
-    if (title.trim().length === 0) {
-      return "Title is required.";
-    }
-    if (!isValidYmd(purchaseDate)) {
-      return "Purchase date must be valid (YYYY-MM-DD).";
-    }
-    if (parsedTotalCents === null) {
-      return "Total price is required and must be a valid amount (e.g. 1234.56).";
-    }
-    if (usageType === "MIXED") {
-      if (parsedWorkPercent === null) {
-        return "Work percent is required for mixed usage.";
-      }
-      if (parsedWorkPercent < 0 || parsedWorkPercent > 100) {
-        return "Work percent must be between 0 and 100.";
-      }
-    }
-    if (parsedWarrantyMonths !== null && parsedWarrantyMonths < 0) {
-      return "Warranty months must be 0 or higher.";
-    }
-
-    return null;
+  const validation = useMemo(() => {
+    return validateItemInput({
+      title,
+      purchaseDate,
+      totalCents: parsedTotalCents,
+      usageType,
+      workPercent: parsedWorkPercent,
+      warrantyMonths: parsedWarrantyMonths,
+    });
   }, [parsedTotalCents, parsedWarrantyMonths, parsedWorkPercent, purchaseDate, title, usageType]);
+  const validationMessage = validation.errors[0]?.message ?? null;
 
   const categoryOptions = useMemo(
     () => [
@@ -211,7 +199,7 @@ export default function ItemEditRoute() {
   }, [loadEditData]);
 
   const saveChanges = async () => {
-    if (!itemId || validationMessage !== null || parsedTotalCents === null) {
+    if (!itemId || !validation.valid || parsedTotalCents === null) {
       return;
     }
 
@@ -225,7 +213,7 @@ export default function ItemEditRoute() {
         purchaseDate,
         totalCents: parsedTotalCents,
         usageType,
-        workPercent: usageType === "MIXED" ? parsedWorkPercent ?? 0 : null,
+        workPercent: usageType === "MIXED" ? parsedWorkPercent : null,
         categoryId,
         warrantyMonths: parsedWarrantyMonths,
         notes: notes.trim().length > 0 ? notes.trim() : null,

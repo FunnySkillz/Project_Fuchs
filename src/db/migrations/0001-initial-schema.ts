@@ -1,6 +1,4 @@
 export const MIGRATION_0001_INITIAL_SCHEMA = `
-PRAGMA foreign_keys = ON;
-
 CREATE TABLE IF NOT EXISTS ProfileSettings (
   Id TEXT PRIMARY KEY,
   TaxYearDefault INTEGER NOT NULL,

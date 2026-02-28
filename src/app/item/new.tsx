@@ -20,8 +20,9 @@ import {
   removeAttachmentFromDraft,
 } from "@/services/item-draft-store";
 import { parseEuroInputToCents } from "@/utils/money";
-import { formatYmdFromDateLocal, isValidYmd } from "@/utils/date";
+import { formatYmdFromDateLocal } from "@/utils/date";
 import { friendlyFileErrorMessage } from "@/services/friendly-errors";
+import { validateItemInput } from "@/domain/item-validation";
 
 function toSingleParam(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
@@ -118,32 +119,19 @@ export default function NewItemRoute() {
     return parsed;
   }, [warrantyMonths]);
 
-  const validationMessage = useMemo(() => {
-    if (title.trim().length === 0) {
-      return "Title is required.";
-    }
-    if (!isValidYmd(purchaseDate)) {
-      return "Purchase date must be valid (YYYY-MM-DD).";
-    }
-    if (parsedTotalCents === null) {
-      return "Total price is required and must be a valid amount (e.g. 1234.56).";
-    }
-    if (usageType === "MIXED") {
-      if (parsedWorkPercent === null) {
-        return "Work percent is required for mixed usage.";
-      }
-      if (parsedWorkPercent < 0 || parsedWorkPercent > 100) {
-        return "Work percent must be between 0 and 100.";
-      }
-    }
-    if (parsedWarrantyMonths !== null && parsedWarrantyMonths < 0) {
-      return "Warranty months must be 0 or higher.";
-    }
-
-    return null;
+  const validation = useMemo(() => {
+    return validateItemInput({
+      title,
+      purchaseDate,
+      totalCents: parsedTotalCents,
+      usageType,
+      workPercent: parsedWorkPercent,
+      warrantyMonths: parsedWarrantyMonths,
+    });
   }, [title, purchaseDate, parsedTotalCents, usageType, parsedWorkPercent, parsedWarrantyMonths]);
+  const validationMessage = validation.errors[0]?.message ?? null;
 
-  const canSave = validationMessage === null && !isSavingItem;
+  const canSave = validation.valid && !isSavingItem;
 
   const reloadDraftAttachments = useCallback((id: string) => {
     setAttachments(getItemDraftAttachments(id));
@@ -280,7 +268,7 @@ export default function NewItemRoute() {
   };
 
   const saveItem = async () => {
-    if (!draftId || validationMessage !== null || parsedTotalCents === null) {
+    if (!draftId || !validation.valid || parsedTotalCents === null) {
       return;
     }
 
@@ -293,7 +281,7 @@ export default function NewItemRoute() {
         purchaseDate,
         totalCents: parsedTotalCents,
         usageType,
-        workPercent: usageType === "MIXED" ? parsedWorkPercent ?? 0 : null,
+        workPercent: usageType === "MIXED" ? parsedWorkPercent : null,
         categoryId,
         vendor: vendor.trim().length > 0 ? vendor.trim() : null,
         warrantyMonths: parsedWarrantyMonths,

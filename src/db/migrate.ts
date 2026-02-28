@@ -60,7 +60,10 @@ export async function runMigrations(db: SQLiteExecutor): Promise<void> {
       await db.execAsync("COMMIT;");
     } catch (error) {
       await db.execAsync("ROLLBACK;");
-      const reason = error instanceof Error ? error.message : "unknown error";
+      const reason =
+        typeof error === "object" && error !== null && "message" in error
+          ? String((error as { message: unknown }).message)
+          : String(error);
       throw new MigrationError(
         `Database migration ${migration.version} (${migration.name}) failed: ${reason}`,
         migration.version
