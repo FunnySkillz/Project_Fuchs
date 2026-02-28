@@ -117,6 +117,12 @@ function buildPdfHtml(params: {
           return `<section class="detail-page">
             <h2>${escapeHtml(item.title)}</h2>
             <p><strong>Purchase date:</strong> ${escapeHtml(item.purchaseDate)}</p>
+            <p><strong>Vendor:</strong> ${escapeHtml(item.vendor?.trim() || "-")}</p>
+            <p><strong>Warranty:</strong> ${
+              item.warrantyMonths && item.warrantyMonths > 0
+                ? `${item.warrantyMonths} months`
+                : "none"
+            }</p>
             <p><strong>Notes:</strong> ${escapeHtml(item.notes?.trim() || "-")}</p>
             <p><strong>Attachments:</strong></p>
             <ul>${attachmentLines}</ul>
@@ -134,8 +140,21 @@ function buildPdfHtml(params: {
       body { font-family: Arial, sans-serif; color: #111; padding: 24px; }
       h1 { margin-bottom: 4px; }
       .meta { margin-top: 0; color: #555; }
-      table { width: 100%; border-collapse: collapse; margin-top: 16px; }
-      th, td { border: 1px solid #ddd; padding: 8px; font-size: 12px; text-align: left; }
+      table { width: 100%; border-collapse: collapse; margin-top: 16px; table-layout: fixed; }
+      th, td {
+        border: 1px solid #ddd;
+        padding: 6px;
+        font-size: 10px;
+        text-align: left;
+        word-wrap: break-word;
+        overflow-wrap: anywhere;
+      }
+      th:nth-child(1), td:nth-child(1) { width: 26%; }
+      th:nth-child(2), td:nth-child(2) { width: 12%; }
+      th:nth-child(3), td:nth-child(3) { width: 16%; }
+      th:nth-child(4), td:nth-child(4) { width: 15%; }
+      th:nth-child(5), td:nth-child(5) { width: 8%; }
+      th:nth-child(6), td:nth-child(6) { width: 23%; }
       th { background: #f2f2f2; }
       .detail-page { page-break-before: always; }
       .detail-page h2 { margin-top: 0; }
