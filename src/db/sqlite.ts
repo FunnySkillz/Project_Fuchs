@@ -1,5 +1,6 @@
 import { deleteDatabaseAsync, openDatabaseAsync, type SQLiteDatabase } from "expo-sqlite";
 import { runMigrations } from "@/db/migrate";
+import { runSeedData } from "@/db/seed";
 
 export const DATABASE_NAME = "steuerfuchs.db";
 
@@ -11,6 +12,7 @@ export function getDatabase(): Promise<SQLiteDatabase> {
       .then(async (db) => {
         await db.execAsync("PRAGMA foreign_keys = ON;");
         await runMigrations(db);
+        await runSeedData(db);
         return db;
       })
       .catch((error) => {
