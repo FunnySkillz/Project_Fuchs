@@ -1,7 +1,14 @@
 ﻿import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { ScrollView, StyleSheet, View } from "react-native";
+import { ScrollView } from "react-native";
 import {
+  Actionsheet as GActionsheet,
+  ActionsheetBackdrop as GActionsheetBackdrop,
+  ActionsheetContent as GActionsheetContent,
+  ActionsheetDragIndicator as GActionsheetDragIndicator,
+  ActionsheetDragIndicatorWrapper as GActionsheetDragIndicatorWrapper,
+  ActionsheetItem as GActionsheetItem,
+  ActionsheetItemText as GActionsheetItemText,
   Badge as GBadge,
   BadgeText as GBadgeText,
   Box as GBox,
@@ -10,24 +17,19 @@ import {
   Card as GCard,
   Heading as GHeading,
   HStack as GHStack,
+  Input as GInput,
+  InputField as GInputField,
+  Slider as GSlider,
+  SliderFilledTrack as GSliderFilledTrack,
+  SliderThumb as GSliderThumb,
+  SliderTrack as GSliderTrack,
   Spinner as GSpinner,
   Text as GText,
+  Textarea as GTextarea,
+  TextareaInput as GTextareaInput,
   VStack as GVStack,
 } from "@gluestack-ui/themed";
 
-import {
-  Badge as LegacyBadge,
-  Button as LegacyButton,
-  Card as LegacyCard,
-  DatePickerTrigger,
-  FormField,
-  Input,
-  Select,
-  TextArea,
-} from "@/components/ui";
-import { ThemedText } from "@/components/themed-text";
-import { ThemedView } from "@/components/themed-view";
-import { Spacing } from "@/constants/theme";
 import type { AttachmentType } from "@/models/attachment";
 import type { Category } from "@/models/category";
 import type { ItemUsageType } from "@/models/item";
@@ -43,7 +45,7 @@ import {
   removeAttachmentFromDraft,
 } from "@/services/item-draft-store";
 import { parseEuroInputToCents } from "@/utils/money";
-import { formatYmdFromDateLocal } from "@/utils/date";
+import { addMonthsToYmd, formatYmdFromDateLocal } from "@/utils/date";
 import { friendlyFileErrorMessage } from "@/services/friendly-errors";
 import { validateItemInput } from "@/domain/item-validation";
 
@@ -99,9 +101,13 @@ export default function NewItemRoute() {
   const [warrantyMonths, setWarrantyMonths] = useState("");
   const [vendor, setVendor] = useState("");
   const [notes, setNotes] = useState("");
+  const [usefulLifeMonthsOverride, setUsefulLifeMonthsOverride] = useState("");
 
   const [categories, setCategories] = useState<Category[]>([]);
   const [isLoadingCategories, setIsLoadingCategories] = useState(false);
+  const [isCreatingCategory, setIsCreatingCategory] = useState(false);
+  const [isCategorySheetOpen, setIsCategorySheetOpen] = useState(false);
+  const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
 
   const receiptAttachments = useMemo(
@@ -111,11 +117,6 @@ export default function NewItemRoute() {
   const extraPhotos = useMemo(
     () => attachments.filter((attachment) => attachment.type === "PHOTO"),
     [attachments]
-  );
-
-  const categoryOptions = useMemo(
-    () => categories.map((category) => ({ value: category.id, label: category.name })),
-    [categories]
   );
 
   const parsedTotalCents = useMemo(() => parseEuroInputToCents(totalPrice), [totalPrice]);
@@ -141,6 +142,27 @@ export default function NewItemRoute() {
     }
     return parsed;
   }, [warrantyMonths]);
+  const parsedUsefulLifeMonthsOverride = useMemo(() => {
+    const trimmed = usefulLifeMonthsOverride.trim();
+    if (trimmed.length === 0) {
+      return null;
+    }
+    const parsed = Number.parseInt(trimmed, 10);
+    if (!Number.isFinite(parsed)) {
+      return null;
+    }
+    return parsed;
+  }, [usefulLifeMonthsOverride]);
+  const usefulLifeMonthsOverrideError = useMemo(() => {
+    const trimmed = usefulLifeMonthsOverride.trim();
+    if (trimmed.length === 0) {
+      return null;
+    }
+    if (parsedUsefulLifeMonthsOverride === null || parsedUsefulLifeMonthsOverride <= 0) {
+      return "Useful life override must be a positive number of months.";
+    }
+    return null;
+  }, [parsedUsefulLifeMonthsOverride, usefulLifeMonthsOverride]);
 
   const validation = useMemo(() => {
     return validateItemInput({
@@ -152,9 +174,28 @@ export default function NewItemRoute() {
       warrantyMonths: parsedWarrantyMonths,
     });
   }, [title, purchaseDate, parsedTotalCents, usageType, parsedWorkPercent, parsedWarrantyMonths]);
-  const validationMessage = validation.errors[0]?.message ?? null;
-
-  const canSave = validation.valid && !isSavingItem;
+  const fieldErrors = useMemo(() => {
+    const grouped: Record<string, string> = {};
+    for (const issue of validation.errors) {
+      if (!grouped[issue.field]) {
+        grouped[issue.field] = issue.message;
+      }
+    }
+    return grouped;
+  }, [validation.errors]);
+  const canSave = validation.valid && usefulLifeMonthsOverrideError === null && !isSavingItem;
+  const selectedCategoryName = useMemo(() => {
+    if (!categoryId) {
+      return "No category selected";
+    }
+    return categories.find((entry) => entry.id === categoryId)?.name ?? "Unknown category";
+  }, [categories, categoryId]);
+  const warrantyUntilDate = useMemo(() => {
+    if (!parsedWarrantyMonths || parsedWarrantyMonths <= 0) {
+      return null;
+    }
+    return addMonthsToYmd(purchaseDate, parsedWarrantyMonths);
+  }, [parsedWarrantyMonths, purchaseDate]);
 
   const reloadDraftAttachments = useCallback((id: string) => {
     setAttachments(getItemDraftAttachments(id));
@@ -277,6 +318,7 @@ export default function NewItemRoute() {
       return;
     }
 
+    setIsCreatingCategory(true);
     setErrorMessage(null);
     try {
       const repository = await getCategoryRepository();
@@ -284,9 +326,12 @@ export default function NewItemRoute() {
       setCategoryId(created.id);
       setNewCategoryName("");
       await loadCategories();
+      setIsCategorySheetOpen(false);
     } catch (error) {
       console.error("Failed to create category", error);
       setErrorMessage("Could not create category.");
+    } finally {
+      setIsCreatingCategory(false);
     }
   };
 
@@ -310,7 +355,12 @@ export default function NewItemRoute() {
   };
 
   const saveItem = async () => {
-    if (!draftId || !validation.valid || parsedTotalCents === null) {
+    if (
+      !draftId ||
+      !validation.valid ||
+      parsedTotalCents === null ||
+      usefulLifeMonthsOverrideError !== null
+    ) {
       return;
     }
 
@@ -328,6 +378,10 @@ export default function NewItemRoute() {
         vendor: vendor.trim().length > 0 ? vendor.trim() : null,
         warrantyMonths: parsedWarrantyMonths,
         notes: notes.trim().length > 0 ? notes.trim() : null,
+        usefulLifeMonthsOverride:
+          parsedUsefulLifeMonthsOverride !== null && parsedUsefulLifeMonthsOverride > 0
+            ? parsedUsefulLifeMonthsOverride
+            : null,
       });
 
       await linkDraftAttachmentsToItem(draftId, created.id);
@@ -352,140 +406,389 @@ export default function NewItemRoute() {
   }
 
   if (step === "2") {
+    const workPercentSliderValue =
+      parsedWorkPercent !== null && parsedWorkPercent >= 0 && parsedWorkPercent <= 100
+        ? parsedWorkPercent
+        : 0;
+
     return (
-      <ThemedView style={styles.container}>
-        <ScrollView contentContainerStyle={styles.content}>
-          <LegacyBadge text="Step 2 of 2" />
-          <ThemedText type="title">Add Item: Core Fields</ThemedText>
-          <ThemedText themeColor="textSecondary">
-            Complete item details, validate input, and save. Draft attachments are linked after save.
-          </ThemedText>
+      <GBox flex={1}>
+        <ScrollView
+          contentContainerStyle={{
+            width: "100%",
+            maxWidth: 860,
+            alignSelf: "center",
+            paddingHorizontal: 20,
+            paddingTop: 24,
+            paddingBottom: 120,
+          }}
+        >
+          <GVStack space="lg">
+            <GBadge size="sm" variant="outline" action="muted" alignSelf="flex-start">
+              <GBadgeText>Step 2 of 2</GBadgeText>
+            </GBadge>
 
-          {errorMessage && <ThemedText style={styles.errorText}>{errorMessage}</ThemedText>}
-          {validationMessage && <ThemedText style={styles.errorText}>{validationMessage}</ThemedText>}
+            <GVStack space="xs">
+              <GHeading size="xl">Add Item: Fields</GHeading>
+              <GText size="sm">
+                Complete required fields, then save the item with the draft attachments.
+              </GText>
+            </GVStack>
 
-          <LegacyCard>
-            <FormField label="Title *">
-              <Input value={title} onChangeText={setTitle} placeholder="e.g. Laptop for work" />
-            </FormField>
-
-            <FormField label="Purchase Date *">
-              <DatePickerTrigger value={purchaseDate} onPress={() => setPurchaseDate(formatYmdFromDateLocal(new Date()))} />
-              <Input
-                value={purchaseDate}
-                onChangeText={setPurchaseDate}
-                placeholder="YYYY-MM-DD"
-                autoCapitalize="none"
-              />
-              <ThemedText type="small" themeColor="textSecondary">
-                Tap the date row to set today, or enter date manually as YYYY-MM-DD.
-              </ThemedText>
-            </FormField>
-
-            <FormField label="Total Price (EUR) *">
-              <Input
-                value={totalPrice}
-                onChangeText={setTotalPrice}
-                keyboardType="decimal-pad"
-                placeholder="e.g. 1299.90"
-              />
-            </FormField>
-
-            <FormField label="Category">
-              <Select
-                value={categoryId}
-                options={categoryOptions}
-                placeholder={isLoadingCategories ? "Loading categories..." : "No category selected"}
-                onChange={(nextValue) => setCategoryId(nextValue)}
-              />
-              <View style={styles.row}>
-                <Input
-                  value={newCategoryName}
-                  onChangeText={setNewCategoryName}
-                  placeholder="Create new category"
-                  style={styles.flexInput}
-                />
-                <LegacyButton variant="secondary" label="Add" onPress={() => void createCategory()} />
-              </View>
-            </FormField>
-
-            <FormField label="Usage Type *">
-              <Select
-                value={usageType}
-                options={usageOptions}
-                onChange={(nextValue) => setUsageType(nextValue as ItemUsageType)}
-              />
-            </FormField>
-
-            {usageType === "MIXED" && (
-              <FormField label="Work Percent *">
-                <Input
-                  value={workPercent}
-                  onChangeText={setWorkPercent}
-                  keyboardType="number-pad"
-                  placeholder="0-100"
-                />
-              </FormField>
+            {errorMessage && (
+              <GCard borderWidth="$1" borderColor="$error300">
+                <GText size="sm">{errorMessage}</GText>
+              </GCard>
             )}
 
-            <FormField label="Warranty Months">
-              <Input
-                value={warrantyMonths}
-                onChangeText={setWarrantyMonths}
-                keyboardType="number-pad"
-                placeholder="Optional"
-              />
-            </FormField>
+            <GCard borderWidth="$1" borderColor="$border200">
+              <GVStack space="md">
+                <GHeading size="md">Required fields</GHeading>
 
-            <FormField label="Vendor">
-              <Input
-                value={vendor}
-                onChangeText={setVendor}
-                placeholder="Optional vendor/store name"
-              />
-            </FormField>
+                <GVStack space="xs">
+                  <GText bold size="sm">
+                    1) Title *
+                  </GText>
+                  <GInput variant="outline">
+                    <GInputField
+                      value={title}
+                      onChangeText={setTitle}
+                      placeholder="e.g. Laptop for work"
+                      testID="new-item-step2-title-input"
+                    />
+                  </GInput>
+                  {fieldErrors.title && (
+                    <GText size="xs" color="$error600">
+                      {fieldErrors.title}
+                    </GText>
+                  )}
+                </GVStack>
 
-            <FormField label="Notes">
-              <TextArea
-                value={notes}
-                onChangeText={setNotes}
-                placeholder="Optional notes for invoice/audit context"
-              />
-            </FormField>
+                <GVStack space="xs">
+                  <GText bold size="sm">
+                    2) Purchase date *
+                  </GText>
+                  <GHStack space="sm" flexWrap="wrap" alignItems="center">
+                    <GInput variant="outline" flex={1} minWidth={180}>
+                      <GInputField
+                        value={purchaseDate}
+                        onChangeText={setPurchaseDate}
+                        placeholder="YYYY-MM-DD"
+                        autoCapitalize="none"
+                        testID="new-item-step2-purchase-date-input"
+                      />
+                    </GInput>
+                    <GButton
+                      variant="outline"
+                      action="secondary"
+                      onPress={() => setPurchaseDate(formatYmdFromDateLocal(new Date()))}
+                    >
+                      <GButtonText>Set today</GButtonText>
+                    </GButton>
+                  </GHStack>
+                  {fieldErrors.purchaseDate && (
+                    <GText size="xs" color="$error600">
+                      {fieldErrors.purchaseDate}
+                    </GText>
+                  )}
+                </GVStack>
 
-            {(usageType === "WORK" || usageType === "MIXED") && notes.trim().length === 0 && (
-              <LegacyBadge text="Missing notes will be flagged" variant="warning" />
-            )}
-          </LegacyCard>
+                <GVStack space="xs">
+                  <GText bold size="sm">
+                    3) Price (EUR) *
+                  </GText>
+                  <GInput variant="outline">
+                    <GInputField
+                      value={totalPrice}
+                      onChangeText={setTotalPrice}
+                      keyboardType="decimal-pad"
+                      placeholder="e.g. 1299.90"
+                      testID="new-item-step2-total-price-input"
+                    />
+                  </GInput>
+                  {fieldErrors.totalCents && (
+                    <GText size="xs" color="$error600">
+                      {fieldErrors.totalCents}
+                    </GText>
+                  )}
+                </GVStack>
 
-          <LegacyCard>
-            <ThemedText type="smallBold">Draft Attachment Summary</ThemedText>
-            <ThemedText type="small">Receipts: {receiptAttachments.length}</ThemedText>
-            <ThemedText type="small">Extra photos: {extraPhotos.length}</ThemedText>
-            {receiptAttachments.length === 0 && (
-              <LegacyBadge text="No receipt attached (allowed, flagged later)" variant="warning" />
-            )}
-          </LegacyCard>
+                <GVStack space="xs">
+                  <GText bold size="sm">
+                    4) Category
+                  </GText>
+                  <GButton
+                    variant="outline"
+                    action="secondary"
+                    onPress={() => setIsCategorySheetOpen(true)}
+                    justifyContent="space-between"
+                    testID="new-item-step2-category-open"
+                  >
+                    <GButtonText>{selectedCategoryName}</GButtonText>
+                  </GButton>
+                  {isLoadingCategories && (
+                    <GHStack space="sm" alignItems="center">
+                      <GSpinner size="small" />
+                      <GText size="xs">Loading categories...</GText>
+                    </GHStack>
+                  )}
+                  <GHStack space="sm" flexWrap="wrap" alignItems="center">
+                    <GInput variant="outline" flex={1} minWidth={200}>
+                      <GInputField
+                        value={newCategoryName}
+                        onChangeText={setNewCategoryName}
+                        placeholder="Create new category"
+                        testID="new-item-step2-category-create-input"
+                      />
+                    </GInput>
+                    <GButton
+                      variant="outline"
+                      action="secondary"
+                      onPress={() => void createCategory()}
+                      disabled={isCreatingCategory}
+                      testID="new-item-step2-category-create-button"
+                    >
+                      <GButtonText>{isCreatingCategory ? "Adding..." : "Add"}</GButtonText>
+                    </GButton>
+                  </GHStack>
+                </GVStack>
 
-          <View style={styles.row}>
-            <LegacyButton
-              variant="secondary"
-              label="Back to Step 1"
+                <GVStack space="xs">
+                  <GText bold size="sm">
+                    5) Usage type *
+                  </GText>
+                  <GHStack space="sm" flexWrap="wrap">
+                    {usageOptions.map((option) => (
+                      <GButton
+                        key={option.value}
+                        size="sm"
+                        variant={usageType === option.value ? "solid" : "outline"}
+                        action={usageType === option.value ? "primary" : "secondary"}
+                        onPress={() => setUsageType(option.value)}
+                        testID={`new-item-step2-usage-${option.value.toLowerCase()}`}
+                      >
+                        <GButtonText>{option.label.toUpperCase()}</GButtonText>
+                      </GButton>
+                    ))}
+                  </GHStack>
+                </GVStack>
+
+                {usageType === "MIXED" && (
+                  <GVStack space="xs">
+                    <GText bold size="sm">
+                      6) Work percent *
+                    </GText>
+                    <GInput variant="outline">
+                      <GInputField
+                        value={workPercent}
+                        onChangeText={setWorkPercent}
+                        keyboardType="number-pad"
+                        placeholder="0-100"
+                        testID="new-item-step2-work-percent-input"
+                      />
+                    </GInput>
+                    <GSlider
+                      value={workPercentSliderValue}
+                      minValue={0}
+                      maxValue={100}
+                      step={1}
+                      onChange={(value) => {
+                        const nextValue = Array.isArray(value) ? value[0] : value;
+                        if (typeof nextValue === "number" && Number.isFinite(nextValue)) {
+                          setWorkPercent(String(Math.round(nextValue)));
+                        }
+                      }}
+                    >
+                      <GSliderTrack>
+                        <GSliderFilledTrack />
+                      </GSliderTrack>
+                      <GSliderThumb />
+                    </GSlider>
+                    {fieldErrors.workPercent && (
+                      <GText size="xs" color="$error600">
+                        {fieldErrors.workPercent}
+                      </GText>
+                    )}
+                  </GVStack>
+                )}
+              </GVStack>
+            </GCard>
+
+            <GCard borderWidth="$1" borderColor="$border200">
+              <GVStack space="md">
+                <GHeading size="md">Optional</GHeading>
+
+                <GVStack space="xs">
+                  <GText bold size="sm">
+                    Notes
+                  </GText>
+                  <GTextarea>
+                    <GTextareaInput
+                      value={notes}
+                      onChangeText={setNotes}
+                      placeholder="Optional notes for invoice or audit context"
+                      testID="new-item-step2-notes-input"
+                    />
+                  </GTextarea>
+                  {(usageType === "WORK" || usageType === "MIXED") && notes.trim().length === 0 && (
+                    <GBadge size="sm" action="warning" variant="outline" alignSelf="flex-start">
+                      <GBadgeText>Missing notes will be flagged</GBadgeText>
+                    </GBadge>
+                  )}
+                </GVStack>
+
+                <GVStack space="xs">
+                  <GText bold size="sm">
+                    Warranty months
+                  </GText>
+                  <GInput variant="outline">
+                    <GInputField
+                      value={warrantyMonths}
+                      onChangeText={setWarrantyMonths}
+                      keyboardType="number-pad"
+                      placeholder="Optional"
+                      testID="new-item-step2-warranty-months-input"
+                    />
+                  </GInput>
+                  {fieldErrors.warrantyMonths && (
+                    <GText size="xs" color="$error600">
+                      {fieldErrors.warrantyMonths}
+                    </GText>
+                  )}
+                  <GText size="xs">Warranty until: {warrantyUntilDate ?? "n/a"}</GText>
+                </GVStack>
+
+                <GVStack space="xs">
+                  <GText bold size="sm">
+                    Vendor
+                  </GText>
+                  <GInput variant="outline">
+                    <GInputField
+                      value={vendor}
+                      onChangeText={setVendor}
+                      placeholder="Optional vendor/store"
+                      testID="new-item-step2-vendor-input"
+                    />
+                  </GInput>
+                </GVStack>
+              </GVStack>
+            </GCard>
+
+            <GCard borderWidth="$1" borderColor="$border200">
+              <GVStack space="md">
+                <GHStack alignItems="center" justifyContent="space-between">
+                  <GHeading size="md">Advanced</GHeading>
+                  <GButton
+                    size="sm"
+                    variant="outline"
+                    action="secondary"
+                    onPress={() => setIsAdvancedOpen((current) => !current)}
+                    testID="new-item-step2-advanced-toggle"
+                  >
+                    <GButtonText>{isAdvancedOpen ? "Hide" : "Show"}</GButtonText>
+                  </GButton>
+                </GHStack>
+                {isAdvancedOpen && (
+                  <GVStack space="xs">
+                    <GText bold size="sm">
+                      Useful life override (months)
+                    </GText>
+                    <GInput variant="outline">
+                      <GInputField
+                        value={usefulLifeMonthsOverride}
+                        onChangeText={setUsefulLifeMonthsOverride}
+                        keyboardType="number-pad"
+                        placeholder="Optional, e.g. 36"
+                        testID="new-item-step2-useful-life-input"
+                      />
+                    </GInput>
+                    {usefulLifeMonthsOverrideError && (
+                      <GText size="xs" color="$error600">
+                        {usefulLifeMonthsOverrideError}
+                      </GText>
+                    )}
+                  </GVStack>
+                )}
+              </GVStack>
+            </GCard>
+
+            <GCard borderWidth="$1" borderColor="$border200">
+              <GVStack space="sm">
+                <GHeading size="sm">Draft attachment summary</GHeading>
+                <GText size="sm">Receipts: {receiptAttachments.length}</GText>
+                <GText size="sm">Extra photos: {extraPhotos.length}</GText>
+                {receiptAttachments.length === 0 && (
+                  <GBadge size="sm" action="warning" variant="outline" alignSelf="flex-start">
+                    <GBadgeText>No receipt attached (allowed, flagged later)</GBadgeText>
+                  </GBadge>
+                )}
+              </GVStack>
+            </GCard>
+          </GVStack>
+        </ScrollView>
+
+        <GBox borderTopWidth="$1" borderColor="$border200" bg="$background0" px="$5" py="$3">
+          <GHStack space="sm" flexWrap="wrap" justifyContent="flex-end">
+            <GButton
+              variant="outline"
+              action="secondary"
               onPress={() =>
                 router.replace({
                   pathname: "/item/new",
                   params: { draftId: draftId ?? "", step: "1" },
                 })
               }
-            />
-            <LegacyButton
-              label={isSavingItem ? "Saving..." : "Save Item"}
+              testID="new-item-step2-back"
+            >
+              <GButtonText>Back to Step 1</GButtonText>
+            </GButton>
+            <GButton
+              variant="outline"
+              action="secondary"
+              onPress={() => void cancelDraft()}
+              disabled={isBusy}
+              testID="new-item-step2-cancel"
+            >
+              <GButtonText>Cancel</GButtonText>
+            </GButton>
+            <GButton
               onPress={() => void saveItem()}
-              disabled={!canSave}
-            />
-          </View>
-        </ScrollView>
-      </ThemedView>
+              disabled={!canSave || isBusy}
+              testID="new-item-step2-save"
+            >
+              <GButtonText>{isSavingItem ? "Saving..." : "Save Item"}</GButtonText>
+            </GButton>
+          </GHStack>
+        </GBox>
+
+        <GActionsheet isOpen={isCategorySheetOpen} onClose={() => setIsCategorySheetOpen(false)}>
+          <GActionsheetBackdrop />
+          <GActionsheetContent>
+            <GActionsheetDragIndicatorWrapper>
+              <GActionsheetDragIndicator />
+            </GActionsheetDragIndicatorWrapper>
+            <GActionsheetItem
+              onPress={() => {
+                setCategoryId(null);
+                setIsCategorySheetOpen(false);
+              }}
+            >
+              <GActionsheetItemText>No category selected</GActionsheetItemText>
+            </GActionsheetItem>
+            {categories.map((category) => (
+              <GActionsheetItem
+                key={category.id}
+                onPress={() => {
+                  setCategoryId(category.id);
+                  setIsCategorySheetOpen(false);
+                }}
+              >
+                <GActionsheetItemText>{category.name}</GActionsheetItemText>
+              </GActionsheetItem>
+            ))}
+          </GActionsheetContent>
+        </GActionsheet>
+      </GBox>
     );
   }
 
@@ -626,45 +929,3 @@ export default function NewItemRoute() {
     </GBox>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  centered: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    gap: Spacing.two,
-    padding: Spacing.four,
-  },
-  content: {
-    width: "100%",
-    maxWidth: 720,
-    alignSelf: "center",
-    padding: Spacing.four,
-    gap: Spacing.three,
-  },
-  row: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: Spacing.two,
-  },
-  flexInput: {
-    flex: 1,
-    minWidth: 200,
-  },
-  attachmentRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: Spacing.two,
-  },
-  attachmentMeta: {
-    flex: 1,
-    gap: 2,
-  },
-  errorText: {
-    color: "#B00020",
-  },
-});
