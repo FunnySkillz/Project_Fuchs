@@ -96,7 +96,8 @@ export default function ExportRoute() {
   const [isGeneratingZip, setIsGeneratingZip] = useState(false);
   const [isSharingZip, setIsSharingZip] = useState(false);
 
-  const [items, setItems] = useState<Item[]>([]);
+  const [yearItems, setYearItems] = useState<Item[]>([]);
+  const [missingReceiptItemIds, setMissingReceiptItemIds] = useState<Set<string>>(new Set());
   const [categories, setCategories] = useState<Category[]>([]);
   const [settings, setSettings] = useState<ProfileSettings | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -148,29 +149,37 @@ export default function ExportRoute() {
 
       const loadedSettings = await profileSettingsRepository.getSettings();
       const targetYear = parsedTaxYear ?? loadedSettings.taxYearDefault;
-      const baseFilters = {
-        year: targetYear,
-        categoryId: categoryId ?? undefined,
-        usageType: usageType ?? undefined,
-        missingReceipt,
-        missingNotes,
-      };
 
-      const [loadedItems, loadedCategories] = await Promise.all([
-        itemRepository.list(baseFilters),
+      const [loadedItems, loadedCategories, loadedMissingReceiptIds] = await Promise.all([
+        itemRepository.list({ year: targetYear }),
         categoryRepository.list(),
+        itemRepository.listMissingReceiptItemIds({ year: targetYear }),
       ]);
 
-      setItems(loadedItems);
+      setYearItems(loadedItems);
+      setMissingReceiptItemIds(new Set(loadedMissingReceiptIds));
       setCategories(loadedCategories);
       setSettings(loadedSettings);
+
+      const validYearItemIds = new Set(loadedItems.map((item) => item.id));
+      setSelectedItemIds((current) => {
+        const next = new Set<string>();
+        current.forEach((id) => {
+          if (validYearItemIds.has(id)) {
+            next.add(id);
+          }
+        });
+        return next;
+      });
     } catch (error) {
       console.error("Failed to load export selection data", error);
+      setYearItems([]);
+      setMissingReceiptItemIds(new Set());
       setLoadError("Could not load export selection data.");
     } finally {
       setIsLoading(false);
     }
-  }, [categoryId, missingNotes, missingReceipt, parsedTaxYear, usageType]);
+  }, [parsedTaxYear]);
 
   useFocusEffect(
     useCallback(() => {
@@ -180,15 +189,29 @@ export default function ExportRoute() {
 
   const filteredItems = useMemo(() => {
     const searchTerm = search.trim().toLowerCase();
-    if (searchTerm.length === 0) {
-      return items;
-    }
-
-    return items.filter((item) => {
+    return yearItems.filter((item) => {
+      if (categoryId && item.categoryId !== categoryId) {
+        return false;
+      }
+      if (usageType && item.usageType !== usageType) {
+        return false;
+      }
+      if (missingReceipt && !missingReceiptItemIds.has(item.id)) {
+        return false;
+      }
+      if (
+        missingNotes &&
+        !(item.notes === null || item.notes.trim().length === 0)
+      ) {
+        return false;
+      }
+      if (searchTerm.length === 0) {
+        return true;
+      }
       const haystack = `${item.title} ${item.vendor ?? ""}`.toLowerCase();
       return haystack.includes(searchTerm);
     });
-  }, [items, search]);
+  }, [categoryId, missingNotes, missingReceipt, missingReceiptItemIds, search, usageType, yearItems]);
 
   const filteredItemIds = useMemo(() => filteredItems.map((item) => item.id), [filteredItems]);
   const allFilteredSelected =
@@ -227,8 +250,8 @@ export default function ExportRoute() {
   };
 
   const selectedItems = useMemo(
-    () => items.filter((item) => selectedItemIds.has(item.id)),
-    [items, selectedItemIds]
+    () => yearItems.filter((item) => selectedItemIds.has(item.id)),
+    [selectedItemIds, yearItems]
   );
 
   const totals = useMemo(() => {
@@ -436,7 +459,7 @@ export default function ExportRoute() {
 
             <Card>
               <ThemedText type="smallBold">Export Preview Summary</ThemedText>
-              <ThemedText type="small">Selected items: {selectedItemIds.size}</ThemedText>
+              <ThemedText type="small">Selected items: {selectedItems.length}</ThemedText>
               <ThemedText type="small">
                 Deductible this year: {formatCents(totals.deductibleThisYearCents)}
               </ThemedText>
