@@ -23,7 +23,7 @@ import {
 import { parseEuroInputToCents } from "@/utils/money";
 import { formatYmdFromDateLocal, isValidYmd } from "@/utils/date";
 import { friendlyFileErrorMessage } from "@/services/friendly-errors";
-import { attachmentFileExists } from "@/services/attachment-storage";
+import { attachmentFileExists, resolveAttachmentPreviewUri } from "@/services/attachment-storage";
 
 function toSingleParam(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
@@ -73,6 +73,7 @@ export default function ItemEditRoute() {
   const [item, setItem] = useState<Item | null>(null);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [missingAttachmentIds, setMissingAttachmentIds] = useState<Set<string>>(new Set());
+  const [attachmentPreviewUris, setAttachmentPreviewUris] = useState<Record<string, string>>({});
   const [categories, setCategories] = useState<Category[]>([]);
 
   const [title, setTitle] = useState("");
@@ -175,10 +176,14 @@ export default function ItemEditRoute() {
         loadedAttachments.map(async (attachment) => ({
           id: attachment.id,
           exists: await attachmentFileExists(attachment.filePath),
+          previewUri: await resolveAttachmentPreviewUri(attachment.filePath, attachment.mimeType),
         }))
       );
       setMissingAttachmentIds(
         new Set(checks.filter((entry) => !entry.exists).map((entry) => entry.id))
+      );
+      setAttachmentPreviewUris(
+        Object.fromEntries(checks.map((entry) => [entry.id, entry.previewUri]))
       );
       setCategories(loadedCategories);
 
@@ -270,6 +275,19 @@ export default function ItemEditRoute() {
 
       const refreshed = await repository.listByItem(itemId);
       setAttachments(refreshed);
+      const checks = await Promise.all(
+        refreshed.map(async (attachment) => ({
+          id: attachment.id,
+          exists: await attachmentFileExists(attachment.filePath),
+          previewUri: await resolveAttachmentPreviewUri(attachment.filePath, attachment.mimeType),
+        }))
+      );
+      setMissingAttachmentIds(
+        new Set(checks.filter((entry) => !entry.exists).map((entry) => entry.id))
+      );
+      setAttachmentPreviewUris(
+        Object.fromEntries(checks.map((entry) => [entry.id, entry.previewUri]))
+      );
     } catch (error) {
       console.error("Failed to add attachment", error);
       setLoadError(friendlyFileErrorMessage(error, "Could not add attachment."));
@@ -292,10 +310,14 @@ export default function ItemEditRoute() {
         refreshed.map(async (attachment) => ({
           id: attachment.id,
           exists: await attachmentFileExists(attachment.filePath),
+          previewUri: await resolveAttachmentPreviewUri(attachment.filePath, attachment.mimeType),
         }))
       );
       setMissingAttachmentIds(
         new Set(checks.filter((entry) => !entry.exists).map((entry) => entry.id))
+      );
+      setAttachmentPreviewUris(
+        Object.fromEntries(checks.map((entry) => [entry.id, entry.previewUri]))
       );
     } catch (error) {
       console.error("Failed to remove attachment", error);
@@ -464,7 +486,11 @@ export default function ItemEditRoute() {
               {attachments.map((attachment) => (
                 <View key={attachment.id} style={styles.attachmentCard}>
                   {isImageAttachment(attachment) ? (
-                    <Image source={{ uri: attachment.filePath }} style={styles.thumbnail} contentFit="cover" />
+                    <Image
+                      source={{ uri: attachmentPreviewUris[attachment.id] ?? attachment.filePath }}
+                      style={styles.thumbnail}
+                      contentFit="cover"
+                    />
                   ) : (
                     <View style={styles.pdfTile}>
                       <ThemedText type="smallBold">PDF</ThemedText>

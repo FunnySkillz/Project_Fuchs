@@ -38,6 +38,41 @@ function parseYearInput(rawYear: string): number | undefined {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
+interface ExportItemRowProps {
+  item: Item;
+  isSelected: boolean;
+  categoryName: string;
+  onToggleSelection: (itemId: string) => void;
+}
+
+const ExportItemRow = React.memo(function ExportItemRow({
+  item,
+  isSelected,
+  categoryName,
+  onToggleSelection,
+}: ExportItemRowProps) {
+  return (
+    <Card style={styles.itemCard}>
+      <View style={styles.rowBetween}>
+        <View style={styles.itemTextGroup}>
+          <ThemedText type="smallBold">{item.title}</ThemedText>
+          <ThemedText type="small" themeColor="textSecondary">
+            {item.purchaseDate} | {formatCents(item.totalCents)} | {item.usageType}
+          </ThemedText>
+          <ThemedText type="small" themeColor="textSecondary">
+            Vendor: {item.vendor?.trim() ? item.vendor : "-"} | Category: {categoryName}
+          </ThemedText>
+        </View>
+        <Button
+          variant={isSelected ? "primary" : "secondary"}
+          label={isSelected ? "Selected" : "Select"}
+          onPress={() => onToggleSelection(item.id)}
+        />
+      </View>
+    </Card>
+  );
+});
+
 export default function ExportRoute() {
   const sessionDefaults = useMemo(() => getExportSelectionSessionState(), []);
 
@@ -170,6 +205,10 @@ export default function ExportRoute() {
       return next;
     });
   };
+
+  const handleToggleItemSelection = useCallback((itemId: string) => {
+    toggleItemSelection(itemId);
+  }, []);
 
   const toggleSelectAllFiltered = () => {
     setSelectedItemIds((current) => {
@@ -315,6 +354,11 @@ export default function ExportRoute() {
       <FlatList
         data={filteredItems}
         keyExtractor={(item) => item.id}
+        initialNumToRender={14}
+        windowSize={10}
+        maxToRenderPerBatch={12}
+        updateCellsBatchingPeriod={40}
+        removeClippedSubviews
         contentContainerStyle={styles.content}
         ListHeaderComponent={
           <View style={styles.headerSection}>
@@ -461,24 +505,12 @@ export default function ExportRoute() {
             : "None";
 
           return (
-            <Card style={styles.itemCard}>
-              <View style={styles.rowBetween}>
-                <View style={styles.itemTextGroup}>
-                  <ThemedText type="smallBold">{item.title}</ThemedText>
-                  <ThemedText type="small" themeColor="textSecondary">
-                    {item.purchaseDate} | {formatCents(item.totalCents)} | {item.usageType}
-                  </ThemedText>
-                  <ThemedText type="small" themeColor="textSecondary">
-                    Vendor: {item.vendor?.trim() ? item.vendor : "-"} | Category: {categoryName}
-                  </ThemedText>
-                </View>
-                <Button
-                  variant={isSelected ? "primary" : "secondary"}
-                  label={isSelected ? "Selected" : "Select"}
-                  onPress={() => toggleItemSelection(item.id)}
-                />
-              </View>
-            </Card>
+            <ExportItemRow
+              item={item}
+              isSelected={isSelected}
+              categoryName={categoryName}
+              onToggleSelection={handleToggleItemSelection}
+            />
           );
         }}
         ListEmptyComponent={

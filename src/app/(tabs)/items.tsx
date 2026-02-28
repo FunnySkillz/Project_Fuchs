@@ -46,6 +46,41 @@ const sortOptions: { value: ItemSortMode; label: string }[] = [
   { value: "deductible_desc", label: "Deductible impact (highest first)" },
 ];
 
+interface ItemRowCardProps {
+  item: Item;
+  categoryName: string;
+  deductibleImpact: number;
+  onOpenDetail: (itemId: string) => void;
+}
+
+const ItemRowCard = React.memo(function ItemRowCard({
+  item,
+  categoryName,
+  deductibleImpact,
+  onOpenDetail,
+}: ItemRowCardProps) {
+  return (
+    <Card style={styles.itemCard}>
+      <ThemedText type="smallBold">{item.title}</ThemedText>
+      <ThemedText type="small" themeColor="textSecondary">
+        {item.purchaseDate} | {formatCents(item.totalCents)} | {item.usageType}
+      </ThemedText>
+      <ThemedText type="small" themeColor="textSecondary">
+        Vendor: {item.vendor?.trim() ? item.vendor : "-"} | Category: {categoryName}
+      </ThemedText>
+      <ThemedText type="small" themeColor="textSecondary">
+        Deductible impact: {formatCents(deductibleImpact)}
+      </ThemedText>
+      <View style={styles.row}>
+        {!item.notes?.trim() && (item.usageType === "WORK" || item.usageType === "MIXED") && (
+          <Badge text="Missing notes" variant="warning" />
+        )}
+        <Button variant="secondary" label="Open Detail" onPress={() => onOpenDetail(item.id)} />
+      </View>
+    </Card>
+  );
+});
+
 export default function ItemsRoute() {
   const router = useRouter();
   const params = useLocalSearchParams<{
@@ -213,11 +248,23 @@ export default function ItemsRoute() {
     setSortMode("purchase_date_desc");
   };
 
+  const handleOpenDetail = useCallback(
+    (nextId: string) => {
+      router.push(`/item/${nextId}`);
+    },
+    [router]
+  );
+
   return (
     <ThemedView style={styles.container}>
       <FlatList
         data={displayedItems}
         keyExtractor={(item) => item.id}
+        initialNumToRender={14}
+        windowSize={10}
+        maxToRenderPerBatch={12}
+        updateCellsBatchingPeriod={40}
+        removeClippedSubviews
         contentContainerStyle={styles.content}
         ListHeaderComponent={
           <View style={styles.headerSection}>
@@ -311,28 +358,12 @@ export default function ItemsRoute() {
             : 0;
 
           return (
-            <Card style={styles.itemCard}>
-              <ThemedText type="smallBold">{item.title}</ThemedText>
-              <ThemedText type="small" themeColor="textSecondary">
-                {item.purchaseDate} | {formatCents(item.totalCents)} | {item.usageType}
-              </ThemedText>
-              <ThemedText type="small" themeColor="textSecondary">
-                Vendor: {item.vendor?.trim() ? item.vendor : "-"} | Category: {categoryName}
-              </ThemedText>
-              <ThemedText type="small" themeColor="textSecondary">
-                Deductible impact: {formatCents(deductibleImpact)}
-              </ThemedText>
-              <View style={styles.row}>
-                {!item.notes?.trim() && (item.usageType === "WORK" || item.usageType === "MIXED") && (
-                  <Badge text="Missing notes" variant="warning" />
-                )}
-                <Button
-                  variant="secondary"
-                  label="Open Detail"
-                  onPress={() => router.push(`/item/${item.id}`)}
-                />
-              </View>
-            </Card>
+            <ItemRowCard
+              item={item}
+              categoryName={categoryName}
+              deductibleImpact={deductibleImpact}
+              onOpenDetail={handleOpenDetail}
+            />
           );
         }}
         ListEmptyComponent={

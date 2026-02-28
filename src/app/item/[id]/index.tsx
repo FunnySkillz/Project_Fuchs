@@ -28,7 +28,7 @@ import {
 import { getProfileSettingsRepository } from "@/repositories/create-profile-settings-repository";
 import { formatCents } from "@/utils/money";
 import { addMonthsToYmd } from "@/utils/date";
-import { attachmentFileExists } from "@/services/attachment-storage";
+import { attachmentFileExists, resolveAttachmentPreviewUri } from "@/services/attachment-storage";
 import { friendlyFileErrorMessage } from "@/services/friendly-errors";
 
 function toSingleParam(value: string | string[] | undefined): string | undefined {
@@ -83,6 +83,7 @@ export default function ItemDetailRoute() {
   const [item, setItem] = useState<Item | null>(null);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [missingAttachmentIds, setMissingAttachmentIds] = useState<Set<string>>(new Set());
+  const [attachmentPreviewUris, setAttachmentPreviewUris] = useState<Record<string, string>>({});
   const [categories, setCategories] = useState<Category[]>([]);
   const [settings, setSettings] = useState<ProfileSettings | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -127,10 +128,14 @@ export default function ItemDetailRoute() {
         loadedAttachments.map(async (attachment) => ({
           id: attachment.id,
           exists: await attachmentFileExists(attachment.filePath),
+          previewUri: await resolveAttachmentPreviewUri(attachment.filePath, attachment.mimeType),
         }))
       );
       setMissingAttachmentIds(
         new Set(checks.filter((entry) => !entry.exists).map((entry) => entry.id))
+      );
+      setAttachmentPreviewUris(
+        Object.fromEntries(checks.map((entry) => [entry.id, entry.previewUri]))
       );
       setCategories(loadedCategories);
       setSettings(loadedSettings);
@@ -310,7 +315,11 @@ export default function ItemDetailRoute() {
                   }}
                   style={({ pressed }) => [styles.galleryTile, pressed && styles.pressed]}>
                   {isImageAttachment(attachment) ? (
-                    <Image source={{ uri: attachment.filePath }} style={styles.thumbnail} contentFit="cover" />
+                    <Image
+                      source={{ uri: attachmentPreviewUris[attachment.id] ?? attachment.filePath }}
+                      style={styles.thumbnail}
+                      contentFit="cover"
+                    />
                   ) : (
                     <View style={styles.pdfTile}>
                       <ThemedText type="smallBold">PDF</ThemedText>

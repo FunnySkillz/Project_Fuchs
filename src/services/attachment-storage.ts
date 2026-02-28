@@ -2,6 +2,7 @@ import * as Crypto from "expo-crypto";
 import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from "expo-file-system/legacy";
 import * as ImagePicker from "expo-image-picker";
+import { manipulateAsync, SaveFormat } from "expo-image-manipulator";
 
 import type { AttachmentType } from "@/models/attachment";
 
@@ -24,6 +25,10 @@ interface PickedAsset {
 
 function inferAttachmentType(mimeType: string): AttachmentType {
   return mimeType === "application/pdf" ? "RECEIPT" : "PHOTO";
+}
+
+function isImageMimeType(mimeType: string): boolean {
+  return mimeType.startsWith("image/");
 }
 
 function extensionFromMimeType(mimeType: string): string {
@@ -49,6 +54,23 @@ async function ensureAttachmentRootDir(): Promise<void> {
   }
 }
 
+function buildThumbnailPath(filePath: string): string {
+  return filePath.replace(/\.[^.]+$/, ".thumb.jpg");
+}
+
+async function createImageThumbnail(filePath: string): Promise<void> {
+  const thumbnailPath = buildThumbnailPath(filePath);
+  const result = await manipulateAsync(
+    filePath,
+    [{ resize: { width: 320 } }],
+    { compress: 0.72, format: SaveFormat.JPEG }
+  );
+  await FileSystem.copyAsync({
+    from: result.uri,
+    to: thumbnailPath,
+  });
+}
+
 async function copyAssetIntoSandbox(asset: PickedAsset): Promise<StoredAttachmentFile> {
   await ensureAttachmentRootDir();
 
@@ -60,6 +82,13 @@ async function copyAssetIntoSandbox(asset: PickedAsset): Promise<StoredAttachmen
     from: asset.uri,
     to: destinationPath,
   });
+  if (isImageMimeType(normalizedMimeType)) {
+    try {
+      await createImageThumbnail(destinationPath);
+    } catch (error) {
+      console.warn("Failed to generate attachment thumbnail", error);
+    }
+  }
 
   const destinationInfo = await FileSystem.getInfoAsync(destinationPath);
   const fileSizeBytes =
@@ -119,14 +148,35 @@ export async function pickAttachmentFromDevice(): Promise<StoredAttachmentFile |
 
 export async function deleteLocalAttachmentFile(filePath: string): Promise<void> {
   const info = await FileSystem.getInfoAsync(filePath);
-  if (!info.exists) {
-    return;
+  if (info.exists) {
+    await FileSystem.deleteAsync(filePath, { idempotent: true });
   }
 
-  await FileSystem.deleteAsync(filePath, { idempotent: true });
+  const thumbnailPath = buildThumbnailPath(filePath);
+  const thumbInfo = await FileSystem.getInfoAsync(thumbnailPath);
+  if (thumbInfo.exists) {
+    await FileSystem.deleteAsync(thumbnailPath, { idempotent: true });
+  }
 }
 
 export async function attachmentFileExists(filePath: string): Promise<boolean> {
   const info = await FileSystem.getInfoAsync(filePath);
   return info.exists;
+}
+
+export async function resolveAttachmentPreviewUri(
+  filePath: string,
+  mimeType: string
+): Promise<string> {
+  if (!isImageMimeType(mimeType)) {
+    return filePath;
+  }
+
+  const thumbnailPath = buildThumbnailPath(filePath);
+  const thumbInfo = await FileSystem.getInfoAsync(thumbnailPath);
+  if (thumbInfo.exists) {
+    return thumbnailPath;
+  }
+
+  return filePath;
 }
