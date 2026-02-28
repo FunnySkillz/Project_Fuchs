@@ -18,6 +18,7 @@ import {
 } from "@/services/export-selection-session";
 import { formatCents } from "@/utils/money";
 import { generatePdfExport, shareExportPdf } from "@/services/pdf-export";
+import { generateZipExport, shareExportZip } from "@/services/zip-export";
 
 const usageOptions: { value: string; label: string }[] = [
   { value: "__all", label: "All usage types" },
@@ -53,6 +54,11 @@ export default function ExportRoute() {
   const [latestPdfName, setLatestPdfName] = useState<string | null>(null);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [isSharingPdf, setIsSharingPdf] = useState(false);
+  const [latestZipUri, setLatestZipUri] = useState<string | null>(null);
+  const [latestZipName, setLatestZipName] = useState<string | null>(null);
+  const [latestZipSizeBytes, setLatestZipSizeBytes] = useState<number | null>(null);
+  const [isGeneratingZip, setIsGeneratingZip] = useState(false);
+  const [isSharingZip, setIsSharingZip] = useState(false);
 
   const [items, setItems] = useState<Item[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -261,6 +267,52 @@ export default function ExportRoute() {
     }
   };
 
+  const handleGenerateZip = async () => {
+    if (!settings || selectedItems.length === 0 || isGeneratingZip) {
+      return;
+    }
+
+    setIsGeneratingZip(true);
+    setLoadError(null);
+    try {
+      const targetYear = parsedTaxYear ?? settings.taxYearDefault;
+      const result = await generateZipExport({
+        taxYear: targetYear,
+        selectedItems,
+        categories,
+        settings,
+        includeDetailPages,
+      });
+      setLatestZipUri(result.fileUri);
+      setLatestZipName(result.fileName);
+      setLatestZipSizeBytes(result.sizeBytes);
+    } catch (error) {
+      console.error("Failed to generate ZIP export", error);
+      setLoadError(
+        error instanceof Error ? error.message : "Could not generate ZIP export."
+      );
+    } finally {
+      setIsGeneratingZip(false);
+    }
+  };
+
+  const handleShareZip = async () => {
+    if (!latestZipUri || isSharingZip) {
+      return;
+    }
+
+    setIsSharingZip(true);
+    setLoadError(null);
+    try {
+      await shareExportZip(latestZipUri);
+    } catch (error) {
+      console.error("Failed to share ZIP export", error);
+      setLoadError(error instanceof Error ? error.message : "Could not share ZIP export.");
+    } finally {
+      setIsSharingZip(false);
+    }
+  };
+
   return (
     <ThemedView style={styles.container}>
       <FlatList
@@ -371,10 +423,29 @@ export default function ExportRoute() {
                   onPress={() => void handleSharePdf()}
                   disabled={!latestPdfUri || isSharingPdf}
                 />
+                <Button
+                  label={isGeneratingZip ? "Generating ZIP..." : "Generate ZIP"}
+                  onPress={() => void handleGenerateZip()}
+                  disabled={selectedItems.length === 0 || isGeneratingZip}
+                />
+                <Button
+                  variant="secondary"
+                  label={isSharingZip ? "Sharing ZIP..." : "Share ZIP"}
+                  onPress={() => void handleShareZip()}
+                  disabled={!latestZipUri || isSharingZip}
+                />
               </View>
               {latestPdfName && (
                 <ThemedText type="small" themeColor="textSecondary">
                   Last PDF: {latestPdfName}
+                </ThemedText>
+              )}
+              {latestZipName && (
+                <ThemedText type="small" themeColor="textSecondary">
+                  Last ZIP: {latestZipName}
+                  {latestZipSizeBytes !== null
+                    ? ` (${(latestZipSizeBytes / 1024 / 1024).toFixed(2)} MB)`
+                    : ""}
                 </ThemedText>
               )}
             </Card>
