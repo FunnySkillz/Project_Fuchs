@@ -1,14 +1,21 @@
 import { useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, StyleSheet, View } from "react-native";
+import {
+  Badge,
+  BadgeText,
+  Box,
+  Button,
+  ButtonText,
+  Card,
+  Heading,
+  HStack,
+  Pressable,
+  Spinner,
+  Text,
+  VStack,
+} from "@gluestack-ui/themed";
 
-import { Badge, Button, Card } from "@/components/ui";
-import { ThemedText } from "@/components/themed-text";
-import { ThemedView } from "@/components/themed-view";
-import { Spacing } from "@/constants/theme";
 import { computeDeductibleImpactCents } from "@/domain/deductible-impact";
-import type { Category } from "@/models/category";
-import type { ProfileSettings } from "@/models/profile-settings";
 import { getCategoryRepository, getItemRepository } from "@/repositories/create-core-repositories";
 import { getProfileSettingsRepository } from "@/repositories/create-profile-settings-repository";
 import { onProfileSettingsSaved } from "@/services/app-events";
@@ -16,7 +23,9 @@ import { formatCents } from "@/utils/money";
 
 interface DashboardStats {
   year: number;
-  deductibleYtdCents: number;
+  itemCount: number;
+  deductibleThisYearCents: number;
+  estimatedRefundImpactCents: number;
   missingReceiptCount: number;
   missingNotesCount: number;
 }
@@ -46,13 +55,18 @@ export default function HomeRoute() {
       ]);
 
       const categoryMap = new Map(categories.map((category) => [category.id, category]));
-      const deductibleYtdCents = yearItems.reduce((sum, item) => {
+      const deductibleThisYearCents = yearItems.reduce((sum, item) => {
         return sum + computeDeductibleImpactCents(item, settings, categoryMap, year);
       }, 0);
+      const estimatedRefundImpactCents = Math.round(
+        (deductibleThisYearCents * settings.marginalRateBps) / 10_000
+      );
 
       setStats({
         year,
-        deductibleYtdCents,
+        itemCount: yearItems.length,
+        deductibleThisYearCents,
+        estimatedRefundImpactCents,
         missingReceiptCount: missingReceiptItems.length,
         missingNotesCount: missingNotesItems.length,
       });
@@ -77,79 +91,124 @@ export default function HomeRoute() {
     return unsubscribe;
   }, [loadDashboard]);
 
+  if (isLoading) {
+    return (
+      <Box flex={1} px="$5" py="$6" justifyContent="center" alignItems="center">
+        <VStack space="md" alignItems="center">
+          <Spinner size="large" />
+          <Text size="sm">Loading home overview...</Text>
+        </VStack>
+      </Box>
+    );
+  }
+
+  if (loadError || !stats) {
+    return (
+      <Box flex={1} px="$5" py="$6">
+        <VStack space="lg" maxWidth={760} width="$full" alignSelf="center">
+          <Heading size="xl">Steuerausgleich</Heading>
+          <Card borderWidth="$1" borderColor="$error300">
+            <VStack space="sm">
+              <Text bold size="md">
+                Could not load dashboard
+              </Text>
+              <Text size="sm">{loadError ?? "Unknown error while loading dashboard."}</Text>
+            </VStack>
+          </Card>
+          <Button onPress={() => void loadDashboard()} alignSelf="flex-start">
+            <ButtonText>Retry</ButtonText>
+          </Button>
+        </VStack>
+      </Box>
+    );
+  }
+
   return (
-    <ThemedView style={styles.container}>
-      <View style={styles.content}>
-        <ThemedText type="title">Home</ThemedText>
-        <ThemedText themeColor="textSecondary">Quick overview for your current tax year.</ThemedText>
+    <Box flex={1} px="$5" py="$6">
+      <VStack maxWidth={760} width="$full" alignSelf="center" space="lg">
+        <VStack space="xs">
+          <Heading size="2xl">Steuerausgleich {stats.year}</Heading>
+          <Text size="sm">Estimated deductible this year</Text>
+        </VStack>
 
-        {isLoading && <ActivityIndicator />}
-        {loadError && <ThemedText style={styles.errorText}>{loadError}</ThemedText>}
+        <Card borderWidth="$1" borderColor="$border200">
+          <VStack space="sm">
+            <Text size="sm">Deductible this year</Text>
+            <Heading size="3xl">{formatCents(stats.deductibleThisYearCents)}</Heading>
+            <Text size="sm">Estimated refund impact: {formatCents(stats.estimatedRefundImpactCents)}</Text>
+          </VStack>
+        </Card>
 
-        {stats && (
-          <>
-            <Card>
-              <ThemedText type="smallBold">Year-to-Date Deductible ({stats.year})</ThemedText>
-              <ThemedText type="subtitle">{formatCents(stats.deductibleYtdCents)}</ThemedText>
-            </Card>
+        <Button onPress={() => router.push("/item/new")} testID="home-add-item-cta">
+          <ButtonText>Add Item</ButtonText>
+        </Button>
 
-            <Button label="Add Receipt" onPress={() => router.push("/item/new")} />
+        {stats.itemCount === 0 ? (
+          <Card borderWidth="$1" borderColor="$border200">
+            <VStack space="sm">
+              <Text bold size="md">
+                No items yet
+              </Text>
+              <Text size="sm">
+                Start with your first purchase record to see deductible impact and export options.
+              </Text>
+              <Button onPress={() => router.push("/item/new")} alignSelf="flex-start">
+                <ButtonText>Add Item</ButtonText>
+              </Button>
+            </VStack>
+          </Card>
+        ) : (
+          <HStack space="md" flexWrap="wrap">
+            <Pressable
+              flex={1}
+              minWidth={240}
+              onPress={() =>
+                router.push({
+                  pathname: "/(tabs)/items",
+                  params: { year: String(stats.year), missingReceipt: "1" },
+                })
+              }
+              testID="home-missing-receipts-card"
+            >
+              <Card borderWidth="$1" borderColor="$border200">
+                <VStack space="sm">
+                  <Text bold size="md">
+                    Missing receipts
+                  </Text>
+                  <Heading size="2xl">{stats.missingReceiptCount}</Heading>
+                  <Badge size="sm" action="warning" variant="solid">
+                    <BadgeText>Open filtered items</BadgeText>
+                  </Badge>
+                </VStack>
+              </Card>
+            </Pressable>
 
-            <Card>
-              <ThemedText type="smallBold">Attention Flags</ThemedText>
-              <View style={styles.flagRow}>
-                <Badge text={`${stats.missingReceiptCount} missing receipt`} variant="warning" />
-                <Button
-                  variant="secondary"
-                  label="Open Filter"
-                  onPress={() =>
-                    router.push({
-                      pathname: "/(tabs)/items",
-                      params: { year: String(stats.year), missingReceipt: "1" },
-                    })
-                  }
-                />
-              </View>
-              <View style={styles.flagRow}>
-                <Badge text={`${stats.missingNotesCount} missing notes`} variant="warning" />
-                <Button
-                  variant="secondary"
-                  label="Open Filter"
-                  onPress={() =>
-                    router.push({
-                      pathname: "/(tabs)/items",
-                      params: { year: String(stats.year), missingNotes: "1" },
-                    })
-                  }
-                />
-              </View>
-            </Card>
-          </>
+            <Pressable
+              flex={1}
+              minWidth={240}
+              onPress={() =>
+                router.push({
+                  pathname: "/(tabs)/items",
+                  params: { year: String(stats.year), missingNotes: "1" },
+                })
+              }
+              testID="home-missing-notes-card"
+            >
+              <Card borderWidth="$1" borderColor="$border200">
+                <VStack space="sm">
+                  <Text bold size="md">
+                    Missing notes
+                  </Text>
+                  <Heading size="2xl">{stats.missingNotesCount}</Heading>
+                  <Badge size="sm" action="warning" variant="solid">
+                    <BadgeText>Open filtered items</BadgeText>
+                  </Badge>
+                </VStack>
+              </Card>
+            </Pressable>
+          </HStack>
         )}
-      </View>
-    </ThemedView>
+      </VStack>
+    </Box>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  content: {
-    flex: 1,
-    gap: Spacing.three,
-    padding: Spacing.four,
-    width: "100%",
-    maxWidth: 720,
-    alignSelf: "center",
-  },
-  flagRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: Spacing.two,
-  },
-  errorText: {
-    color: "#B00020",
-  },
-});

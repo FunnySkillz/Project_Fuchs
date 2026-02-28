@@ -7,6 +7,7 @@ import "../../global.css";
 
 import { AppLockGate } from "@/components/app-lock-gate";
 import { AnimatedSplashOverlay } from "@/components/animated-icon";
+import { AppGluestackUIProvider } from "@/components/gluestack-ui-provider";
 import { InitErrorScreen } from "@/components/init-error-screen";
 import { getProfileSettingsRepository } from "@/repositories/create-profile-settings-repository";
 import {
@@ -285,48 +286,51 @@ export default function RootLayout() {
   }, [authenticate, bootstrapState, hasProfile, refreshAppLockState, refreshPinAvailability]);
 
   const inOnboarding = segments[0] === "(onboarding)";
+  const resolvedColorMode = colorScheme === "dark" ? "dark" : "light";
 
   return (
     <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
-      <AnimatedSplashOverlay />
-      {bootstrapState === "ready" && !hasProfile && !inOnboarding && <Redirect href="/(onboarding)/welcome" />}
-      {bootstrapState === "ready" && hasProfile && inOnboarding && <Redirect href="/(tabs)/home" />}
-      {bootstrapState === "ready" && (!appLockEnabled || isUnlocked || !hasProfile) && <Slot />}
-      {bootstrapState === "ready" && appLockEnabled && !isUnlocked && (
-        <AppLockGate
-          isAuthenticating={isAuthenticating}
-          errorMessage={authError}
-          pinEnabled={pinAvailable}
-          pinValue={pinInput}
-          onPinValueChange={setPinInput}
-          onPinSubmit={() => void handlePinSubmit()}
-          onUsePin={() => setShowPinEntry(true)}
-          onUseBiometric={() => {
-            setShowPinEntry(false);
-            void authenticate();
-          }}
-          showPinEntry={showPinEntry}
-          onRetry={() => void authenticate()}
-          onCancel={() => {
-            setIsUnlocked(false);
-            setAuthError("Authentication canceled.");
-            setShowPinEntry(false);
-          }}
-        />
-      )}
-      {bootstrapState === "init_error" && (
-        <InitErrorScreen
-          message={initError ?? "Database initialization failed."}
-          onRetry={retryInitialization}
-          onResetData={() => {
-            void deleteAllLocalData().then(() => {
-              setHasProfile(false);
-              setBootstrapState("ready");
-              setInitError(null);
-            });
-          }}
-        />
-      )}
+      <AppGluestackUIProvider colorMode={resolvedColorMode}>
+        <AnimatedSplashOverlay />
+        {bootstrapState === "ready" && !hasProfile && !inOnboarding && <Redirect href="/(onboarding)/welcome" />}
+        {bootstrapState === "ready" && hasProfile && inOnboarding && <Redirect href="/(tabs)/home" />}
+        {bootstrapState === "ready" && (!appLockEnabled || isUnlocked || !hasProfile) && <Slot />}
+        {bootstrapState === "ready" && appLockEnabled && !isUnlocked && (
+          <AppLockGate
+            isAuthenticating={isAuthenticating}
+            errorMessage={authError}
+            pinEnabled={pinAvailable}
+            pinValue={pinInput}
+            onPinValueChange={setPinInput}
+            onPinSubmit={() => void handlePinSubmit()}
+            onUsePin={() => setShowPinEntry(true)}
+            onUseBiometric={() => {
+              setShowPinEntry(false);
+              void authenticate();
+            }}
+            showPinEntry={showPinEntry}
+            onRetry={() => void authenticate()}
+            onCancel={() => {
+              setIsUnlocked(false);
+              setAuthError("Authentication canceled.");
+              setShowPinEntry(false);
+            }}
+          />
+        )}
+        {bootstrapState === "init_error" && (
+          <InitErrorScreen
+            message={initError ?? "Database initialization failed."}
+            onRetry={retryInitialization}
+            onResetData={() => {
+              void deleteAllLocalData().then(() => {
+                setHasProfile(false);
+                setBootstrapState("ready");
+                setInitError(null);
+              });
+            }}
+          />
+        )}
+      </AppGluestackUIProvider>
     </ThemeProvider>
   );
 }
