@@ -1,20 +1,32 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Image } from "expo-image";
 import React, { useCallback, useMemo, useState } from "react";
+import { ScrollView } from "react-native";
 import {
-  ActivityIndicator,
-  Alert,
-  Modal,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  View,
-} from "react-native";
+  AlertDialog as GAlertDialog,
+  AlertDialogBackdrop as GAlertDialogBackdrop,
+  AlertDialogBody as GAlertDialogBody,
+  AlertDialogContent as GAlertDialogContent,
+  AlertDialogFooter as GAlertDialogFooter,
+  AlertDialogHeader as GAlertDialogHeader,
+  Badge as GBadge,
+  BadgeText as GBadgeText,
+  Box as GBox,
+  Button as GButton,
+  ButtonText as GButtonText,
+  Card as GCard,
+  Heading as GHeading,
+  HStack as GHStack,
+  Modal as GModal,
+  ModalBackdrop as GModalBackdrop,
+  ModalBody as GModalBody,
+  ModalContent as GModalContent,
+  Pressable as GPressable,
+  Spinner as GSpinner,
+  Text as GText,
+  VStack as GVStack,
+} from "@gluestack-ui/themed";
 
-import { Badge, Button, Card } from "@/components/ui";
-import { ThemedText } from "@/components/themed-text";
-import { ThemedView } from "@/components/themed-view";
-import { Spacing } from "@/constants/theme";
 import { estimateTaxImpact } from "@/domain/calculation-engine";
 import type { Attachment } from "@/models/attachment";
 import type { Category } from "@/models/category";
@@ -26,11 +38,11 @@ import {
   getItemRepository,
 } from "@/repositories/create-core-repositories";
 import { getProfileSettingsRepository } from "@/repositories/create-profile-settings-repository";
-import { formatCents } from "@/utils/money";
-import { addMonthsToYmd } from "@/utils/date";
 import { attachmentFileExists, resolveAttachmentPreviewUri } from "@/services/attachment-storage";
-import { friendlyFileErrorMessage } from "@/services/friendly-errors";
 import { deleteAttachment } from "@/services/attachment-service";
+import { friendlyFileErrorMessage } from "@/services/friendly-errors";
+import { addMonthsToYmd } from "@/utils/date";
+import { formatCents } from "@/utils/money";
 
 function toSingleParam(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
@@ -76,6 +88,22 @@ function resolveWorkShare(item: Item, defaultWorkPercent: number): number {
   return 0;
 }
 
+interface InfoRowProps {
+  label: string;
+  value: string;
+}
+
+function InfoRow({ label, value }: InfoRowProps) {
+  return (
+    <GHStack justifyContent="space-between" alignItems="center" space="md">
+      <GText size="sm">{label}</GText>
+      <GText size="sm" bold textAlign="right" flex={1}>
+        {value}
+      </GText>
+    </GHStack>
+  );
+}
+
 export default function ItemDetailRoute() {
   const router = useRouter();
   const params = useLocalSearchParams<{ id?: string | string[] }>();
@@ -91,6 +119,7 @@ export default function ItemDetailRoute() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [selectedAttachment, setSelectedAttachment] = useState<Attachment | null>(null);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
   const loadItem = useCallback(async () => {
     if (!itemId) {
@@ -159,6 +188,9 @@ export default function ItemDetailRoute() {
 
   const categoryName = item?.categoryId ? categoryMap.get(item.categoryId)?.name ?? "Unknown" : "None";
   const warrantyUntilDate = item ? computeWarrantyUntilDate(item.purchaseDate, item.warrantyMonths) : null;
+  const selectedAttachmentMissing = selectedAttachment
+    ? missingAttachmentIds.has(selectedAttachment.id)
+    : false;
 
   const calculationBreakdown = useMemo(() => {
     if (!item || !settings) {
@@ -186,14 +218,10 @@ export default function ItemDetailRoute() {
     );
 
     return {
-      workShare,
       workRelevantCents,
-      usefulLifeMonths,
-      immediate: workRelevantCents <= settings.gwgThresholdCents,
       deductibleThisYearCents: estimate.deductibleThisYearCents,
       estimatedRefundCents: estimate.estimatedRefundThisYearCents,
       scheduleByYear: estimate.scheduleByYear,
-      explanations: estimate.explanations,
     };
   }, [categoryMap, item, settings]);
 
@@ -210,9 +238,7 @@ export default function ItemDetailRoute() {
       ]);
       const linkedAttachments = await attachmentRepository.listByItem(itemId);
       await Promise.all(linkedAttachments.map((attachment) => deleteAttachment(attachment.id)));
-
-      const repository = itemRepository;
-      await repository.softDelete(itemId);
+      await itemRepository.softDelete(itemId);
       router.replace("/(tabs)/items");
     } catch (error) {
       console.error("Failed to delete item", error);
@@ -222,304 +248,272 @@ export default function ItemDetailRoute() {
     }
   };
 
-  const promptDelete = () => {
-    Alert.alert(
-      "Delete item",
-      "This will delete the item and all linked attachment files. Continue?",
-      [
-        { text: "Cancel", style: "cancel" },
-        { text: "Delete", style: "destructive", onPress: () => void handleDelete() },
-      ]
-    );
-  };
-
   if (isLoading) {
     return (
-      <ThemedView style={styles.centered}>
-        <ActivityIndicator />
-        <ThemedText>Loading item details...</ThemedText>
-      </ThemedView>
+      <GBox flex={1} px="$5" py="$6" alignItems="center" justifyContent="center">
+        <GVStack space="md" alignItems="center">
+          <GSpinner size="large" />
+          <GText size="sm">Loading item details...</GText>
+        </GVStack>
+      </GBox>
     );
   }
 
   if (!item) {
     return (
-      <ThemedView style={styles.centered}>
-        <ThemedText type="title">Item Detail</ThemedText>
-        <ThemedText style={styles.errorText}>{loadError ?? "Item not found."}</ThemedText>
-        <Button variant="secondary" label="Back to Items" onPress={() => router.replace("/(tabs)/items")} />
-      </ThemedView>
+      <GBox flex={1} px="$5" py="$6">
+        <GVStack maxWidth={860} width="$full" alignSelf="center" space="lg">
+          <GHeading size="xl">Item Detail</GHeading>
+          <GCard borderWidth="$1" borderColor="$error300">
+            <GVStack space="sm">
+              <GText bold size="md">
+                Could not load item
+              </GText>
+              <GText size="sm">{loadError ?? "Item not found."}</GText>
+            </GVStack>
+          </GCard>
+          <GButton variant="outline" action="secondary" onPress={() => router.replace("/(tabs)/items")}>
+            <GButtonText>Back to Items</GButtonText>
+          </GButton>
+        </GVStack>
+      </GBox>
     );
   }
 
   return (
-    <ThemedView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.content}>
-        <View style={styles.headerRow}>
-          <View style={styles.headerTextGroup}>
-            <ThemedText type="title">{item.title}</ThemedText>
-            <ThemedText themeColor="textSecondary">Purchase date: {item.purchaseDate}</ThemedText>
-          </View>
-          <Badge text={item.usageType} />
-        </View>
+    <GBox flex={1} px="$5" py="$6">
+      <ScrollView
+        contentContainerStyle={{
+          width: "100%",
+          maxWidth: 860,
+          alignSelf: "center",
+          paddingBottom: 24,
+        }}
+      >
+        <GVStack space="lg">
+          <GHStack justifyContent="space-between" alignItems="flex-start" space="md">
+            <GVStack space="xs" flex={1}>
+              <GHeading size="2xl">{item.title}</GHeading>
+              <GText size="sm">Purchase date: {item.purchaseDate}</GText>
+            </GVStack>
+            <GBadge size="sm" variant="outline" action="muted">
+              <GBadgeText>{item.usageType}</GBadgeText>
+            </GBadge>
+          </GHStack>
 
-        {loadError && <ThemedText style={styles.errorText}>{loadError}</ThemedText>}
+          {loadError && (
+            <GCard borderWidth="$1" borderColor="$error300">
+              <GText size="sm">{loadError}</GText>
+            </GCard>
+          )}
 
-        <Card>
-          <ThemedText type="smallBold">Key Fields</ThemedText>
-          <ThemedText type="small">Item ID: {item.id}</ThemedText>
-          <ThemedText type="small">Price: {formatCents(item.totalCents)}</ThemedText>
-          <ThemedText type="small">Currency: {item.currency}</ThemedText>
-          <ThemedText type="small">Category: {categoryName}</ThemedText>
-          <ThemedText type="small">Usage type: {item.usageType}</ThemedText>
-          <ThemedText type="small">Vendor: {item.vendor?.trim() ? item.vendor : "-"}</ThemedText>
-          <ThemedText type="small">
-            Work percent: {item.usageType === "MIXED" ? `${item.workPercent ?? settings?.defaultWorkPercent ?? 0}%` : "n/a"}
-          </ThemedText>
-          <ThemedText type="small">
-            Useful life override:{" "}
-            {item.usefulLifeMonthsOverride && item.usefulLifeMonthsOverride > 0
-              ? `${item.usefulLifeMonthsOverride} months`
-              : "none"}
-          </ThemedText>
-          <ThemedText type="small">
-            Warranty: {item.warrantyMonths && item.warrantyMonths > 0 ? `${item.warrantyMonths} months` : "none"}
-          </ThemedText>
-          <ThemedText type="small">Warranty until: {warrantyUntilDate ?? "n/a"}</ThemedText>
-          <ThemedText type="small">Notes: {item.notes?.trim() ? item.notes : "-"}</ThemedText>
-          <ThemedText type="small" themeColor="textSecondary">
-            Created at: {item.createdAt}
-          </ThemedText>
-          <ThemedText type="small" themeColor="textSecondary">
-            Updated at: {item.updatedAt}
-          </ThemedText>
-        </Card>
-
-        <Card>
-          <ThemedText type="smallBold">Calculation Breakdown</ThemedText>
-          {calculationBreakdown ? (
-            <>
-              <ThemedText type="small">Work share: {(calculationBreakdown.workShare * 100).toFixed(0)}%</ThemedText>
-              <ThemedText type="small">
-                Work-relevant amount: {formatCents(calculationBreakdown.workRelevantCents)}
-              </ThemedText>
-              <ThemedText type="small">
-                Mode: {calculationBreakdown.immediate ? "Immediate deduction (below GWG)" : "AfA schedule"}
-              </ThemedText>
-              <ThemedText type="small">
-                Useful life months: {calculationBreakdown.usefulLifeMonths}
-              </ThemedText>
-              <ThemedText type="small">
-                Deductible this year: {formatCents(calculationBreakdown.deductibleThisYearCents)}
-              </ThemedText>
-              <ThemedText type="small">
-                Estimated refund: {formatCents(calculationBreakdown.estimatedRefundCents)}
-              </ThemedText>
-              <ThemedText type="smallBold">Schedule by year</ThemedText>
-              {calculationBreakdown.scheduleByYear.length === 0 ? (
-                <ThemedText type="small" themeColor="textSecondary">
-                  No deductible schedule available.
-                </ThemedText>
+          <GCard borderWidth="$1" borderColor="$border200">
+            <GVStack space="md">
+              <GHeading size="md">Attachment gallery</GHeading>
+              {attachments.length === 0 ? (
+                <GText size="sm">No attachments available.</GText>
               ) : (
-                calculationBreakdown.scheduleByYear.map((entry) => (
-                  <ThemedText key={entry.year} type="small">
-                    {entry.year}: {formatCents(entry.deductibleCents)}
-                  </ThemedText>
-                ))
-              )}
-              <ThemedText type="smallBold">Explanation</ThemedText>
-              {calculationBreakdown.explanations.map((line, index) => (
-                <ThemedText key={`${index}-${line}`} type="small" themeColor="textSecondary">
-                  - {line}
-                </ThemedText>
-              ))}
-            </>
-          ) : (
-            <ThemedText type="small" themeColor="textSecondary">
-              Calculation data unavailable.
-            </ThemedText>
-          )}
-        </Card>
-
-        <Card>
-          <ThemedText type="smallBold">Attachment Gallery</ThemedText>
-          {attachments.length === 0 ? (
-            <ThemedText type="small" themeColor="textSecondary">
-              No attachments available.
-            </ThemedText>
-          ) : (
-            <View style={styles.galleryGrid}>
-              {attachments.map((attachment) => (
-                <Pressable
-                  key={attachment.id}
-                  onPress={() => {
-                    if (missingAttachmentIds.has(attachment.id)) {
-                      Alert.alert(
-                        "Attachment missing",
-                        "The local file is missing. Open Edit Item and re-attach this document/photo."
+                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                  <GHStack space="sm" pr="$2">
+                    {attachments.map((attachment) => {
+                      const missing = missingAttachmentIds.has(attachment.id);
+                      const tile = (
+                        <GCard width={200} borderWidth="$1" borderColor={missing ? "$warning300" : "$border200"}>
+                          <GVStack space="sm">
+                            {missing ? (
+                              <GBox height={120} alignItems="center" justifyContent="center">
+                                <GText size="sm">File unavailable</GText>
+                              </GBox>
+                            ) : isImageAttachment(attachment) ? (
+                              <Image
+                                source={{ uri: attachmentPreviewUris[attachment.id] ?? attachment.filePath }}
+                                style={{ width: "100%", height: 120, borderRadius: 8 }}
+                                contentFit="cover"
+                              />
+                            ) : (
+                              <GBox height={120} alignItems="center" justifyContent="center">
+                                <GText bold size="md">
+                                  PDF
+                                </GText>
+                              </GBox>
+                            )}
+                            <GText size="sm" numberOfLines={1}>
+                              {attachment.originalFileName ?? attachment.type}
+                            </GText>
+                            {missing && (
+                              <GBadge size="sm" action="warning" variant="outline" alignSelf="flex-start">
+                                <GBadgeText>Missing file</GBadgeText>
+                              </GBadge>
+                            )}
+                          </GVStack>
+                        </GCard>
                       );
-                      return;
-                    }
-                    setSelectedAttachment(attachment);
-                  }}
-                  style={({ pressed }) => [styles.galleryTile, pressed && styles.pressed]}>
-                  {isImageAttachment(attachment) ? (
-                    <Image
-                      source={{ uri: attachmentPreviewUris[attachment.id] ?? attachment.filePath }}
-                      style={styles.thumbnail}
-                      contentFit="cover"
-                    />
-                  ) : (
-                    <View style={styles.pdfTile}>
-                      <ThemedText type="smallBold">PDF</ThemedText>
-                    </View>
-                  )}
-                  <ThemedText type="small" numberOfLines={1}>
-                    {attachment.originalFileName ?? attachment.type}
-                  </ThemedText>
-                  {missingAttachmentIds.has(attachment.id) && (
-                    <Badge text="Missing file" variant="warning" />
-                  )}
-                </Pressable>
-              ))}
-            </View>
-          )}
-        </Card>
 
-        <View style={styles.actionRow}>
-          <Button
-            variant="secondary"
-            label="Edit"
-            onPress={() => router.push(`/item/${item.id}/edit`)}
-          />
-          <Button
-            variant="danger"
-            label={isDeleting ? "Deleting..." : "Delete"}
-            onPress={promptDelete}
-            disabled={isDeleting}
-          />
-        </View>
+                      if (missing) {
+                        return <GBox key={attachment.id}>{tile}</GBox>;
+                      }
+
+                      return (
+                        <GPressable key={attachment.id} onPress={() => setSelectedAttachment(attachment)}>
+                          {tile}
+                        </GPressable>
+                      );
+                    })}
+                  </GHStack>
+                </ScrollView>
+              )}
+            </GVStack>
+          </GCard>
+
+          <GCard borderWidth="$1" borderColor="$border200">
+            <GVStack space="sm">
+              <GHeading size="md">Info</GHeading>
+              <InfoRow label="Title" value={item.title} />
+              <InfoRow label="Category" value={categoryName} />
+              <InfoRow label="Purchase date" value={item.purchaseDate} />
+              <InfoRow label="Vendor" value={item.vendor?.trim() ? item.vendor : "-"} />
+              <InfoRow label="Warranty until" value={warrantyUntilDate ?? "n/a"} />
+            </GVStack>
+          </GCard>
+
+          <GCard borderWidth="$1" borderColor="$border200">
+            <GVStack space="sm">
+              <GHeading size="md">Calculation</GHeading>
+              {calculationBreakdown ? (
+                <>
+                  <InfoRow
+                    label="Deductible base"
+                    value={formatCents(calculationBreakdown.workRelevantCents)}
+                  />
+                  <InfoRow
+                    label="Deductible this year"
+                    value={formatCents(calculationBreakdown.deductibleThisYearCents)}
+                  />
+                  <InfoRow
+                    label="Estimated refund impact"
+                    value={formatCents(calculationBreakdown.estimatedRefundCents)}
+                  />
+                  <GVStack space="xs" pt="$2">
+                    <GText bold size="sm">
+                      Schedule by year
+                    </GText>
+                    {calculationBreakdown.scheduleByYear.length === 0 ? (
+                      <GText size="sm">No deductible schedule available.</GText>
+                    ) : (
+                      calculationBreakdown.scheduleByYear.map((entry) => (
+                        <GHStack key={entry.year} justifyContent="space-between" alignItems="center">
+                          <GText size="sm">{entry.year}</GText>
+                          <GText size="sm" bold>
+                            {formatCents(entry.deductibleCents)}
+                          </GText>
+                        </GHStack>
+                      ))
+                    )}
+                  </GVStack>
+                </>
+              ) : (
+                <GText size="sm">Calculation data unavailable.</GText>
+              )}
+            </GVStack>
+          </GCard>
+
+          <GHStack space="sm" flexWrap="wrap">
+            <GButton
+              variant="outline"
+              action="secondary"
+              onPress={() => router.push(`/item/${item.id}/edit`)}
+              testID="item-detail-edit"
+            >
+              <GButtonText>Edit</GButtonText>
+            </GButton>
+            <GButton
+              variant="outline"
+              action="negative"
+              onPress={() => setIsDeleteDialogOpen(true)}
+              disabled={isDeleting}
+              testID="item-detail-delete"
+            >
+              <GButtonText>{isDeleting ? "Deleting..." : "Delete"}</GButtonText>
+            </GButton>
+          </GHStack>
+        </GVStack>
       </ScrollView>
 
-      <Modal visible={selectedAttachment !== null} transparent animationType="fade" onRequestClose={() => setSelectedAttachment(null)}>
-        <View style={styles.fullscreenOverlay}>
-          <Pressable style={styles.fullscreenCloseArea} onPress={() => setSelectedAttachment(null)} />
-          <View style={styles.fullscreenCard}>
-            {selectedAttachment && isImageAttachment(selectedAttachment) ? (
-              <Image source={{ uri: selectedAttachment.filePath }} style={styles.fullscreenImage} contentFit="contain" />
-            ) : (
-              <View style={styles.fullscreenPdfFallback}>
-                <ThemedText type="smallBold">PDF Preview</ThemedText>
-                <ThemedText type="small" themeColor="textSecondary">
-                  Full-screen preview for PDF is not available in-app yet.
-                </ThemedText>
-              </View>
-            )}
-            <ThemedText type="small" numberOfLines={1}>
-              {selectedAttachment?.originalFileName ?? selectedAttachment?.type}
-            </ThemedText>
-            <Button variant="secondary" label="Close" onPress={() => setSelectedAttachment(null)} />
-          </View>
-        </View>
-      </Modal>
-    </ThemedView>
+      <GAlertDialog isOpen={isDeleteDialogOpen} onClose={() => setIsDeleteDialogOpen(false)}>
+        <GAlertDialogBackdrop />
+        <GAlertDialogContent>
+          <GAlertDialogHeader>
+            <GHeading size="md">Delete item?</GHeading>
+          </GAlertDialogHeader>
+          <GAlertDialogBody>
+            <GText size="sm">
+              This will delete the item and all linked attachment files from this device.
+            </GText>
+          </GAlertDialogBody>
+          <GAlertDialogFooter>
+            <GHStack space="sm">
+              <GButton
+                variant="outline"
+                action="secondary"
+                onPress={() => setIsDeleteDialogOpen(false)}
+                testID="item-detail-delete-cancel"
+              >
+                <GButtonText>Cancel</GButtonText>
+              </GButton>
+              <GButton
+                action="negative"
+                testID="item-detail-delete-confirm"
+                onPress={() => {
+                  setIsDeleteDialogOpen(false);
+                  void handleDelete();
+                }}
+              >
+                <GButtonText>Delete</GButtonText>
+              </GButton>
+            </GHStack>
+          </GAlertDialogFooter>
+        </GAlertDialogContent>
+      </GAlertDialog>
+
+      <GModal isOpen={selectedAttachment !== null} onClose={() => setSelectedAttachment(null)}>
+        <GModalBackdrop />
+        <GModalContent>
+          <GModalBody>
+            <GVStack space="md">
+              {selectedAttachment ? (
+                selectedAttachmentMissing ? (
+                  <GCard borderWidth="$1" borderColor="$warning300">
+                    <GText size="sm">
+                      File unavailable. Open Edit Item and re-attach this document/photo.
+                    </GText>
+                  </GCard>
+                ) : isImageAttachment(selectedAttachment) ? (
+                  <Image
+                    source={{
+                      uri:
+                        attachmentPreviewUris[selectedAttachment.id] ?? selectedAttachment.filePath,
+                    }}
+                    style={{ width: "100%", height: 320, borderRadius: 8 }}
+                    contentFit="contain"
+                  />
+                ) : (
+                  <GCard borderWidth="$1" borderColor="$border200">
+                    <GText size="sm">
+                      PDF preview is not available in-app yet.
+                    </GText>
+                  </GCard>
+                )
+              ) : null}
+              <GText size="sm" numberOfLines={1}>
+                {selectedAttachment?.originalFileName ?? selectedAttachment?.type}
+              </GText>
+              <GButton variant="outline" action="secondary" onPress={() => setSelectedAttachment(null)}>
+                <GButtonText>Close</GButtonText>
+              </GButton>
+            </GVStack>
+          </GModalBody>
+        </GModalContent>
+      </GModal>
+    </GBox>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  centered: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    gap: Spacing.two,
-    padding: Spacing.four,
-  },
-  content: {
-    width: "100%",
-    maxWidth: 860,
-    alignSelf: "center",
-    padding: Spacing.four,
-    gap: Spacing.three,
-  },
-  headerRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: Spacing.two,
-  },
-  headerTextGroup: {
-    flex: 1,
-    gap: Spacing.one,
-  },
-  galleryGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: Spacing.two,
-  },
-  galleryTile: {
-    width: 150,
-    gap: Spacing.one,
-  },
-  thumbnail: {
-    width: 150,
-    height: 120,
-    borderRadius: 10,
-    backgroundColor: "#ECEDEE",
-  },
-  pdfTile: {
-    width: 150,
-    height: 120,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "#9BA1A6",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#FFFFFF",
-  },
-  actionRow: {
-    flexDirection: "row",
-    gap: Spacing.two,
-    flexWrap: "wrap",
-  },
-  fullscreenOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.85)",
-    justifyContent: "center",
-    padding: Spacing.four,
-  },
-  fullscreenCloseArea: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  fullscreenCard: {
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#9BA1A6",
-    backgroundColor: "#FFFFFF",
-    padding: Spacing.three,
-    gap: Spacing.two,
-  },
-  fullscreenImage: {
-    width: "100%",
-    aspectRatio: 1,
-    backgroundColor: "#111111",
-    borderRadius: 10,
-  },
-  fullscreenPdfFallback: {
-    width: "100%",
-    padding: Spacing.four,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "#9BA1A6",
-    backgroundColor: "#FFFFFF",
-    gap: Spacing.one,
-  },
-  pressed: {
-    opacity: 0.75,
-  },
-  errorText: {
-    color: "#B00020",
-  },
-});
