@@ -21,6 +21,7 @@ import {
   pickAttachmentFromDevice,
 } from "@/services/attachment-storage";
 import { parseEuroInputToCents } from "@/utils/money";
+import { formatYmdFromDateLocal, isValidYmd } from "@/utils/date";
 
 function toSingleParam(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
@@ -28,27 +29,6 @@ function toSingleParam(value: string | string[] | undefined): string | undefined
 
 function isImageAttachment(attachment: Attachment): boolean {
   return attachment.mimeType.startsWith("image/");
-}
-
-function formatDateYmd(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-function isValidDateYmd(value: string): boolean {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    return false;
-  }
-
-  const [year, month, day] = value.split("-").map((part) => Number.parseInt(part, 10));
-  const date = new Date(Date.UTC(year, month - 1, day));
-  return (
-    date.getUTCFullYear() === year &&
-    date.getUTCMonth() + 1 === month &&
-    date.getUTCDate() === day
-  );
 }
 
 function formatFileSize(bytes: number | null): string {
@@ -93,7 +73,7 @@ export default function ItemEditRoute() {
   const [categories, setCategories] = useState<Category[]>([]);
 
   const [title, setTitle] = useState("");
-  const [purchaseDate, setPurchaseDate] = useState(formatDateYmd(new Date()));
+  const [purchaseDate, setPurchaseDate] = useState(formatYmdFromDateLocal(new Date()));
   const [totalPrice, setTotalPrice] = useState("");
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [usageType, setUsageType] = useState<ItemUsageType>("WORK");
@@ -130,7 +110,7 @@ export default function ItemEditRoute() {
     if (title.trim().length === 0) {
       return "Title is required.";
     }
-    if (!isValidDateYmd(purchaseDate)) {
+    if (!isValidYmd(purchaseDate)) {
       return "Purchase date must be valid (YYYY-MM-DD).";
     }
     if (parsedTotalCents === null) {
@@ -359,7 +339,7 @@ export default function ItemEditRoute() {
           </FormField>
 
           <FormField label="Purchase Date *">
-            <DatePickerTrigger value={purchaseDate} onPress={() => setPurchaseDate(formatDateYmd(new Date()))} />
+            <DatePickerTrigger value={purchaseDate} onPress={() => setPurchaseDate(formatYmdFromDateLocal(new Date()))} />
             <Input
               value={purchaseDate}
               onChangeText={setPurchaseDate}

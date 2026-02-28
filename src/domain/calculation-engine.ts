@@ -1,4 +1,5 @@
 import type { ItemUsageType } from "@/models/item";
+import { parseYmd } from "@/utils/date";
 
 export interface TaxEstimateSettings {
   gwgThresholdCents: number;
@@ -28,24 +29,12 @@ export interface TaxEstimateResult {
 }
 
 function parsePurchaseDate(value: string): { year: number; month: number; day: number } {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
-  if (!match) {
-    throw new Error(`Invalid purchaseDate format: ${value}`);
-  }
-
-  const year = Number.parseInt(match[1], 10);
-  const month = Number.parseInt(match[2], 10);
-  const day = Number.parseInt(match[3], 10);
-  const date = new Date(Date.UTC(year, month - 1, day));
-  const valid =
-    date.getUTCFullYear() === year &&
-    date.getUTCMonth() + 1 === month &&
-    date.getUTCDate() === day;
-  if (!valid) {
+  const parsed = parseYmd(value);
+  if (!parsed) {
     throw new Error(`Invalid purchaseDate value: ${value}`);
   }
 
-  return { year, month, day };
+  return parsed;
 }
 
 function resolveWorkSharePercent(

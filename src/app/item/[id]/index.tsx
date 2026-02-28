@@ -27,6 +27,7 @@ import {
 } from "@/repositories/create-core-repositories";
 import { getProfileSettingsRepository } from "@/repositories/create-profile-settings-repository";
 import { formatCents } from "@/utils/money";
+import { addMonthsToYmd } from "@/utils/date";
 
 function toSingleParam(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
@@ -36,23 +37,11 @@ function isImageAttachment(attachment: Attachment): boolean {
   return attachment.mimeType.startsWith("image/");
 }
 
-function formatDate(dateValue: Date): string {
-  return dateValue.toISOString().slice(0, 10);
-}
-
 function computeWarrantyUntilDate(purchaseDate: string, warrantyMonths: number | null): string | null {
   if (!warrantyMonths || warrantyMonths <= 0) {
     return null;
   }
-
-  const base = new Date(`${purchaseDate}T00:00:00.000Z`);
-  if (Number.isNaN(base.getTime())) {
-    return null;
-  }
-
-  const withMonths = new Date(base);
-  withMonths.setUTCMonth(withMonths.getUTCMonth() + warrantyMonths);
-  return formatDate(withMonths);
+  return addMonthsToYmd(purchaseDate, warrantyMonths);
 }
 
 function resolveUsefulLifeMonths(item: Item, categoryMap: Map<string, Category>): number {

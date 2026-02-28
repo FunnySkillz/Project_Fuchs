@@ -31,17 +31,10 @@ import {
   verifyPinAsync,
 } from "@/services/pin-auth";
 import { estimateTaxImpact } from "@/domain/calculation-engine";
+import { formatCents } from "@/utils/money";
 
 WebBrowser.maybeCompleteAuthSession();
 const oneDriveAuthProvider = getOneDriveAuthProvider();
-
-function formatCents(cents: number): string {
-  return new Intl.NumberFormat("de-AT", {
-    style: "currency",
-    currency: "EUR",
-    maximumFractionDigits: 2,
-  }).format(cents / 100);
-}
 
 function calculatePreview(values: ProfileSettingsFormValues) {
   const sampleItemCents = 150_000;

@@ -9,6 +9,7 @@ import type { Item } from "@/models/item";
 import type { ProfileSettings } from "@/models/profile-settings";
 import { getAttachmentRepository } from "@/repositories/create-core-repositories";
 import { formatCents } from "@/utils/money";
+import { formatYmdFromDateUtc } from "@/utils/date";
 
 const EXPORT_DIR = `${FileSystem.documentDirectory}exports`;
 
@@ -49,10 +50,6 @@ async function ensureExportDirectory(): Promise<void> {
   if (!info.exists) {
     await FileSystem.makeDirectoryAsync(EXPORT_DIR, { intermediates: true });
   }
-}
-
-function formatIsoDate(date: Date): string {
-  return date.toISOString().slice(0, 10);
 }
 
 function buildPdfHtml(params: {
@@ -182,7 +179,7 @@ export async function generatePdfExport(
     attachmentLists.map((entry) => [entry.itemId, entry.attachments])
   );
 
-  const generatedDate = formatIsoDate(new Date());
+  const generatedDate = formatYmdFromDateUtc(new Date());
   const html = buildPdfHtml({
     taxYear,
     generatedDate,

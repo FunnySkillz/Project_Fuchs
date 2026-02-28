@@ -11,20 +11,13 @@ import type { Category } from "@/models/category";
 import type { ProfileSettings } from "@/models/profile-settings";
 import { getCategoryRepository, getItemRepository } from "@/repositories/create-core-repositories";
 import { getProfileSettingsRepository } from "@/repositories/create-profile-settings-repository";
+import { formatCents } from "@/utils/money";
 
 interface DashboardStats {
   year: number;
   deductibleYtdCents: number;
   missingReceiptCount: number;
   missingNotesCount: number;
-}
-
-function formatCents(cents: number): string {
-  return new Intl.NumberFormat("de-AT", {
-    style: "currency",
-    currency: "EUR",
-    maximumFractionDigits: 2,
-  }).format(cents / 100);
 }
 
 export default function HomeRoute() {
