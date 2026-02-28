@@ -129,6 +129,7 @@ export function estimateTaxImpact(
 
   const explanations: string[] = [];
   explanations.push(`Usage type ${input.usageType} resolved to ${workSharePercent}% work share.`);
+  explanations.push(`Deductible base amount: ${workRelevantCents} cents.`);
 
   if (workRelevantCents <= 0) {
     explanations.push("No work-relevant amount. Deduction is 0.");
@@ -143,7 +144,7 @@ export function estimateTaxImpact(
   let scheduleByYear: YearlyDeduction[] = [];
   if (workRelevantCents <= settings.gwgThresholdCents) {
     explanations.push(
-      `Work-relevant amount is below/equal GWG threshold (${settings.gwgThresholdCents} cents), immediate deduction in purchase year.`
+      `Deductible base is below/equal GWG threshold (${settings.gwgThresholdCents} cents), immediate deduction in purchase year.`
     );
     scheduleByYear = [{ year: purchase.year, deductibleCents: workRelevantCents }];
   } else {
