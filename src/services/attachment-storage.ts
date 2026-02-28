@@ -105,9 +105,18 @@ async function copyAssetIntoSandbox(asset: PickedAsset): Promise<StoredAttachmen
 }
 
 export async function capturePhotoAttachment(): Promise<StoredAttachmentFile | null> {
-  const permission = await ImagePicker.requestCameraPermissionsAsync();
+  let permission: ImagePicker.PermissionResponse;
+  try {
+    permission = await ImagePicker.requestCameraPermissionsAsync();
+  } catch {
+    throw new Error(
+      "Camera permission could not be requested. Please allow camera access in system settings and try again."
+    );
+  }
   if (!permission.granted) {
-    throw new Error("Camera permission is required to capture attachments.");
+    throw new Error(
+      "Camera permission denied. Enable camera access in your device settings to capture receipt photos."
+    );
   }
 
   const result = await ImagePicker.launchCameraAsync({
@@ -128,11 +137,18 @@ export async function capturePhotoAttachment(): Promise<StoredAttachmentFile | n
 }
 
 export async function pickAttachmentFromDevice(): Promise<StoredAttachmentFile | null> {
-  const result = await DocumentPicker.getDocumentAsync({
-    multiple: false,
-    type: ["application/pdf", "image/*"],
-    copyToCacheDirectory: true,
-  });
+  let result: DocumentPicker.DocumentPickerResult;
+  try {
+    result = await DocumentPicker.getDocumentAsync({
+      multiple: false,
+      type: ["application/pdf", "image/*"],
+      copyToCacheDirectory: true,
+    });
+  } catch {
+    throw new Error(
+      "File picker access failed. Please allow file/photo access in system settings and try again."
+    );
+  }
   if (result.canceled || result.assets.length === 0) {
     return null;
   }

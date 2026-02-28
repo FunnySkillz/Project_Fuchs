@@ -356,7 +356,7 @@ export default function ItemDetailRoute() {
                     if (missingAttachmentIds.has(attachment.id)) {
                       Alert.alert(
                         "Attachment missing",
-                        "The local file for this attachment is missing."
+                        "The local file is missing. Open Edit Item and re-attach this document/photo."
                       );
                       return;
                     }

@@ -17,6 +17,19 @@ import {
 import { deleteAllLocalData } from "@/services/local-data";
 import { hasPinAsync, verifyPinAsync } from "@/services/pin-auth";
 
+function friendlyInitErrorMessage(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  const lowered = message.toLowerCase();
+
+  if (lowered.includes("migration")) {
+    return "Database migration failed. Retry initialization. If it still fails, use 'Reset Local Data' to recover.";
+  }
+  if (lowered.includes("database") || lowered.includes("sqlite")) {
+    return "Database initialization failed. Retry first. If the error persists, use 'Reset Local Data' to rebuild local storage.";
+  }
+  return message || "Database initialization failed.";
+}
+
 export default function RootLayout() {
   const colorScheme = useColorScheme();
   const segments = useSegments();
@@ -226,7 +239,7 @@ export default function RootLayout() {
         }
 
         console.error("Failed to initialize app", error);
-        setInitError(error instanceof Error ? error.message : "Database initialization failed.");
+        setInitError(friendlyInitErrorMessage(error));
         setBootstrapState("init_error");
       }
     };
