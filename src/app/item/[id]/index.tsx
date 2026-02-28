@@ -30,6 +30,7 @@ import { formatCents } from "@/utils/money";
 import { addMonthsToYmd } from "@/utils/date";
 import { attachmentFileExists, resolveAttachmentPreviewUri } from "@/services/attachment-storage";
 import { friendlyFileErrorMessage } from "@/services/friendly-errors";
+import { deleteAttachment } from "@/services/attachment-service";
 
 function toSingleParam(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
@@ -195,7 +196,14 @@ export default function ItemDetailRoute() {
 
     setIsDeleting(true);
     try {
-      const repository = await getItemRepository();
+      const [itemRepository, attachmentRepository] = await Promise.all([
+        getItemRepository(),
+        getAttachmentRepository(),
+      ]);
+      const linkedAttachments = await attachmentRepository.listByItem(itemId);
+      await Promise.all(linkedAttachments.map((attachment) => deleteAttachment(attachment.id)));
+
+      const repository = itemRepository;
       await repository.softDelete(itemId);
       router.replace("/(tabs)/items");
     } catch (error) {

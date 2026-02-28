@@ -146,6 +146,14 @@ export async function pickAttachmentFromDevice(): Promise<StoredAttachmentFile |
   });
 }
 
+export async function saveFromCamera(): Promise<StoredAttachmentFile | null> {
+  return capturePhotoAttachment();
+}
+
+export async function saveFromPicker(): Promise<StoredAttachmentFile | null> {
+  return pickAttachmentFromDevice();
+}
+
 export async function deleteLocalAttachmentFile(filePath: string): Promise<void> {
   const info = await FileSystem.getInfoAsync(filePath);
   if (info.exists) {

@@ -17,9 +17,10 @@ import {
 } from "@/repositories/create-core-repositories";
 import type { StoredAttachmentFile } from "@/services/attachment-storage";
 import {
-  capturePhotoAttachment,
-  pickAttachmentFromDevice,
+  saveFromCamera,
+  saveFromPicker,
 } from "@/services/attachment-storage";
+import { deleteAttachment } from "@/services/attachment-service";
 import { parseEuroInputToCents } from "@/utils/money";
 import { formatYmdFromDateLocal, isValidYmd } from "@/utils/date";
 import { friendlyFileErrorMessage } from "@/services/friendly-errors";
@@ -249,13 +250,13 @@ export default function ItemEditRoute() {
     try {
       let picked: StoredAttachmentFile | null = null;
       if (kind === "receipt_camera") {
-        const captured = await capturePhotoAttachment();
+        const captured = await saveFromCamera();
         picked = captured ? withType(captured, "RECEIPT") : null;
       } else if (kind === "receipt_upload") {
-        const uploaded = await pickAttachmentFromDevice();
+        const uploaded = await saveFromPicker();
         picked = uploaded ? withType(uploaded, "RECEIPT") : null;
       } else {
-        const captured = await capturePhotoAttachment();
+        const captured = await saveFromCamera();
         picked = captured ? withType(captured, "PHOTO") : null;
       }
 
@@ -303,7 +304,7 @@ export default function ItemEditRoute() {
 
     try {
       const repository = await getAttachmentRepository();
-      await repository.softDelete(attachmentId);
+      await deleteAttachment(attachmentId);
       const refreshed = await repository.listByItem(itemId);
       setAttachments(refreshed);
       const checks = await Promise.all(

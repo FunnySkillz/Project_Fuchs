@@ -11,7 +11,7 @@ import type { Category } from "@/models/category";
 import type { ItemUsageType } from "@/models/item";
 import { getCategoryRepository, getItemRepository } from "@/repositories/create-core-repositories";
 import type { StoredAttachmentFile } from "@/services/attachment-storage";
-import { capturePhotoAttachment, pickAttachmentFromDevice } from "@/services/attachment-storage";
+import { saveFromCamera, saveFromPicker } from "@/services/attachment-storage";
 import {
   addAttachmentToDraft,
   createItemDraft,
@@ -189,7 +189,7 @@ export default function NewItemRoute() {
     setIsBusy(true);
     setErrorMessage(null);
     try {
-      const captured = await capturePhotoAttachment();
+      const captured = await saveFromCamera();
       if (!captured) {
         return;
       }
@@ -210,7 +210,7 @@ export default function NewItemRoute() {
     setIsBusy(true);
     setErrorMessage(null);
     try {
-      const picked = await pickAttachmentFromDevice();
+      const picked = await saveFromPicker();
       if (!picked) {
         return;
       }
@@ -231,7 +231,7 @@ export default function NewItemRoute() {
     setIsBusy(true);
     setErrorMessage(null);
     try {
-      const captured = await capturePhotoAttachment();
+      const captured = await saveFromCamera();
       if (!captured) {
         return;
       }

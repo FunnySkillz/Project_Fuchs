@@ -30,8 +30,13 @@ export interface AttachmentListOptions {
   includeDeleted?: boolean;
 }
 
+export interface AttachmentGetOptions {
+  includeDeleted?: boolean;
+}
+
 export interface AttachmentRepository {
   add(input: CreateAttachmentInput): Promise<Attachment>;
+  getById(id: string, options?: AttachmentGetOptions): Promise<Attachment | null>;
   listByItem(itemId: string, options?: AttachmentListOptions): Promise<Attachment[]>;
   softDelete(id: string): Promise<void>;
   deleteFileHard(id: string): Promise<void>;
@@ -100,6 +105,28 @@ export class SQLiteAttachmentRepository implements AttachmentRepository {
     }
 
     return mapAttachmentRow(created);
+  }
+
+  async getById(id: string, options: AttachmentGetOptions = {}): Promise<Attachment | null> {
+    const whereDeletedClause = options.includeDeleted ? "" : "AND DeletedAt IS NULL";
+    const row = await this.db.getFirstAsync<AttachmentRow>(
+      `SELECT
+        Id AS id,
+        ItemId AS itemId,
+        Type AS type,
+        MimeType AS mimeType,
+        FilePath AS filePath,
+        OriginalFileName AS originalFileName,
+        FileSizeBytes AS fileSizeBytes,
+        CreatedAt AS createdAt,
+        UpdatedAt AS updatedAt,
+        DeletedAt AS deletedAt
+      FROM Attachment
+      WHERE Id = $id ${whereDeletedClause}
+      LIMIT 1;`,
+      { $id: id }
+    );
+    return row ? mapAttachmentRow(row) : null;
   }
 
   async listByItem(itemId: string, options: AttachmentListOptions = {}): Promise<Attachment[]> {
