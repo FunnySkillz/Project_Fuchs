@@ -303,7 +303,7 @@ export default function ItemEditRoute() {
 
     try {
       const repository = await getAttachmentRepository();
-      await repository.delete(attachmentId);
+      await repository.softDelete(attachmentId);
       const refreshed = await repository.listByItem(itemId);
       setAttachments(refreshed);
       const checks = await Promise.all(

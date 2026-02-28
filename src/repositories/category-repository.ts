@@ -20,9 +20,14 @@ export interface CreateCustomCategoryInput {
   defaultUsefulLifeMonths?: number | null;
 }
 
+export interface CategoryListOptions {
+  includeDeleted?: boolean;
+}
+
 export interface CategoryRepository {
-  list(): Promise<Category[]>;
+  list(options?: CategoryListOptions): Promise<Category[]>;
   createCustomCategory(input: CreateCustomCategoryInput): Promise<Category>;
+  softDelete(id: string): Promise<void>;
 }
 
 function mapCategoryRow(row: CategoryRow): Category {
@@ -41,7 +46,8 @@ function mapCategoryRow(row: CategoryRow): Category {
 export class SQLiteCategoryRepository implements CategoryRepository {
   constructor(private readonly db: SQLiteExecutor) {}
 
-  async list(): Promise<Category[]> {
+  async list(options: CategoryListOptions = {}): Promise<Category[]> {
+    const whereDeletedClause = options.includeDeleted ? "" : "WHERE DeletedAt IS NULL";
     const rows = await this.db.getAllAsync<CategoryRow>(
       `SELECT
         Id AS id,
@@ -53,7 +59,7 @@ export class SQLiteCategoryRepository implements CategoryRepository {
         UpdatedAt AS updatedAt,
         DeletedAt AS deletedAt
       FROM Category
-      WHERE DeletedAt IS NULL
+      ${whereDeletedClause}
       ORDER BY SortOrder ASC, Name ASC;`,
       []
     );
@@ -104,5 +110,14 @@ export class SQLiteCategoryRepository implements CategoryRepository {
     }
 
     return mapCategoryRow(created);
+  }
+
+  async softDelete(id: string): Promise<void> {
+    await this.db.runAsync(
+      `UPDATE Category
+       SET DeletedAt = (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+       WHERE Id = $id AND IsPreset = 0 AND DeletedAt IS NULL;`,
+      { $id: id }
+    );
   }
 }

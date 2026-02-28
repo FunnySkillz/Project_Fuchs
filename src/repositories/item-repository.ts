@@ -2,7 +2,6 @@ import * as Crypto from "expo-crypto";
 
 import type { SQLiteExecutor } from "@/db/profile-settings-db";
 import type { Item, ItemUsageType } from "@/models/item";
-import { deleteLocalAttachmentFile } from "@/services/attachment-storage";
 
 interface ItemRow {
   id: string;
@@ -20,11 +19,6 @@ interface ItemRow {
   createdAt: string;
   updatedAt: string;
   deletedAt: string | null;
-}
-
-interface ItemAttachmentFileRow {
-  id: string;
-  filePath: string;
 }
 
 export interface CreateItemInput {
@@ -50,13 +44,19 @@ export interface ItemListFilters {
   categoryId?: string;
   missingReceipt?: boolean;
   missingNotes?: boolean;
+  includeDeleted?: boolean;
+}
+
+export interface GetItemOptions {
+  includeDeleted?: boolean;
 }
 
 export interface ItemRepository {
   create(input: CreateItemInput): Promise<Item>;
   update(input: UpdateItemInput): Promise<Item>;
-  delete(id: string): Promise<void>;
-  getById(id: string): Promise<Item | null>;
+  softDelete(id: string): Promise<void>;
+  restore(id: string): Promise<void>;
+  getById(id: string, options?: GetItemOptions): Promise<Item | null>;
   list(filters?: ItemListFilters): Promise<Item[]>;
 }
 
@@ -171,26 +171,13 @@ export class SQLiteItemRepository implements ItemRepository {
     return updated;
   }
 
-  async delete(id: string): Promise<void> {
-    const attachments = await this.db.getAllAsync<ItemAttachmentFileRow>(
-      `SELECT
-        Id AS id,
-        FilePath AS filePath
-      FROM Attachment
-      WHERE ItemId = $itemId AND DeletedAt IS NULL;`,
+  async softDelete(id: string): Promise<void> {
+    await this.db.runAsync(
+      `UPDATE Attachment
+       SET DeletedAt = (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+       WHERE ItemId = $itemId AND DeletedAt IS NULL;`,
       { $itemId: id }
     );
-
-    for (const attachment of attachments) {
-      await this.db.runAsync(
-        `UPDATE Attachment
-         SET DeletedAt = (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
-         WHERE Id = $id AND DeletedAt IS NULL;`,
-        { $id: attachment.id }
-      );
-      await deleteLocalAttachmentFile(attachment.filePath);
-    }
-
     await this.db.runAsync(
       `UPDATE Item
        SET DeletedAt = (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
@@ -199,7 +186,24 @@ export class SQLiteItemRepository implements ItemRepository {
     );
   }
 
-  async getById(id: string): Promise<Item | null> {
+  async restore(id: string): Promise<void> {
+    await this.db.runAsync(
+      `UPDATE Item
+       SET DeletedAt = NULL
+       WHERE Id = $id;`,
+      { $id: id }
+    );
+
+    await this.db.runAsync(
+      `UPDATE Attachment
+       SET DeletedAt = NULL
+       WHERE ItemId = $itemId;`,
+      { $itemId: id }
+    );
+  }
+
+  async getById(id: string, options: GetItemOptions = {}): Promise<Item | null> {
+    const whereDeletedClause = options.includeDeleted ? "" : "AND DeletedAt IS NULL";
     const row = await this.db.getFirstAsync<ItemRow>(
       `SELECT
         Id AS id,
@@ -218,7 +222,7 @@ export class SQLiteItemRepository implements ItemRepository {
         UpdatedAt AS updatedAt,
         DeletedAt AS deletedAt
       FROM Item
-      WHERE Id = $id AND DeletedAt IS NULL
+      WHERE Id = $id ${whereDeletedClause}
       LIMIT 1;`,
       { $id: id }
     );
@@ -226,8 +230,12 @@ export class SQLiteItemRepository implements ItemRepository {
   }
 
   async list(filters: ItemListFilters = {}): Promise<Item[]> {
-    const clauses: string[] = ["i.DeletedAt IS NULL"];
+    const clauses: string[] = [];
     const params: Record<string, string | number | null> = {};
+
+    if (!filters.includeDeleted) {
+      clauses.push("i.DeletedAt IS NULL");
+    }
 
     if (filters.year !== undefined) {
       clauses.push("substr(i.PurchaseDate, 1, 4) = $year");
@@ -274,7 +282,7 @@ export class SQLiteItemRepository implements ItemRepository {
         i.UpdatedAt AS updatedAt,
         i.DeletedAt AS deletedAt
       FROM Item i
-      WHERE ${clauses.join(" AND ")}
+      ${clauses.length > 0 ? `WHERE ${clauses.join(" AND ")}` : ""}
       ORDER BY i.PurchaseDate DESC, i.CreatedAt DESC;`,
       params
     );

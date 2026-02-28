@@ -26,10 +26,15 @@ export interface CreateAttachmentInput {
   fileSizeBytes?: number | null;
 }
 
+export interface AttachmentListOptions {
+  includeDeleted?: boolean;
+}
+
 export interface AttachmentRepository {
   add(input: CreateAttachmentInput): Promise<Attachment>;
-  listByItem(itemId: string): Promise<Attachment[]>;
-  delete(id: string): Promise<void>;
+  listByItem(itemId: string, options?: AttachmentListOptions): Promise<Attachment[]>;
+  softDelete(id: string): Promise<void>;
+  deleteFileHard(id: string): Promise<void>;
 }
 
 function mapAttachmentRow(row: AttachmentRow): Attachment {
@@ -97,7 +102,8 @@ export class SQLiteAttachmentRepository implements AttachmentRepository {
     return mapAttachmentRow(created);
   }
 
-  async listByItem(itemId: string): Promise<Attachment[]> {
+  async listByItem(itemId: string, options: AttachmentListOptions = {}): Promise<Attachment[]> {
+    const whereDeletedClause = options.includeDeleted ? "" : "AND DeletedAt IS NULL";
     const rows = await this.db.getAllAsync<AttachmentRow>(
       `SELECT
         Id AS id,
@@ -111,31 +117,39 @@ export class SQLiteAttachmentRepository implements AttachmentRepository {
         UpdatedAt AS updatedAt,
         DeletedAt AS deletedAt
       FROM Attachment
-      WHERE ItemId = $itemId AND DeletedAt IS NULL
+      WHERE ItemId = $itemId ${whereDeletedClause}
       ORDER BY CreatedAt ASC;`,
       { $itemId: itemId }
     );
     return rows.map(mapAttachmentRow);
   }
 
-  async delete(id: string): Promise<void> {
-    const existing = await this.db.getFirstAsync<Pick<AttachmentRow, "filePath">>(
-      `SELECT FilePath AS filePath
-       FROM Attachment
-       WHERE Id = $id AND DeletedAt IS NULL
-       LIMIT 1;`,
-      { $id: id }
-    );
-
+  async softDelete(id: string): Promise<void> {
     await this.db.runAsync(
       `UPDATE Attachment
        SET DeletedAt = (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
        WHERE Id = $id AND DeletedAt IS NULL;`,
       { $id: id }
     );
+  }
+
+  async deleteFileHard(id: string): Promise<void> {
+    const existing = await this.db.getFirstAsync<Pick<AttachmentRow, "filePath">>(
+      `SELECT FilePath AS filePath
+       FROM Attachment
+       WHERE Id = $id
+       LIMIT 1;`,
+      { $id: id }
+    );
 
     if (existing?.filePath) {
       await deleteLocalAttachmentFile(existing.filePath);
     }
+
+    await this.db.runAsync(
+      `DELETE FROM Attachment
+       WHERE Id = $id;`,
+      { $id: id }
+    );
   }
 }

@@ -196,7 +196,7 @@ export default function ItemDetailRoute() {
     setIsDeleting(true);
     try {
       const repository = await getItemRepository();
-      await repository.delete(itemId);
+      await repository.softDelete(itemId);
       router.replace("/(tabs)/items");
     } catch (error) {
       console.error("Failed to delete item", error);
