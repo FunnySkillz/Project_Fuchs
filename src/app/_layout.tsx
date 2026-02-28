@@ -103,7 +103,7 @@ export default function RootLayout() {
 
   const refreshAppLockState = useCallback(async () => {
     const repository = await getProfileSettingsRepository();
-    const hasSettings = await repository.hasSettings();
+    const hasSettings = await repository.hasValidSettings();
     if (!hasSettings) {
       setHasProfile(false);
       setAppLockEnabled(false);
@@ -188,7 +188,7 @@ export default function RootLayout() {
       try {
         setInitError(null);
         const repository = await getProfileSettingsRepository();
-        const hasSettings = await repository.hasSettings();
+        const hasSettings = await repository.hasValidSettings();
         if (!active) {
           return;
         }

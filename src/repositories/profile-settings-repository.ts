@@ -16,6 +16,7 @@ interface ProfileSettingsRow {
 
 export interface ProfileSettingsRepository {
   hasSettings(): Promise<boolean>;
+  hasValidSettings(): Promise<boolean>;
   getSettings(): Promise<ProfileSettings>;
   upsertSettings(settings: Partial<ProfileSettings>): Promise<ProfileSettings>;
 }
@@ -36,6 +37,27 @@ export class SQLiteProfileSettingsRepository implements ProfileSettingsRepositor
     );
 
     return row?.existsFlag === 1;
+  }
+
+  async hasValidSettings(): Promise<boolean> {
+    const row = await this.db.getFirstAsync<{ validFlag: number }>(
+      `SELECT 1 AS validFlag
+      FROM ProfileSettings
+      WHERE Id = $id
+        AND DeletedAt IS NULL
+        AND TaxYearDefault BETWEEN 2000 AND 2100
+        AND MarginalRateBps BETWEEN 0 AND 10000
+        AND DefaultWorkPercent BETWEEN 0 AND 100
+        AND GwgThresholdCents >= 0
+        AND ApplyHalfYearRule IN (0, 1)
+        AND AppLockEnabled IN (0, 1)
+        AND UploadToOneDriveAfterExport IN (0, 1)
+        AND Currency = 'EUR'
+      LIMIT 1;`,
+      { $id: PROFILE_SETTINGS_SINGLETON_ID }
+    );
+
+    return row?.validFlag === 1;
   }
 
   async getSettings(): Promise<ProfileSettings> {

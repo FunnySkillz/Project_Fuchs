@@ -8,7 +8,11 @@ import { ThemedText } from "@/components/themed-text";
 import { createDefaultProfileSettings, type ProfileSettings } from "@/models/profile-settings";
 import { getProfileSettingsRepository } from "@/repositories/create-profile-settings-repository";
 import { Spacing } from "@/constants/theme";
-import { emitDatabaseRestored, emitLocalDataDeleted } from "@/services/app-events";
+import {
+  emitDatabaseRestored,
+  emitLocalDataDeleted,
+  emitProfileSettingsSaved,
+} from "@/services/app-events";
 import { getOneDriveAuthProvider } from "@/services/auth/onedrive-auth-provider";
 import { deleteAllLocalData } from "@/services/local-data";
 import {
@@ -133,6 +137,7 @@ export default function SettingsScreen() {
     const repository = await getProfileSettingsRepository();
     const updated = await repository.upsertSettings(values);
     setSettings(updated);
+    emitProfileSettingsSaved();
   };
 
   const handleSavePin = async () => {
@@ -167,18 +172,39 @@ export default function SettingsScreen() {
 
   const confirmDeleteAllData = async (): Promise<boolean> => {
     if (Platform.OS === "web") {
-      return globalThis.confirm(
+      const initial = globalThis.confirm(
         "Delete all local data? This will permanently remove your items, settings, attachments, and app lock PIN from this device."
+      );
+      if (!initial) {
+        return false;
+      }
+      return globalThis.confirm(
+        "Final confirmation: This action is irreversible and will remove all local app data now."
       );
     }
 
-    return new Promise((resolve) => {
+    const firstConfirmation = await new Promise<boolean>((resolve) => {
       Alert.alert(
         "Delete all local data",
         "This permanently removes all local app data from this device. This action cannot be undone.",
         [
           { text: "Cancel", style: "cancel", onPress: () => resolve(false) },
-          { text: "Delete", style: "destructive", onPress: () => resolve(true) },
+          { text: "Continue", style: "destructive", onPress: () => resolve(true) },
+        ]
+      );
+    });
+
+    if (!firstConfirmation) {
+      return false;
+    }
+
+    return new Promise<boolean>((resolve) => {
+      Alert.alert(
+        "Final confirmation required",
+        "Delete all items, attachments, settings, and PIN from this device now?",
+        [
+          { text: "Cancel", style: "cancel", onPress: () => resolve(false) },
+          { text: "Delete Everything", style: "destructive", onPress: () => resolve(true) },
         ]
       );
     });
@@ -380,6 +406,7 @@ export default function SettingsScreen() {
       appLockEnabled: updated.appLockEnabled,
       uploadToOneDriveAfterExport: updated.uploadToOneDriveAfterExport,
     });
+    emitProfileSettingsSaved();
   };
 
   const handleRunTestExport = async () => {
