@@ -4,6 +4,7 @@ export interface ProfileSettings {
   defaultWorkPercent: number;
   gwgThresholdCents: number;
   applyHalfYearRule: boolean;
+  appLockEnabled: boolean;
   currency: "EUR";
 }
 
@@ -18,6 +19,7 @@ export function createDefaultProfileSettings(now: Date = new Date()): ProfileSet
     defaultWorkPercent: DEFAULT_WORK_PERCENT,
     gwgThresholdCents: DEFAULT_GWG_THRESHOLD_CENTS,
     applyHalfYearRule: false,
+    appLockEnabled: false,
     currency: "EUR",
   };
 }

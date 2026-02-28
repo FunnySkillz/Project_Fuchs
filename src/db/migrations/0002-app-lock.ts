@@ -1,0 +1,3 @@
+export const MIGRATION_0002_APP_LOCK_COLUMN = `
+ALTER TABLE ProfileSettings ADD COLUMN AppLockEnabled INTEGER NOT NULL DEFAULT 0;
+`;

@@ -82,6 +82,7 @@ export default function SettingsScreen() {
       defaultWorkPercent: updated.defaultWorkPercent,
       gwgThresholdCents: updated.gwgThresholdCents,
       applyHalfYearRule: updated.applyHalfYearRule,
+      appLockEnabled: updated.appLockEnabled,
     });
   };
 

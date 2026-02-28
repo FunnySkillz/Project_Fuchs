@@ -16,6 +16,7 @@ export interface ProfileSettingsFormValues {
   defaultWorkPercent: number;
   gwgThresholdCents: number;
   applyHalfYearRule: boolean;
+  appLockEnabled: boolean;
 }
 
 interface Props {
@@ -58,8 +59,18 @@ export function ProfileSettingsForm({
     String((initialValues.gwgThresholdCents / 100).toFixed(2))
   );
   const [applyHalfYearRule, setApplyHalfYearRule] = useState(initialValues.applyHalfYearRule);
+  const [appLockEnabled, setAppLockEnabled] = useState(initialValues.appLockEnabled);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+
+  React.useEffect(() => {
+    setTaxYearDefault(String(initialValues.taxYearDefault));
+    setMarginalRatePercent(String(bpsToPercent(initialValues.marginalRateBps)));
+    setDefaultWorkPercent(String(initialValues.defaultWorkPercent));
+    setGwgThresholdEuros(String((initialValues.gwgThresholdCents / 100).toFixed(2)));
+    setApplyHalfYearRule(initialValues.applyHalfYearRule);
+    setAppLockEnabled(initialValues.appLockEnabled);
+  }, [initialValues]);
 
   const validation = useMemo(() => {
     const parsedTaxYear = parseNumber(taxYearDefault);
@@ -107,9 +118,17 @@ export function ProfileSettingsForm({
         defaultWorkPercent: Math.round(parsedWorkPercent),
         gwgThresholdCents: Math.round(parsedGwgThresholdEuros * 100),
         applyHalfYearRule,
+        appLockEnabled,
       },
     } as const;
-  }, [applyHalfYearRule, defaultWorkPercent, gwgThresholdEuros, marginalRatePercent, taxYearDefault]);
+  }, [
+    appLockEnabled,
+    applyHalfYearRule,
+    defaultWorkPercent,
+    gwgThresholdEuros,
+    marginalRatePercent,
+    taxYearDefault,
+  ]);
 
   React.useEffect(() => {
     onValuesChange?.(validation.valid ? validation.values : null);
@@ -188,6 +207,13 @@ export function ProfileSettingsForm({
             onPress={() => setApplyHalfYearRule((current) => !current)}>
             <ThemedText type="smallBold">Apply Half-Year Rule</ThemedText>
             <ThemedText>{applyHalfYearRule ? "Enabled" : "Disabled"}</ThemedText>
+          </Pressable>
+
+          <Pressable
+            style={({ pressed }) => [styles.toggleRow, pressed && styles.pressed]}
+            onPress={() => setAppLockEnabled((current) => !current)}>
+            <ThemedText type="smallBold">App Lock</ThemedText>
+            <ThemedText>{appLockEnabled ? "Enabled" : "Disabled"}</ThemedText>
           </Pressable>
         </>
       )}

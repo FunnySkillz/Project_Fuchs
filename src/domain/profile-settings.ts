@@ -66,6 +66,7 @@ export function normalizeProfileSettings(
       MIN_GWG_THRESHOLD_CENTS
     ),
     applyHalfYearRule: partial.applyHalfYearRule ?? fallback.applyHalfYearRule,
+    appLockEnabled: partial.appLockEnabled ?? fallback.appLockEnabled,
     currency: "EUR",
   };
 }

@@ -9,6 +9,7 @@ interface ProfileSettingsRow {
   defaultWorkPercent: number;
   gwgThresholdCents: number;
   applyHalfYearRule: number;
+  appLockEnabled: number;
   currency: string;
 }
 
@@ -44,6 +45,7 @@ export class SQLiteProfileSettingsRepository implements ProfileSettingsRepositor
         DefaultWorkPercent AS defaultWorkPercent,
         GwgThresholdCents AS gwgThresholdCents,
         ApplyHalfYearRule AS applyHalfYearRule,
+        AppLockEnabled AS appLockEnabled,
         Currency AS currency
       FROM ProfileSettings
       WHERE Id = $id AND DeletedAt IS NULL
@@ -63,6 +65,7 @@ export class SQLiteProfileSettingsRepository implements ProfileSettingsRepositor
       defaultWorkPercent: row.defaultWorkPercent,
       gwgThresholdCents: row.gwgThresholdCents,
       applyHalfYearRule: row.applyHalfYearRule === 1,
+      appLockEnabled: row.appLockEnabled === 1,
       currency: row.currency === "EUR" ? "EUR" : "EUR",
     });
   }
@@ -83,15 +86,17 @@ export class SQLiteProfileSettingsRepository implements ProfileSettingsRepositor
         DefaultWorkPercent,
         GwgThresholdCents,
         ApplyHalfYearRule,
+        AppLockEnabled,
         Currency,
         DeletedAt
-      ) VALUES ($id, $taxYearDefault, $marginalRateBps, $defaultWorkPercent, $gwgThresholdCents, $applyHalfYearRule, $currency, NULL)
+      ) VALUES ($id, $taxYearDefault, $marginalRateBps, $defaultWorkPercent, $gwgThresholdCents, $applyHalfYearRule, $appLockEnabled, $currency, NULL)
       ON CONFLICT(Id) DO UPDATE SET
         TaxYearDefault = excluded.TaxYearDefault,
         MarginalRateBps = excluded.MarginalRateBps,
         DefaultWorkPercent = excluded.DefaultWorkPercent,
         GwgThresholdCents = excluded.GwgThresholdCents,
         ApplyHalfYearRule = excluded.ApplyHalfYearRule,
+        AppLockEnabled = excluded.AppLockEnabled,
         Currency = excluded.Currency,
         DeletedAt = NULL;`,
       {
@@ -101,6 +106,7 @@ export class SQLiteProfileSettingsRepository implements ProfileSettingsRepositor
         $defaultWorkPercent: settings.defaultWorkPercent,
         $gwgThresholdCents: settings.gwgThresholdCents,
         $applyHalfYearRule: settings.applyHalfYearRule ? 1 : 0,
+        $appLockEnabled: settings.appLockEnabled ? 1 : 0,
         $currency: settings.currency,
       }
     );
