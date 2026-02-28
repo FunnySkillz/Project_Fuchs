@@ -15,7 +15,7 @@ import { Badge, Button, Card } from "@/components/ui";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { Spacing } from "@/constants/theme";
-import { computeDeductibleImpactCents } from "@/domain/deductible-impact";
+import { estimateTaxImpact } from "@/domain/calculation-engine";
 import type { Attachment } from "@/models/attachment";
 import type { Category } from "@/models/category";
 import type { Item } from "@/models/item";
@@ -167,25 +167,33 @@ export default function ItemDetailRoute() {
 
     const workShare = resolveWorkShare(item, settings.defaultWorkPercent);
     const workRelevantCents = Math.round(item.totalCents * workShare);
-    const deductibleThisYearCents = computeDeductibleImpactCents(
-      item,
-      settings,
-      categoryMap,
-      settings.taxYearDefault
-    );
     const usefulLifeMonths = resolveUsefulLifeMonths(item, categoryMap);
-    const immediate = workRelevantCents <= settings.gwgThresholdCents;
-    const estimatedRefundCents = Math.round(
-      (deductibleThisYearCents * settings.marginalRateBps) / 10_000
+    const estimate = estimateTaxImpact(
+      {
+        totalCents: item.totalCents,
+        usageType: item.usageType,
+        workPercent: item.workPercent,
+        purchaseDate: item.purchaseDate,
+        usefulLifeMonths,
+      },
+      {
+        gwgThresholdCents: settings.gwgThresholdCents,
+        applyHalfYearRule: settings.applyHalfYearRule,
+        marginalRateBps: settings.marginalRateBps,
+        defaultWorkPercent: settings.defaultWorkPercent,
+      },
+      settings.taxYearDefault
     );
 
     return {
       workShare,
       workRelevantCents,
-      deductibleThisYearCents,
       usefulLifeMonths,
-      immediate,
-      estimatedRefundCents,
+      immediate: workRelevantCents <= settings.gwgThresholdCents,
+      deductibleThisYearCents: estimate.deductibleThisYearCents,
+      estimatedRefundCents: estimate.estimatedRefundThisYearCents,
+      scheduleByYear: estimate.scheduleByYear,
+      explanations: estimate.explanations,
     };
   }, [categoryMap, item, settings]);
 
@@ -307,6 +315,24 @@ export default function ItemDetailRoute() {
               <ThemedText type="small">
                 Estimated refund: {formatCents(calculationBreakdown.estimatedRefundCents)}
               </ThemedText>
+              <ThemedText type="smallBold">Schedule by year</ThemedText>
+              {calculationBreakdown.scheduleByYear.length === 0 ? (
+                <ThemedText type="small" themeColor="textSecondary">
+                  No deductible schedule available.
+                </ThemedText>
+              ) : (
+                calculationBreakdown.scheduleByYear.map((entry) => (
+                  <ThemedText key={entry.year} type="small">
+                    {entry.year}: {formatCents(entry.deductibleCents)}
+                  </ThemedText>
+                ))
+              )}
+              <ThemedText type="smallBold">Explanation</ThemedText>
+              {calculationBreakdown.explanations.map((line, index) => (
+                <ThemedText key={`${index}-${line}`} type="small" themeColor="textSecondary">
+                  - {line}
+                </ThemedText>
+              ))}
             </>
           ) : (
             <ThemedText type="small" themeColor="textSecondary">

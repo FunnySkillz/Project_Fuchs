@@ -1,5 +1,5 @@
 import { useFocusEffect, useRouter } from "expo-router";
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, StyleSheet, View } from "react-native";
 
 import { Badge, Button, Card } from "@/components/ui";
@@ -11,6 +11,7 @@ import type { Category } from "@/models/category";
 import type { ProfileSettings } from "@/models/profile-settings";
 import { getCategoryRepository, getItemRepository } from "@/repositories/create-core-repositories";
 import { getProfileSettingsRepository } from "@/repositories/create-profile-settings-repository";
+import { onProfileSettingsSaved } from "@/services/app-events";
 import { formatCents } from "@/utils/money";
 
 interface DashboardStats {
@@ -30,14 +31,14 @@ export default function HomeRoute() {
     setIsLoading(true);
     setLoadError(null);
     try {
-      const year = new Date().getFullYear();
       const [settingsRepo, itemRepo, categoryRepo] = await Promise.all([
         getProfileSettingsRepository(),
         getItemRepository(),
         getCategoryRepository(),
       ]);
-      const [settings, yearItems, missingReceiptItems, missingNotesItems, categories] = await Promise.all([
-        settingsRepo.getSettings(),
+      const settings = await settingsRepo.getSettings();
+      const year = settings.taxYearDefault;
+      const [yearItems, missingReceiptItems, missingNotesItems, categories] = await Promise.all([
         itemRepo.list({ year }),
         itemRepo.list({ year, missingReceipt: true }),
         itemRepo.list({ year, missingNotes: true }),
@@ -68,6 +69,13 @@ export default function HomeRoute() {
       void loadDashboard();
     }, [loadDashboard])
   );
+
+  useEffect(() => {
+    const unsubscribe = onProfileSettingsSaved(() => {
+      void loadDashboard();
+    });
+    return unsubscribe;
+  }, [loadDashboard]);
 
   return (
     <ThemedView style={styles.container}>

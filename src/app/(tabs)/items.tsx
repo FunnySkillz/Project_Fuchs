@@ -123,6 +123,20 @@ export default function ItemsRoute() {
     [categories]
   );
 
+  const targetYear = parsedYear ?? settings?.taxYearDefault ?? new Date().getFullYear();
+
+  const deductibleImpactByItemId = useMemo(() => {
+    if (!settings) {
+      return new Map<string, number>();
+    }
+    return new Map(
+      allItems.map((item) => [
+        item.id,
+        computeDeductibleImpactCents(item, settings, categoryMap, targetYear),
+      ])
+    );
+  }, [allItems, categoryMap, settings, targetYear]);
+
   useEffect(() => {
     updateItemListSessionState({
       search,
@@ -224,9 +238,8 @@ export default function ItemsRoute() {
       }
 
       if (sortMode === "deductible_desc" && settings) {
-        const targetYear = parsedYear ?? settings.taxYearDefault;
-        const rightImpact = computeDeductibleImpactCents(right, settings, categoryMap, targetYear);
-        const leftImpact = computeDeductibleImpactCents(left, settings, categoryMap, targetYear);
+        const rightImpact = deductibleImpactByItemId.get(right.id) ?? 0;
+        const leftImpact = deductibleImpactByItemId.get(left.id) ?? 0;
         if (rightImpact !== leftImpact) {
           return rightImpact - leftImpact;
         }
@@ -239,7 +252,7 @@ export default function ItemsRoute() {
     });
 
     return sorted;
-  }, [allItems, categoryMap, parsedYear, search, settings, sortMode]);
+  }, [allItems, deductibleImpactByItemId, search, settings, sortMode]);
 
   const hasActiveFilters =
     search.trim().length > 0 ||
@@ -360,14 +373,7 @@ export default function ItemsRoute() {
         }
         renderItem={({ item }) => {
           const categoryName = item.categoryId ? categoryMap.get(item.categoryId)?.name ?? "Unknown" : "None";
-          const deductibleImpact = settings
-            ? computeDeductibleImpactCents(
-                item,
-                settings,
-                categoryMap,
-                parsedYear ?? settings.taxYearDefault
-              )
-            : 0;
+          const deductibleImpact = deductibleImpactByItemId.get(item.id) ?? 0;
 
           return (
             <ItemRowCard
