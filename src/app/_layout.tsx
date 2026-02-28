@@ -6,19 +6,22 @@ import { AppState, type AppStateStatus, useColorScheme } from 'react-native';
 import { AppLockGate } from '@/components/app-lock-gate';
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import AppTabs from '@/components/app-tabs';
+import { InitErrorScreen } from '@/components/init-error-screen';
 import { OnboardingFlow } from '@/components/onboarding-flow';
 import { getProfileSettingsRepository } from '@/repositories/create-profile-settings-repository';
 import { type ProfileSettingsFormValues } from '@/components/profile-settings-form';
 import { onLocalDataDeleted } from '@/services/app-events';
+import { deleteAllLocalData } from '@/services/local-data';
 import { hasPinAsync, verifyPinAsync } from '@/services/pin-auth';
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
-  const [bootstrapState, setBootstrapState] = React.useState<"loading" | "needs_onboarding" | "ready">("loading");
+  const [bootstrapState, setBootstrapState] = React.useState<"loading" | "needs_onboarding" | "ready" | "init_error">("loading");
   const [appLockEnabled, setAppLockEnabled] = React.useState(false);
   const [isUnlocked, setIsUnlocked] = React.useState(true);
   const [isAuthenticating, setIsAuthenticating] = React.useState(false);
   const [authError, setAuthError] = React.useState<string | null>(null);
+  const [initError, setInitError] = React.useState<string | null>(null);
   const [pinAvailable, setPinAvailable] = React.useState(false);
   const [showPinEntry, setShowPinEntry] = React.useState(false);
   const [pinInput, setPinInput] = React.useState("");
@@ -148,31 +151,38 @@ export default function TabLayout() {
     };
   }, []);
 
-  useEffect(() => {
-    let isMounted = true;
+  const retryInitialization = useCallback(() => {
+    setBootstrapState("loading");
+  }, []);
 
-    const initializeApp = async () => {
+  useEffect(() => {
+    if (bootstrapState !== "loading") {
+      return;
+    }
+
+    let active = true;
+    const retry = async () => {
+      if (!active) {
+        return;
+      }
       try {
+        setInitError(null);
         const repository = await getProfileSettingsRepository();
         const hasSettings = await repository.hasSettings();
-        if (!isMounted) {
+        if (!active) {
           return;
         }
-
         if (!hasSettings) {
           setBootstrapState("needs_onboarding");
           return;
         }
-
         const settings = await repository.getSettings();
-        if (!isMounted) {
+        if (!active) {
           return;
         }
-
         const hasPin = await refreshPinAvailability();
         setAppLockEnabled(settings.appLockEnabled);
         setBootstrapState("ready");
-
         if (settings.appLockEnabled) {
           setIsUnlocked(false);
           if (hasPin) {
@@ -184,19 +194,22 @@ export default function TabLayout() {
           setAuthError(null);
         }
       } catch (error) {
-        if (isMounted) {
-          console.error('Failed to initialize app', error);
-          setBootstrapState("needs_onboarding");
+        if (!active) {
+          return;
         }
+        console.error("Failed to initialize app", error);
+        setInitError(
+          error instanceof Error ? error.message : "Database initialization failed."
+        );
+        setBootstrapState("init_error");
       }
     };
-
-    void initializeApp();
+    void retry();
 
     return () => {
-      isMounted = false;
+      active = false;
     };
-  }, [authenticate, refreshPinAvailability]);
+  }, [authenticate, bootstrapState, refreshPinAvailability]);
 
   useEffect(() => {
     const subscription = AppState.addEventListener("change", (nextState) => {
@@ -274,6 +287,18 @@ export default function TabLayout() {
       )}
       {bootstrapState === "needs_onboarding" && (
         <OnboardingFlow onComplete={handleOnboardingComplete} />
+      )}
+      {bootstrapState === "init_error" && (
+        <InitErrorScreen
+          message={initError ?? "Database initialization failed."}
+          onRetry={retryInitialization}
+          onResetData={() => {
+            void deleteAllLocalData().then(() => {
+              setBootstrapState("needs_onboarding");
+              setInitError(null);
+            });
+          }}
+        />
       )}
     </ThemeProvider>
   );

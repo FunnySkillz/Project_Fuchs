@@ -7,10 +7,15 @@ let databasePromise: Promise<SQLiteDatabase> | null = null;
 
 export function getDatabase(): Promise<SQLiteDatabase> {
   if (!databasePromise) {
-    databasePromise = openDatabaseAsync(DATABASE_NAME).then(async (db) => {
-      await runMigrations(db);
-      return db;
-    });
+    databasePromise = openDatabaseAsync(DATABASE_NAME)
+      .then(async (db) => {
+        await runMigrations(db);
+        return db;
+      })
+      .catch((error) => {
+        databasePromise = null;
+        throw error;
+      });
   }
 
   return databasePromise;
