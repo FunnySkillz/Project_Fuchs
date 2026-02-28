@@ -259,17 +259,32 @@ export default function ItemDetailRoute() {
 
         <Card>
           <ThemedText type="smallBold">Key Fields</ThemedText>
+          <ThemedText type="small">Item ID: {item.id}</ThemedText>
           <ThemedText type="small">Price: {formatCents(item.totalCents)}</ThemedText>
+          <ThemedText type="small">Currency: {item.currency}</ThemedText>
           <ThemedText type="small">Category: {categoryName}</ThemedText>
+          <ThemedText type="small">Usage type: {item.usageType}</ThemedText>
           <ThemedText type="small">Vendor: {item.vendor?.trim() ? item.vendor : "-"}</ThemedText>
           <ThemedText type="small">
             Work percent: {item.usageType === "MIXED" ? `${item.workPercent ?? settings?.defaultWorkPercent ?? 0}%` : "n/a"}
+          </ThemedText>
+          <ThemedText type="small">
+            Useful life override:{" "}
+            {item.usefulLifeMonthsOverride && item.usefulLifeMonthsOverride > 0
+              ? `${item.usefulLifeMonthsOverride} months`
+              : "none"}
           </ThemedText>
           <ThemedText type="small">
             Warranty: {item.warrantyMonths && item.warrantyMonths > 0 ? `${item.warrantyMonths} months` : "none"}
           </ThemedText>
           <ThemedText type="small">Warranty until: {warrantyUntilDate ?? "n/a"}</ThemedText>
           <ThemedText type="small">Notes: {item.notes?.trim() ? item.notes : "-"}</ThemedText>
+          <ThemedText type="small" themeColor="textSecondary">
+            Created at: {item.createdAt}
+          </ThemedText>
+          <ThemedText type="small" themeColor="textSecondary">
+            Updated at: {item.updatedAt}
+          </ThemedText>
         </Card>
 
         <Card>
