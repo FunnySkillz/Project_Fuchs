@@ -58,6 +58,7 @@ export interface ItemRepository {
   restore(id: string): Promise<void>;
   getById(id: string, options?: GetItemOptions): Promise<Item | null>;
   list(filters?: ItemListFilters): Promise<Item[]>;
+  listMissingReceiptItemIds(filters?: Omit<ItemListFilters, "missingReceipt">): Promise<string[]>;
 }
 
 function mapItemRow(row: ItemRow): Item {
@@ -288,5 +289,47 @@ export class SQLiteItemRepository implements ItemRepository {
     );
 
     return rows.map(mapItemRow);
+  }
+
+  async listMissingReceiptItemIds(
+    filters: Omit<ItemListFilters, "missingReceipt"> = {}
+  ): Promise<string[]> {
+    const clauses: string[] = [
+      `NOT EXISTS (
+        SELECT 1
+        FROM Attachment a
+        WHERE a.ItemId = i.Id
+          AND a.Type = 'RECEIPT'
+          AND a.DeletedAt IS NULL
+      )`,
+    ];
+    const params: Record<string, string | number | null> = {};
+
+    if (!filters.includeDeleted) {
+      clauses.push("i.DeletedAt IS NULL");
+    }
+    if (filters.year !== undefined) {
+      clauses.push("substr(i.PurchaseDate, 1, 4) = $year");
+      params.$year = String(filters.year);
+    }
+    if (filters.usageType !== undefined) {
+      clauses.push("i.UsageType = $usageType");
+      params.$usageType = filters.usageType;
+    }
+    if (filters.categoryId !== undefined) {
+      clauses.push("i.CategoryId = $categoryId");
+      params.$categoryId = filters.categoryId;
+    }
+    if (filters.missingNotes) {
+      clauses.push("(i.Notes IS NULL OR trim(i.Notes) = '')");
+    }
+
+    const rows = await this.db.getAllAsync<{ id: string }>(
+      `SELECT i.Id AS id
+      FROM Item i
+      WHERE ${clauses.join(" AND ")};`,
+      params
+    );
+    return rows.map((row) => row.id);
   }
 }

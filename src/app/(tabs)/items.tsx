@@ -50,6 +50,7 @@ interface ItemRowCardProps {
   item: Item;
   categoryName: string;
   deductibleImpact: number;
+  isMissingReceipt: boolean;
   onOpenDetail: (itemId: string) => void;
 }
 
@@ -57,6 +58,7 @@ const ItemRowCard = React.memo(function ItemRowCard({
   item,
   categoryName,
   deductibleImpact,
+  isMissingReceipt,
   onOpenDetail,
 }: ItemRowCardProps) {
   return (
@@ -72,6 +74,7 @@ const ItemRowCard = React.memo(function ItemRowCard({
         Deductible impact: {formatCents(deductibleImpact)}
       </ThemedText>
       <View style={styles.row}>
+        {isMissingReceipt && <Badge text="Missing receipt" variant="warning" />}
         {!item.notes?.trim() && (item.usageType === "WORK" || item.usageType === "MIXED") && (
           <Badge text="Missing notes" variant="warning" />
         )}
@@ -100,6 +103,7 @@ export default function ItemsRoute() {
   const [sortMode, setSortMode] = useState<ItemSortMode>(sessionDefaults.sortMode);
 
   const [allItems, setAllItems] = useState<Item[]>([]);
+  const [missingReceiptItemIds, setMissingReceiptItemIds] = useState<Set<string>>(new Set());
   const [categories, setCategories] = useState<Category[]>([]);
   const [settings, setSettings] = useState<ProfileSettings | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -176,12 +180,20 @@ export default function ItemsRoute() {
         categoryRepository.list(),
         profileSettingsRepository.getSettings(),
       ]);
+      const missingReceiptIds = await itemRepository.listMissingReceiptItemIds({
+        year: parsedYear,
+        categoryId: categoryId ?? undefined,
+        usageType: usageType ?? undefined,
+        missingNotes,
+      });
 
       setAllItems(loadedItems);
+      setMissingReceiptItemIds(new Set(missingReceiptIds));
       setCategories(loadedCategories);
       setSettings(loadedSettings);
     } catch (error) {
       console.error("Failed to load items", error);
+      setMissingReceiptItemIds(new Set());
       setLoadError("Could not load items.");
     } finally {
       setIsLoading(false);
@@ -362,6 +374,7 @@ export default function ItemsRoute() {
               item={item}
               categoryName={categoryName}
               deductibleImpact={deductibleImpact}
+              isMissingReceipt={missingReceiptItemIds.has(item.id)}
               onOpenDetail={handleOpenDetail}
             />
           );
