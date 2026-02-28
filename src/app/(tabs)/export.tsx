@@ -17,6 +17,7 @@ import {
   updateExportSelectionSessionState,
 } from "@/services/export-selection-session";
 import { formatCents } from "@/utils/money";
+import { generatePdfExport, shareExportPdf } from "@/services/pdf-export";
 
 const usageOptions: { value: string; label: string }[] = [
   { value: "__all", label: "All usage types" },
@@ -47,6 +48,11 @@ export default function ExportRoute() {
   const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(
     new Set(sessionDefaults.selectedItemIds)
   );
+  const [includeDetailPages, setIncludeDetailPages] = useState(false);
+  const [latestPdfUri, setLatestPdfUri] = useState<string | null>(null);
+  const [latestPdfName, setLatestPdfName] = useState<string | null>(null);
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+  const [isSharingPdf, setIsSharingPdf] = useState(false);
 
   const [items, setItems] = useState<Item[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -210,6 +216,51 @@ export default function ExportRoute() {
     setSelectedItemIds(new Set());
   };
 
+  const handleGeneratePdf = async () => {
+    if (!settings || selectedItems.length === 0 || isGeneratingPdf) {
+      return;
+    }
+
+    setIsGeneratingPdf(true);
+    setLoadError(null);
+    try {
+      const targetYear = parsedTaxYear ?? settings.taxYearDefault;
+      const result = await generatePdfExport({
+        taxYear: targetYear,
+        selectedItems,
+        categories,
+        settings,
+        includeDetailPages,
+      });
+      setLatestPdfUri(result.fileUri);
+      setLatestPdfName(result.fileName);
+    } catch (error) {
+      console.error("Failed to generate PDF export", error);
+      setLoadError(
+        error instanceof Error ? error.message : "Could not generate PDF export."
+      );
+    } finally {
+      setIsGeneratingPdf(false);
+    }
+  };
+
+  const handleSharePdf = async () => {
+    if (!latestPdfUri || isSharingPdf) {
+      return;
+    }
+
+    setIsSharingPdf(true);
+    setLoadError(null);
+    try {
+      await shareExportPdf(latestPdfUri);
+    } catch (error) {
+      console.error("Failed to share PDF export", error);
+      setLoadError(error instanceof Error ? error.message : "Could not share PDF export.");
+    } finally {
+      setIsSharingPdf(false);
+    }
+  };
+
   return (
     <ThemedView style={styles.container}>
       <FlatList
@@ -299,6 +350,33 @@ export default function ExportRoute() {
               <ThemedText type="small">
                 Estimated refund impact: {formatCents(totals.estimatedRefundCents)}
               </ThemedText>
+              <View style={styles.row}>
+                <Button
+                  variant={includeDetailPages ? "primary" : "secondary"}
+                  label={
+                    includeDetailPages
+                      ? "Detail Pages: ON"
+                      : "Detail Pages: OFF"
+                  }
+                  onPress={() => setIncludeDetailPages((current) => !current)}
+                />
+                <Button
+                  label={isGeneratingPdf ? "Generating PDF..." : "Generate PDF"}
+                  onPress={() => void handleGeneratePdf()}
+                  disabled={selectedItems.length === 0 || isGeneratingPdf}
+                />
+                <Button
+                  variant="secondary"
+                  label={isSharingPdf ? "Sharing..." : "Share PDF"}
+                  onPress={() => void handleSharePdf()}
+                  disabled={!latestPdfUri || isSharingPdf}
+                />
+              </View>
+              {latestPdfName && (
+                <ThemedText type="small" themeColor="textSecondary">
+                  Last PDF: {latestPdfName}
+                </ThemedText>
+              )}
             </Card>
 
             <View style={styles.metaRow}>
