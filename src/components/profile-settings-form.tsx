@@ -1,8 +1,9 @@
 import React, { useMemo, useState } from "react";
-import { Pressable, StyleSheet, TextInput, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
+import { Button, FormField, Input } from "@/components/ui";
 import {
   bpsToPercent,
   type ProfileSettings,
@@ -160,94 +161,84 @@ export function ProfileSettingsForm({
 
   return (
     <ThemedView type="backgroundElement" style={styles.formCard}>
-      <View style={styles.field}>
-        <ThemedText type="smallBold">Tax Year Default</ThemedText>
-        <TextInput
+      <FormField label="Tax Year Default">
+        <Input
           value={taxYearDefault}
           onChangeText={setTaxYearDefault}
           keyboardType="number-pad"
-          style={styles.input}
           placeholder="2026"
           maxLength={4}
         />
-      </View>
+      </FormField>
 
-      <View style={styles.field}>
-        <ThemedText type="smallBold">Marginal Tax Rate (%)</ThemedText>
-        <TextInput
+      <FormField label="Marginal Tax Rate (%)">
+        <Input
           value={marginalRatePercent}
           onChangeText={setMarginalRatePercent}
           keyboardType="decimal-pad"
-          style={styles.input}
           placeholder="40"
         />
-      </View>
+      </FormField>
 
-      <View style={styles.field}>
-        <ThemedText type="smallBold">Default Work-Use Percent (%)</ThemedText>
-        <TextInput
+      <FormField label="Default Work-Use Percent (%)">
+        <Input
           value={defaultWorkPercent}
           onChangeText={setDefaultWorkPercent}
           keyboardType="number-pad"
-          style={styles.input}
           placeholder="100"
         />
-      </View>
+      </FormField>
 
       {showAdvanced && (
         <>
           <View style={styles.separator} />
           <ThemedText type="smallBold">Advanced</ThemedText>
-          <View style={styles.field}>
-            <ThemedText type="smallBold">GWG Threshold (EUR)</ThemedText>
-            <TextInput
+          <FormField label="GWG Threshold (EUR)">
+            <Input
               value={gwgThresholdEuros}
               onChangeText={setGwgThresholdEuros}
               keyboardType="decimal-pad"
-              style={styles.input}
               placeholder="1000.00"
             />
-          </View>
+          </FormField>
 
-          <Pressable
-            style={({ pressed }) => [styles.toggleRow, pressed && styles.pressed]}
-            onPress={() => setApplyHalfYearRule((current) => !current)}>
-            <ThemedText type="smallBold">Apply Half-Year Rule</ThemedText>
-            <ThemedText>{applyHalfYearRule ? "Enabled" : "Disabled"}</ThemedText>
-          </Pressable>
+          <Button
+            variant="secondary"
+            style={styles.toggleRow}
+            onPress={() => setApplyHalfYearRule((current) => !current)}
+            label={`Apply Half-Year Rule: ${applyHalfYearRule ? "Enabled" : "Disabled"}`}
+          />
 
-          <Pressable
-            style={({ pressed }) => [styles.toggleRow, pressed && styles.pressed]}
-            onPress={() => setAppLockEnabled((current) => !current)}>
-            <ThemedText type="smallBold">App Lock</ThemedText>
-            <ThemedText>{appLockEnabled ? "Enabled" : "Disabled"}</ThemedText>
-          </Pressable>
+          <Button
+            variant="secondary"
+            style={styles.toggleRow}
+            onPress={() => setAppLockEnabled((current) => !current)}
+            label={`App Lock: ${appLockEnabled ? "Enabled" : "Disabled"}`}
+          />
 
-          <Pressable
-            style={({ pressed }) => [styles.toggleRow, pressed && styles.pressed]}
-            onPress={() => setUploadToOneDriveAfterExport((current) => !current)}>
-            <ThemedText type="smallBold">Upload to OneDrive After Export</ThemedText>
-            <ThemedText>{uploadToOneDriveAfterExport ? "Enabled" : "Disabled"}</ThemedText>
-          </Pressable>
+          <Button
+            variant="secondary"
+            style={styles.toggleRow}
+            onPress={() => setUploadToOneDriveAfterExport((current) => !current)}
+            label={`Upload to OneDrive After Export: ${
+              uploadToOneDriveAfterExport ? "Enabled" : "Disabled"
+            }`}
+          />
         </>
       )}
 
       {!validation.valid && <ThemedText style={styles.errorText}>{validation.message}</ThemedText>}
       {saveError && <ThemedText style={styles.errorText}>{saveError}</ThemedText>}
 
-      <Pressable
-        style={({ pressed }) => [styles.submitButton, pressed && styles.pressed]}
+      <Button
+        style={styles.submitButton}
         onPress={handleSubmit}
-        disabled={!validation.valid || isSaving}>
-        <ThemedText type="smallBold">{isSaving ? "Saving..." : submitLabel}</ThemedText>
-      </Pressable>
+        disabled={!validation.valid || isSaving}
+        label={isSaving ? "Saving..." : submitLabel}
+      />
 
       {onResetToDefault && (
-        <Pressable
-          style={({ pressed }) => [styles.resetButton, pressed && styles.pressed]}
-          onPress={() => void onResetToDefault()}>
-          <ThemedText type="smallBold">Reset to Defaults</ThemedText>
-        </Pressable>
+        <Button variant="ghost" style={styles.resetButton} onPress={() => void onResetToDefault()} label="Reset to Defaults" />
       )}
     </ThemedView>
   );
@@ -262,52 +253,21 @@ const styles = StyleSheet.create({
   field: {
     gap: Spacing.one,
   },
-  input: {
-    borderWidth: 1,
-    borderColor: "#9BA1A6",
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 16,
-    backgroundColor: "#FFFFFF",
-  },
   separator: {
     height: 1,
     backgroundColor: "#D6D8DB",
     marginVertical: Spacing.one,
   },
   toggleRow: {
-    borderWidth: 1,
-    borderColor: "#9BA1A6",
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    backgroundColor: "#FFFFFF",
+    marginTop: 0,
   },
   submitButton: {
     marginTop: Spacing.one,
-    borderWidth: 1,
-    borderColor: "#9BA1A6",
-    borderRadius: 10,
-    alignItems: "center",
-    paddingVertical: 12,
-    backgroundColor: "#ECEDEE",
-  },
-  pressed: {
-    opacity: 0.75,
   },
   errorText: {
     color: "#B00020",
   },
   resetButton: {
-    borderWidth: 1,
-    borderColor: "#9BA1A6",
-    borderRadius: 10,
-    alignItems: "center",
-    paddingVertical: 12,
-    backgroundColor: "#FFFFFF",
+    marginTop: 0,
   },
 });
