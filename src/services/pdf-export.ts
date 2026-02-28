@@ -10,6 +10,9 @@ import type { ProfileSettings } from "@/models/profile-settings";
 import { getAttachmentRepository } from "@/repositories/create-core-repositories";
 import { formatCents } from "@/utils/money";
 import { formatYmdFromDateUtc } from "@/utils/date";
+import { attachmentFileExists } from "@/services/attachment-storage";
+
+type AttachmentWithExistence = Attachment & { __exists: boolean };
 
 const EXPORT_DIR = `${FileSystem.documentDirectory}exports`;
 
@@ -58,7 +61,7 @@ function buildPdfHtml(params: {
   selectedItems: Item[];
   categories: Category[];
   settings: ProfileSettings;
-  attachmentsByItemId: Map<string, Attachment[]>;
+  attachmentsByItemId: Map<string, AttachmentWithExistence[]>;
   includeDetailPages: boolean;
 }): string {
   const {
@@ -106,7 +109,8 @@ function buildPdfHtml(params: {
               : attachments
                   .map((attachment) => {
                     const name = attachment.originalFileName ?? attachment.filePath.split("/").pop() ?? "Unnamed";
-                    return `<li>${escapeHtml(name)} (${escapeHtml(attachment.type)})</li>`;
+                    const suffix = attachment.__exists ? "" : " [missing file]";
+                    return `<li>${escapeHtml(name)} (${escapeHtml(attachment.type)})${escapeHtml(suffix)}</li>`;
                   })
                   .join("");
 
@@ -172,7 +176,13 @@ export async function generatePdfExport(
   const attachmentLists = await Promise.all(
     selectedItems.map(async (item) => {
       const attachments = await attachmentRepository.listByItem(item.id);
-      return { itemId: item.id, attachments };
+      const withExistence = await Promise.all(
+        attachments.map(async (attachment) => ({
+          ...attachment,
+          __exists: await attachmentFileExists(attachment.filePath),
+        }))
+      );
+      return { itemId: item.id, attachments: withExistence };
     })
   );
   const attachmentsByItemId = new Map(

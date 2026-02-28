@@ -21,6 +21,7 @@ import {
 } from "@/services/item-draft-store";
 import { parseEuroInputToCents } from "@/utils/money";
 import { formatYmdFromDateLocal, isValidYmd } from "@/utils/date";
+import { friendlyFileErrorMessage } from "@/services/friendly-errors";
 
 function toSingleParam(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
@@ -196,7 +197,7 @@ export default function NewItemRoute() {
       reloadDraftAttachments(draftId);
     } catch (error) {
       console.error("Failed to capture receipt", error);
-      setErrorMessage("Could not capture receipt photo.");
+      setErrorMessage(friendlyFileErrorMessage(error, "Could not capture receipt photo."));
     } finally {
       setIsBusy(false);
     }
@@ -217,7 +218,7 @@ export default function NewItemRoute() {
       reloadDraftAttachments(draftId);
     } catch (error) {
       console.error("Failed to upload receipt", error);
-      setErrorMessage("Could not upload receipt.");
+      setErrorMessage(friendlyFileErrorMessage(error, "Could not upload receipt."));
     } finally {
       setIsBusy(false);
     }
@@ -238,7 +239,7 @@ export default function NewItemRoute() {
       reloadDraftAttachments(draftId);
     } catch (error) {
       console.error("Failed to capture extra photo", error);
-      setErrorMessage("Could not capture extra photo.");
+      setErrorMessage(friendlyFileErrorMessage(error, "Could not capture extra photo."));
     } finally {
       setIsBusy(false);
     }
@@ -253,7 +254,7 @@ export default function NewItemRoute() {
       reloadDraftAttachments(draftId);
     } catch (error) {
       console.error("Failed to remove attachment", error);
-      setErrorMessage("Could not remove attachment.");
+      setErrorMessage(friendlyFileErrorMessage(error, "Could not remove attachment."));
     }
   };
 

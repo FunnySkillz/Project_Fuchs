@@ -19,6 +19,7 @@ import {
 import { formatCents } from "@/utils/money";
 import { generatePdfExport, shareExportPdf } from "@/services/pdf-export";
 import { generateZipExport, shareExportZip } from "@/services/zip-export";
+import { friendlyFileErrorMessage } from "@/services/friendly-errors";
 
 const usageOptions: { value: string; label: string }[] = [
   { value: "__all", label: "All usage types" },
@@ -242,9 +243,7 @@ export default function ExportRoute() {
       setLatestPdfName(result.fileName);
     } catch (error) {
       console.error("Failed to generate PDF export", error);
-      setLoadError(
-        error instanceof Error ? error.message : "Could not generate PDF export."
-      );
+      setLoadError(friendlyFileErrorMessage(error, "Could not generate PDF export."));
     } finally {
       setIsGeneratingPdf(false);
     }
@@ -261,7 +260,7 @@ export default function ExportRoute() {
       await shareExportPdf(latestPdfUri);
     } catch (error) {
       console.error("Failed to share PDF export", error);
-      setLoadError(error instanceof Error ? error.message : "Could not share PDF export.");
+      setLoadError(friendlyFileErrorMessage(error, "Could not share PDF export."));
     } finally {
       setIsSharingPdf(false);
     }
@@ -288,9 +287,7 @@ export default function ExportRoute() {
       setLatestZipSizeBytes(result.sizeBytes);
     } catch (error) {
       console.error("Failed to generate ZIP export", error);
-      setLoadError(
-        error instanceof Error ? error.message : "Could not generate ZIP export."
-      );
+      setLoadError(friendlyFileErrorMessage(error, "Could not generate ZIP export."));
     } finally {
       setIsGeneratingZip(false);
     }
@@ -307,7 +304,7 @@ export default function ExportRoute() {
       await shareExportZip(latestZipUri);
     } catch (error) {
       console.error("Failed to share ZIP export", error);
-      setLoadError(error instanceof Error ? error.message : "Could not share ZIP export.");
+      setLoadError(friendlyFileErrorMessage(error, "Could not share ZIP export."));
     } finally {
       setIsSharingZip(false);
     }

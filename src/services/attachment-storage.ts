@@ -125,3 +125,8 @@ export async function deleteLocalAttachmentFile(filePath: string): Promise<void>
 
   await FileSystem.deleteAsync(filePath, { idempotent: true });
 }
+
+export async function attachmentFileExists(filePath: string): Promise<boolean> {
+  const info = await FileSystem.getInfoAsync(filePath);
+  return info.exists;
+}

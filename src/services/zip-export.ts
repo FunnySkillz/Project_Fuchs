@@ -64,6 +64,7 @@ export async function generateZipExport(
 
   const attachmentRepository = await getAttachmentRepository();
   const zip = new JSZip();
+  const skippedFiles: string[] = [];
 
   const pdfBase64 = await readFileAsBase64(pdf.fileUri);
   zip.file(pdf.fileName, pdfBase64, { base64: true });
@@ -80,9 +81,20 @@ export async function generateZipExport(
     for (const attachment of attachments) {
       const fallbackName = attachment.filePath.split("/").pop() ?? `${attachment.id}.bin`;
       const fileName = sanitizePathName(attachment.originalFileName ?? fallbackName);
-      const fileBase64 = await readFileAsBase64(attachment.filePath);
-      itemFolder.file(fileName, fileBase64, { base64: true });
+      try {
+        const fileBase64 = await readFileAsBase64(attachment.filePath);
+        itemFolder.file(fileName, fileBase64, { base64: true });
+      } catch {
+        skippedFiles.push(`${item.title} -> ${fileName}`);
+      }
     }
+  }
+
+  if (skippedFiles.length > 0) {
+    zip.file(
+      "missing-attachments.txt",
+      `Some attachment files were missing and skipped:\n${skippedFiles.join("\n")}\n`
+    );
   }
 
   const zipBase64 = await zip.generateAsync({ type: "base64" });

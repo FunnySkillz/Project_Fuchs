@@ -28,6 +28,8 @@ import {
 import { getProfileSettingsRepository } from "@/repositories/create-profile-settings-repository";
 import { formatCents } from "@/utils/money";
 import { addMonthsToYmd } from "@/utils/date";
+import { attachmentFileExists } from "@/services/attachment-storage";
+import { friendlyFileErrorMessage } from "@/services/friendly-errors";
 
 function toSingleParam(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
@@ -80,6 +82,7 @@ export default function ItemDetailRoute() {
 
   const [item, setItem] = useState<Item | null>(null);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [missingAttachmentIds, setMissingAttachmentIds] = useState<Set<string>>(new Set());
   const [categories, setCategories] = useState<Category[]>([]);
   const [settings, setSettings] = useState<ProfileSettings | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -120,11 +123,20 @@ export default function ItemDetailRoute() {
       }
 
       setAttachments(loadedAttachments);
+      const checks = await Promise.all(
+        loadedAttachments.map(async (attachment) => ({
+          id: attachment.id,
+          exists: await attachmentFileExists(attachment.filePath),
+        }))
+      );
+      setMissingAttachmentIds(
+        new Set(checks.filter((entry) => !entry.exists).map((entry) => entry.id))
+      );
       setCategories(loadedCategories);
       setSettings(loadedSettings);
     } catch (error) {
       console.error("Failed to load item detail", error);
-      setLoadError("Could not load item details.");
+      setLoadError(friendlyFileErrorMessage(error, "Could not load item details."));
     } finally {
       setIsLoading(false);
     }
@@ -183,7 +195,7 @@ export default function ItemDetailRoute() {
       router.replace("/(tabs)/items");
     } catch (error) {
       console.error("Failed to delete item", error);
-      setLoadError("Could not delete item.");
+      setLoadError(friendlyFileErrorMessage(error, "Could not delete item."));
     } finally {
       setIsDeleting(false);
     }
@@ -286,7 +298,16 @@ export default function ItemDetailRoute() {
               {attachments.map((attachment) => (
                 <Pressable
                   key={attachment.id}
-                  onPress={() => setSelectedAttachment(attachment)}
+                  onPress={() => {
+                    if (missingAttachmentIds.has(attachment.id)) {
+                      Alert.alert(
+                        "Attachment missing",
+                        "The local file for this attachment is missing."
+                      );
+                      return;
+                    }
+                    setSelectedAttachment(attachment);
+                  }}
                   style={({ pressed }) => [styles.galleryTile, pressed && styles.pressed]}>
                   {isImageAttachment(attachment) ? (
                     <Image source={{ uri: attachment.filePath }} style={styles.thumbnail} contentFit="cover" />
@@ -298,6 +319,9 @@ export default function ItemDetailRoute() {
                   <ThemedText type="small" numberOfLines={1}>
                     {attachment.originalFileName ?? attachment.type}
                   </ThemedText>
+                  {missingAttachmentIds.has(attachment.id) && (
+                    <Badge text="Missing file" variant="warning" />
+                  )}
                 </Pressable>
               ))}
             </View>

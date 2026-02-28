@@ -22,6 +22,8 @@ import {
 } from "@/services/attachment-storage";
 import { parseEuroInputToCents } from "@/utils/money";
 import { formatYmdFromDateLocal, isValidYmd } from "@/utils/date";
+import { friendlyFileErrorMessage } from "@/services/friendly-errors";
+import { attachmentFileExists } from "@/services/attachment-storage";
 
 function toSingleParam(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
@@ -70,6 +72,7 @@ export default function ItemEditRoute() {
 
   const [item, setItem] = useState<Item | null>(null);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [missingAttachmentIds, setMissingAttachmentIds] = useState<Set<string>>(new Set());
   const [categories, setCategories] = useState<Category[]>([]);
 
   const [title, setTitle] = useState("");
@@ -168,6 +171,15 @@ export default function ItemEditRoute() {
 
       setItem(loadedItem);
       setAttachments(loadedAttachments);
+      const checks = await Promise.all(
+        loadedAttachments.map(async (attachment) => ({
+          id: attachment.id,
+          exists: await attachmentFileExists(attachment.filePath),
+        }))
+      );
+      setMissingAttachmentIds(
+        new Set(checks.filter((entry) => !entry.exists).map((entry) => entry.id))
+      );
       setCategories(loadedCategories);
 
       setTitle(loadedItem.title);
@@ -260,7 +272,7 @@ export default function ItemEditRoute() {
       setAttachments(refreshed);
     } catch (error) {
       console.error("Failed to add attachment", error);
-      setLoadError("Could not add attachment.");
+      setLoadError(friendlyFileErrorMessage(error, "Could not add attachment."));
     } finally {
       setIsAttachmentBusy(false);
     }
@@ -276,9 +288,18 @@ export default function ItemEditRoute() {
       await repository.delete(attachmentId);
       const refreshed = await repository.listByItem(itemId);
       setAttachments(refreshed);
+      const checks = await Promise.all(
+        refreshed.map(async (attachment) => ({
+          id: attachment.id,
+          exists: await attachmentFileExists(attachment.filePath),
+        }))
+      );
+      setMissingAttachmentIds(
+        new Set(checks.filter((entry) => !entry.exists).map((entry) => entry.id))
+      );
     } catch (error) {
       console.error("Failed to remove attachment", error);
-      setLoadError("Could not remove attachment.");
+      setLoadError(friendlyFileErrorMessage(error, "Could not remove attachment."));
     }
   };
 
@@ -452,6 +473,9 @@ export default function ItemEditRoute() {
                   <ThemedText type="small" numberOfLines={1}>
                     {attachment.originalFileName ?? attachment.type}
                   </ThemedText>
+                  {missingAttachmentIds.has(attachment.id) && (
+                    <Badge text="Missing file" variant="warning" />
+                  )}
                   <ThemedText type="small" themeColor="textSecondary">
                     {formatFileSize(attachment.fileSizeBytes)}
                   </ThemedText>
