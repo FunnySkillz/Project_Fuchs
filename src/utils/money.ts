@@ -29,26 +29,48 @@ function normalizeLocalizedAmount(raw: string): string | null {
   return normalized;
 }
 
-export function parseEuroInputToCents(raw: string): number | null {
-  const normalized = normalizeLocalizedAmount(raw);
-  if (!normalized) {
-    return null;
-  }
-
+function parseNormalizedToCents(normalized: string): number {
   const [eurosPart, centsPartRaw = ""] = normalized.split(".");
   const centsPart = centsPartRaw.padEnd(2, "0");
   const euros = Number.parseInt(eurosPart, 10);
   const cents = Number.parseInt(centsPart, 10);
   if (!Number.isFinite(euros) || !Number.isFinite(cents)) {
-    return null;
+    throw new Error("Invalid money format.");
   }
-
-  const total = euros * 100 + cents;
-  return total > 0 ? total : null;
+  return euros * 100 + cents;
 }
 
-export function formatCents(cents: number, locale: string = "de-AT"): string {
-  return new Intl.NumberFormat(locale, {
+export function parseMoneyToCents(raw: string): number {
+  if (raw.trim().startsWith("-")) {
+    throw new Error("Amount must be greater than 0.");
+  }
+
+  const normalized = normalizeLocalizedAmount(raw);
+  if (!normalized) {
+    throw new Error("Invalid money format. Use digits with up to two decimals.");
+  }
+
+  const total = parseNormalizedToCents(normalized);
+  if (total <= 0) {
+    throw new Error("Amount must be greater than 0.");
+  }
+  return total;
+}
+
+export function parseEuroInputToCents(raw: string): number | null {
+  try {
+    return parseMoneyToCents(raw);
+  } catch {
+    return null;
+  }
+}
+
+export function formatCents(cents: number, localeOrCurrency: string = "de-AT"): string {
+  if (/^[A-Z]{3}$/.test(localeOrCurrency)) {
+    return `${(cents / 100).toFixed(2)} ${localeOrCurrency}`;
+  }
+
+  return new Intl.NumberFormat(localeOrCurrency, {
     style: "currency",
     currency: "EUR",
     maximumFractionDigits: 2,

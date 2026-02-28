@@ -1,18 +1,30 @@
-import { parseEuroInputToCents, formatCents } from "@/utils/money";
+import { formatCents, parseEuroInputToCents, parseMoneyToCents } from "@/utils/money";
 import { addMonthsToYmd, isValidYmd, parseYmd } from "@/utils/date";
 
 describe("money parsing/formatting", () => {
-  it("converts 999.99 to 99999 cents", () => {
+  it("parseMoneyToCents converts 999.99 to 99999", () => {
+    expect(parseMoneyToCents("999.99")).toBe(99_999);
+  });
+
+  it("parseMoneyToCents handles locale tolerant decimal forms", () => {
+    expect(parseMoneyToCents("999,99")).toBe(99_999);
+    expect(parseMoneyToCents("1.000,00")).toBe(100_000);
+  });
+
+  it("parseMoneyToCents rejects zero and negative values", () => {
+    expect(() => parseMoneyToCents("0")).toThrow("greater than 0");
+    expect(() => parseMoneyToCents("-5")).toThrow("greater than 0");
+  });
+
+  it("parseEuroInputToCents keeps null-safe behavior for forms", () => {
     expect(parseEuroInputToCents("999.99")).toBe(99_999);
+    expect(parseEuroInputToCents("0")).toBeNull();
+    expect(parseEuroInputToCents("-5")).toBeNull();
+    expect(parseEuroInputToCents("abc")).toBeNull();
   });
 
-  it("handles localized decimal forms", () => {
-    expect(parseEuroInputToCents("1.234,56")).toBe(123_456);
-    expect(parseEuroInputToCents("1,234.56")).toBe(123_456);
-  });
-
-  it("formats cents consistently", () => {
-    expect(formatCents(99_999)).toContain("999");
+  it('formatCents(99999, "EUR") returns "999.99 EUR"', () => {
+    expect(formatCents(99_999, "EUR")).toBe("999.99 EUR");
   });
 });
 
