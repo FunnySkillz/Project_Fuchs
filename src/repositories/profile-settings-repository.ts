@@ -13,6 +13,7 @@ interface ProfileSettingsRow {
 }
 
 export interface ProfileSettingsRepository {
+  hasSettings(): Promise<boolean>;
   getSettings(): Promise<ProfileSettings>;
   upsertSettings(settings: Partial<ProfileSettings>): Promise<ProfileSettings>;
 }
@@ -22,6 +23,18 @@ export class SQLiteProfileSettingsRepository implements ProfileSettingsRepositor
     private readonly db: SQLiteExecutor,
     private readonly nowProvider: () => Date = () => new Date()
   ) {}
+
+  async hasSettings(): Promise<boolean> {
+    const row = await this.db.getFirstAsync<{ existsFlag: number }>(
+      `SELECT 1 AS existsFlag
+      FROM ProfileSettings
+      WHERE Id = $id AND DeletedAt IS NULL
+      LIMIT 1;`,
+      { $id: PROFILE_SETTINGS_SINGLETON_ID }
+    );
+
+    return row?.existsFlag === 1;
+  }
 
   async getSettings(): Promise<ProfileSettings> {
     const row = await this.db.getFirstAsync<ProfileSettingsRow>(

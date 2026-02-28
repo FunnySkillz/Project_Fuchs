@@ -21,3 +21,11 @@ export function createDefaultProfileSettings(now: Date = new Date()): ProfileSet
     currency: "EUR",
   };
 }
+
+export function bpsToPercent(bps: number): number {
+  return bps / 100;
+}
+
+export function percentToBps(percent: number): number {
+  return Math.round(percent * 100);
+}
