@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Alert, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from "react-native";
+import * as WebBrowser from "expo-web-browser";
 
 import { ProfileSettingsForm, type ProfileSettingsFormValues } from "@/components/profile-settings-form";
 import { ThemedText } from "@/components/themed-text";
@@ -9,11 +10,19 @@ import { Spacing } from "@/constants/theme";
 import { emitLocalDataDeleted } from "@/services/app-events";
 import { deleteAllLocalData } from "@/services/local-data";
 import {
+  connectOneDrive,
+  disconnectOneDrive,
+  getOneDriveRedirectUri,
+  hasOneDriveConnection,
+} from "@/services/onedrive-auth";
+import {
   hasPinAsync,
   isValidPin,
   setPinAsync,
   verifyPinAsync,
 } from "@/services/pin-auth";
+
+WebBrowser.maybeCompleteAuthSession();
 
 function formatCents(cents: number): string {
   return new Intl.NumberFormat("de-AT", {
@@ -53,6 +62,9 @@ export default function SettingsScreen() {
   const [pinError, setPinError] = useState<string | null>(null);
   const [pinSuccess, setPinSuccess] = useState<string | null>(null);
   const [dangerError, setDangerError] = useState<string | null>(null);
+  const [oneDriveConnected, setOneDriveConnected] = useState(false);
+  const [oneDriveBusy, setOneDriveBusy] = useState(false);
+  const [oneDriveError, setOneDriveError] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -65,6 +77,8 @@ export default function SettingsScreen() {
           setSettings(loaded);
           const hasPin = await hasPinAsync();
           setPinExists(hasPin);
+          const connected = await hasOneDriveConnection();
+          setOneDriveConnected(connected);
         }
       } catch (error) {
         if (isMounted) {
@@ -150,6 +164,36 @@ export default function SettingsScreen() {
     } catch (error) {
       console.error("Failed to delete local data", error);
       setDangerError("Could not delete local data. Please try again.");
+    }
+  };
+
+  const handleConnectOneDrive = async () => {
+    setOneDriveError(null);
+    setOneDriveBusy(true);
+    try {
+      await connectOneDrive();
+      setOneDriveConnected(true);
+    } catch (error) {
+      console.error("Failed to connect OneDrive", error);
+      setOneDriveError(
+        error instanceof Error ? error.message : "Could not connect OneDrive."
+      );
+    } finally {
+      setOneDriveBusy(false);
+    }
+  };
+
+  const handleDisconnectOneDrive = async () => {
+    setOneDriveError(null);
+    setOneDriveBusy(true);
+    try {
+      await disconnectOneDrive();
+      setOneDriveConnected(false);
+    } catch (error) {
+      console.error("Failed to disconnect OneDrive", error);
+      setOneDriveError("Could not disconnect OneDrive.");
+    } finally {
+      setOneDriveBusy(false);
     }
   };
 
@@ -263,6 +307,38 @@ export default function SettingsScreen() {
           <ThemedText type="smallBold">Delete All Local Data</ThemedText>
         </Pressable>
       </View>
+      <View style={styles.oneDriveCard}>
+        <ThemedText type="smallBold">OneDrive (Export-Only)</ThemedText>
+        <ThemedText type="small" themeColor="textSecondary">
+          Connect OneDrive only for user-triggered export/backup uploads. App works fully without it.
+        </ThemedText>
+        <ThemedText type="small" themeColor="textSecondary">
+          Redirect URI: {getOneDriveRedirectUri()}
+        </ThemedText>
+        <ThemedText type="small">
+          Status: {oneDriveConnected ? "Connected" : "Not connected"}
+        </ThemedText>
+        {oneDriveError && <ThemedText style={styles.errorText}>{oneDriveError}</ThemedText>}
+        {!oneDriveConnected ? (
+          <Pressable
+            style={({ pressed }) => [styles.oneDriveButton, pressed && styles.pressed]}
+            onPress={() => void handleConnectOneDrive()}
+            disabled={oneDriveBusy}>
+            <ThemedText type="smallBold">
+              {oneDriveBusy ? "Connecting..." : "Connect OneDrive"}
+            </ThemedText>
+          </Pressable>
+        ) : (
+          <Pressable
+            style={({ pressed }) => [styles.oneDriveDisconnectButton, pressed && styles.pressed]}
+            onPress={() => void handleDisconnectOneDrive()}
+            disabled={oneDriveBusy}>
+            <ThemedText type="smallBold">
+              {oneDriveBusy ? "Disconnecting..." : "Disconnect OneDrive"}
+            </ThemedText>
+          </Pressable>
+        )}
+      </View>
     </ScrollView>
   );
 }
@@ -334,6 +410,30 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingVertical: 12,
     backgroundColor: "#FFDCDC",
+  },
+  oneDriveCard: {
+    borderWidth: 1,
+    borderColor: "#9BA1A6",
+    borderRadius: 10,
+    padding: Spacing.three,
+    gap: Spacing.two,
+    backgroundColor: "#FFFFFF",
+  },
+  oneDriveButton: {
+    borderWidth: 1,
+    borderColor: "#9BA1A6",
+    borderRadius: 10,
+    alignItems: "center",
+    paddingVertical: 12,
+    backgroundColor: "#ECEDEE",
+  },
+  oneDriveDisconnectButton: {
+    borderWidth: 1,
+    borderColor: "#9BA1A6",
+    borderRadius: 10,
+    alignItems: "center",
+    paddingVertical: 12,
+    backgroundColor: "#FFFFFF",
   },
   successText: {
     color: "#0B7D47",
