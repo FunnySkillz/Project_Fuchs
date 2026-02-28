@@ -250,6 +250,12 @@ Build preview:
 eas build --profile preview
 ```
 
+Internal dev client build:
+
+```bash
+eas build --profile dev
+```
+
 Release/internal testing:
 
 ```bash
@@ -259,6 +265,10 @@ eas build --platform android --profile preview
 # iOS internal/TestFlight candidate
 eas build --platform ios --profile preview
 ```
+
+Release checklist:
+
+- `docs/release-internal-testing-checklist.md`
 
 ## Security & Privacy
 

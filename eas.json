@@ -3,6 +3,10 @@
     "version": ">= 16.0.0"
   },
   "build": {
+    "dev": {
+      "developmentClient": true,
+      "distribution": "internal"
+    },
     "development": {
       "developmentClient": true,
       "distribution": "internal"
