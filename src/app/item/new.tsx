@@ -73,6 +73,7 @@ export default function NewItemRoute() {
   const [usageType, setUsageType] = useState<ItemUsageType>("WORK");
   const [workPercent, setWorkPercent] = useState("");
   const [warrantyMonths, setWarrantyMonths] = useState("");
+  const [vendor, setVendor] = useState("");
   const [notes, setNotes] = useState("");
 
   const [categories, setCategories] = useState<Category[]>([]);
@@ -294,6 +295,7 @@ export default function NewItemRoute() {
         usageType,
         workPercent: usageType === "MIXED" ? parsedWorkPercent ?? 0 : null,
         categoryId,
+        vendor: vendor.trim().length > 0 ? vendor.trim() : null,
         warrantyMonths: parsedWarrantyMonths,
         notes: notes.trim().length > 0 ? notes.trim() : null,
       });
@@ -400,6 +402,14 @@ export default function NewItemRoute() {
                 onChangeText={setWarrantyMonths}
                 keyboardType="number-pad"
                 placeholder="Optional"
+              />
+            </FormField>
+
+            <FormField label="Vendor">
+              <Input
+                value={vendor}
+                onChangeText={setVendor}
+                placeholder="Optional vendor/store name"
               />
             </FormField>
 
