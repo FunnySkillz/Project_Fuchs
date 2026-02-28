@@ -8,14 +8,12 @@ import { createDefaultProfileSettings, type ProfileSettings } from "@/models/pro
 import { getProfileSettingsRepository } from "@/repositories/create-profile-settings-repository";
 import { Spacing } from "@/constants/theme";
 import { emitLocalDataDeleted } from "@/services/app-events";
+import { getOneDriveAuthProvider } from "@/services/auth/onedrive-auth-provider";
 import { deleteAllLocalData } from "@/services/local-data";
 import {
-  connectOneDrive,
-  disconnectOneDrive,
   ensureSelectedFolderAccessible,
   getOneDriveRedirectUri,
   getSelectedOneDriveFolder,
-  hasOneDriveConnection,
   listOneDriveFolders,
   type OneDriveFolder,
   type OneDriveFolderSelection,
@@ -34,6 +32,7 @@ import {
 } from "@/services/pin-auth";
 
 WebBrowser.maybeCompleteAuthSession();
+const oneDriveAuthProvider = getOneDriveAuthProvider();
 
 function formatCents(cents: number): string {
   return new Intl.NumberFormat("de-AT", {
@@ -92,7 +91,7 @@ export default function SettingsScreen() {
           setSettings(loaded);
           const hasPin = await hasPinAsync();
           setPinExists(hasPin);
-          const connected = await hasOneDriveConnection();
+          const connected = await oneDriveAuthProvider.isConnected();
           setOneDriveConnected(connected);
           const selected = await getSelectedOneDriveFolder();
           setOneDriveSelectedFolderState(selected);
@@ -188,7 +187,7 @@ export default function SettingsScreen() {
     setOneDriveError(null);
     setOneDriveBusy(true);
     try {
-      await connectOneDrive();
+      await oneDriveAuthProvider.connect();
       setOneDriveConnected(true);
       const selected = await getSelectedOneDriveFolder();
       setOneDriveSelectedFolderState(selected);
@@ -206,7 +205,7 @@ export default function SettingsScreen() {
     setOneDriveError(null);
     setOneDriveBusy(true);
     try {
-      await disconnectOneDrive();
+      await oneDriveAuthProvider.disconnect();
       setOneDriveConnected(false);
       setOneDriveSelectedFolderState(null);
       setOneDriveFolders([]);
