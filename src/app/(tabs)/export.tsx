@@ -8,9 +8,14 @@ import { ThemedView } from "@/components/themed-view";
 import { Spacing } from "@/constants/theme";
 import { computeDeductibleImpactCents } from "@/domain/deductible-impact";
 import type { Category } from "@/models/category";
+import type { ExportRun } from "@/models/export-run";
 import type { Item, ItemUsageType } from "@/models/item";
 import type { ProfileSettings } from "@/models/profile-settings";
-import { getCategoryRepository, getItemRepository } from "@/repositories/create-core-repositories";
+import {
+  getCategoryRepository,
+  getExportRunRepository,
+  getItemRepository,
+} from "@/repositories/create-core-repositories";
 import { getProfileSettingsRepository } from "@/repositories/create-profile-settings-repository";
 import {
   getExportSelectionSessionState,
@@ -105,6 +110,7 @@ export default function ExportRoute() {
   const [missingReceiptItemIds, setMissingReceiptItemIds] = useState<Set<string>>(new Set());
   const [categories, setCategories] = useState<Category[]>([]);
   const [settings, setSettings] = useState<ProfileSettings | null>(null);
+  const [exportHistory, setExportHistory] = useState<ExportRun[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -146,25 +152,30 @@ export default function ExportRoute() {
     setIsLoading(true);
     setLoadError(null);
     try {
-      const [itemRepository, categoryRepository, profileSettingsRepository] = await Promise.all([
+      const [itemRepository, categoryRepository, profileSettingsRepository, exportRunRepository] =
+        await Promise.all([
         getItemRepository(),
         getCategoryRepository(),
         getProfileSettingsRepository(),
+        getExportRunRepository(),
       ]);
 
       const loadedSettings = await profileSettingsRepository.getSettings();
       const targetYear = parsedTaxYear ?? loadedSettings.taxYearDefault;
 
-      const [loadedItems, loadedCategories, loadedMissingReceiptIds] = await Promise.all([
+      const [loadedItems, loadedCategories, loadedMissingReceiptIds, loadedHistory] =
+        await Promise.all([
         itemRepository.list({ year: targetYear }),
         categoryRepository.list(),
         itemRepository.listMissingReceiptItemIds({ year: targetYear }),
+        exportRunRepository.listByYear(targetYear),
       ]);
 
       setYearItems(loadedItems);
       setMissingReceiptItemIds(new Set(loadedMissingReceiptIds));
       setCategories(loadedCategories);
       setSettings(loadedSettings);
+      setExportHistory(loadedHistory);
 
       const validYearItemIds = new Set(loadedItems.map((item) => item.id));
       setSelectedItemIds((current) => {
@@ -180,6 +191,7 @@ export default function ExportRoute() {
       console.error("Failed to load export selection data", error);
       setYearItems([]);
       setMissingReceiptItemIds(new Set());
+      setExportHistory([]);
       setLoadError("Could not load export selection data.");
     } finally {
       setIsLoading(false);
@@ -308,6 +320,17 @@ export default function ExportRoute() {
       });
       setLatestPdfUri(result.fileUri);
       setLatestPdfName(result.fileName);
+
+      const exportRunRepository = await getExportRunRepository();
+      const run = await exportRunRepository.create({
+        taxYear: targetYear,
+        itemCount: selectedItems.length,
+        totalDeductibleCents: totals.deductibleThisYearCents,
+        estimatedRefundCents: totals.estimatedRefundCents,
+        outputType: "PDF",
+        outputFilePath: result.fileUri,
+      });
+      setExportHistory((current) => [run, ...current]);
     } catch (error) {
       console.error("Failed to generate PDF export", error);
       setLoadError(friendlyFileErrorMessage(error, "Could not generate PDF export."));
@@ -354,6 +377,17 @@ export default function ExportRoute() {
       setLatestZipUri(result.fileUri);
       setLatestZipName(result.fileName);
       setLatestZipSizeBytes(result.sizeBytes);
+
+      const exportRunRepository = await getExportRunRepository();
+      const run = await exportRunRepository.create({
+        taxYear: targetYear,
+        itemCount: selectedItems.length,
+        totalDeductibleCents: totals.deductibleThisYearCents,
+        estimatedRefundCents: totals.estimatedRefundCents,
+        outputType: "ZIP",
+        outputFilePath: result.fileUri,
+      });
+      setExportHistory((current) => [run, ...current]);
     } catch (error) {
       console.error("Failed to generate ZIP export", error);
       setLoadError(friendlyFileErrorMessage(error, "Could not generate ZIP export."));
@@ -376,6 +410,24 @@ export default function ExportRoute() {
       setLoadError(friendlyFileErrorMessage(error, "Could not share ZIP export."));
     } finally {
       setIsSharingZip(false);
+    }
+  };
+
+  const handleShareHistoryRun = async (run: ExportRun) => {
+    if (!run.outputFilePath) {
+      setLoadError("Selected export history entry has no output file path.");
+      return;
+    }
+
+    try {
+      if (run.outputType === "PDF") {
+        await shareExportPdf(run.outputFilePath);
+        return;
+      }
+      await shareExportZip(run.outputFilePath);
+    } catch (error) {
+      console.error("Failed to share export from history", error);
+      setLoadError(friendlyFileErrorMessage(error, "Could not share export file from history."));
     }
   };
 
@@ -526,6 +578,35 @@ export default function ExportRoute() {
               )}
             </Card>
 
+            <Card>
+              <ThemedText type="smallBold">Export History</ThemedText>
+              {exportHistory.length === 0 ? (
+                <ThemedText type="small" themeColor="textSecondary">
+                  No exports recorded for this tax year yet.
+                </ThemedText>
+              ) : (
+                exportHistory.map((run) => (
+                  <View key={run.id} style={styles.historyRow}>
+                    <View style={styles.historyTextGroup}>
+                      <ThemedText type="smallBold">{run.outputType}</ThemedText>
+                      <ThemedText type="small" themeColor="textSecondary">
+                        {run.createdAt} | Items: {run.itemCount}
+                      </ThemedText>
+                      <ThemedText type="small" themeColor="textSecondary">
+                        Deductible: {formatCents(run.totalDeductibleCents)} | Refund:{" "}
+                        {formatCents(run.estimatedRefundCents)}
+                      </ThemedText>
+                    </View>
+                    <Button
+                      variant="secondary"
+                      label="Share Again"
+                      onPress={() => void handleShareHistoryRun(run)}
+                    />
+                  </View>
+                ))
+              )}
+            </Card>
+
             <View style={styles.metaRow}>
               <Badge text={`${filteredItems.length} filtered item(s)`} />
               {loadError && <ThemedText style={styles.errorText}>{loadError}</ThemedText>}
@@ -594,6 +675,21 @@ const styles = StyleSheet.create({
   },
   itemCard: {
     marginBottom: Spacing.two,
+  },
+  historyRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: Spacing.two,
+    flexWrap: "wrap",
+    borderWidth: 1,
+    borderColor: "#D6D8DB",
+    borderRadius: 10,
+    padding: Spacing.two,
+  },
+  historyTextGroup: {
+    flex: 1,
+    gap: Spacing.one,
   },
   metaRow: {
     flexDirection: "row",
