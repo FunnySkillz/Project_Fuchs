@@ -16,6 +16,7 @@ interface GenerateZipExportParams {
   categories: Category[];
   settings: ProfileSettings;
   includeDetailPages: boolean;
+  onProgress?: (progress: ZipExportProgress) => void;
 }
 
 export interface ZipExportResult {
@@ -23,6 +24,14 @@ export interface ZipExportResult {
   fileName: string;
   sizeBytes: number;
   embeddedPdfName: string;
+}
+
+export interface ZipExportProgress {
+  stage: "prepare" | "pdf" | "attachments" | "finalize";
+  processedItems: number;
+  totalItems: number;
+  percent: number;
+  message: string;
 }
 
 function sanitizePathName(value: string): string {
@@ -49,10 +58,19 @@ async function readFileAsBase64(fileUri: string): Promise<string> {
 export async function generateZipExport(
   params: GenerateZipExportParams
 ): Promise<ZipExportResult> {
-  const { taxYear, selectedItems, categories, settings, includeDetailPages } = params;
+  const { taxYear, selectedItems, categories, settings, includeDetailPages, onProgress } = params;
   if (selectedItems.length === 0) {
     throw new Error("No selected items for ZIP export.");
   }
+
+  const totalItems = selectedItems.length;
+  onProgress?.({
+    stage: "prepare",
+    processedItems: 0,
+    totalItems,
+    percent: 5,
+    message: "Preparing ZIP export...",
+  });
 
   const pdf = await generatePdfExport({
     taxYear,
@@ -60,6 +78,13 @@ export async function generateZipExport(
     categories,
     settings,
     includeDetailPages,
+  });
+  onProgress?.({
+    stage: "pdf",
+    processedItems: 0,
+    totalItems,
+    percent: 20,
+    message: "Embedded PDF generated.",
   });
 
   const attachmentRepository = await getAttachmentRepository();
@@ -88,6 +113,18 @@ export async function generateZipExport(
         skippedFiles.push(`${item.title} -> ${fileName}`);
       }
     }
+
+    const percent = Math.min(
+      90,
+      20 + Math.round(((index + 1) / totalItems) * 70)
+    );
+    onProgress?.({
+      stage: "attachments",
+      processedItems: index + 1,
+      totalItems,
+      percent,
+      message: `Packing attachments (${index + 1}/${totalItems})...`,
+    });
   }
 
   if (skippedFiles.length > 0) {
@@ -98,6 +135,13 @@ export async function generateZipExport(
   }
 
   const zipBase64 = await zip.generateAsync({ type: "base64" });
+  onProgress?.({
+    stage: "finalize",
+    processedItems: totalItems,
+    totalItems,
+    percent: 95,
+    message: "Finalizing ZIP file...",
+  });
   await ensureExportDirectory();
   const safeTimestamp = new Date().toISOString().replaceAll(":", "-");
   const fileName = `steuerfuchs-export-${taxYear}-${safeTimestamp}.zip`;
@@ -109,6 +153,14 @@ export async function generateZipExport(
 
   const info = await FileSystem.getInfoAsync(fileUri);
   const sizeBytes = info.exists && typeof info.size === "number" ? info.size : 0;
+
+  onProgress?.({
+    stage: "finalize",
+    processedItems: totalItems,
+    totalItems,
+    percent: 100,
+    message: "ZIP export complete.",
+  });
 
   return {
     fileUri,

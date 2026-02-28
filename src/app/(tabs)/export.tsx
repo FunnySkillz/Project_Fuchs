@@ -18,7 +18,11 @@ import {
 } from "@/services/export-selection-session";
 import { formatCents } from "@/utils/money";
 import { generatePdfExport, shareExportPdf } from "@/services/pdf-export";
-import { generateZipExport, shareExportZip } from "@/services/zip-export";
+import {
+  generateZipExport,
+  shareExportZip,
+  type ZipExportProgress,
+} from "@/services/zip-export";
 import { friendlyFileErrorMessage } from "@/services/friendly-errors";
 
 const usageOptions: { value: string; label: string }[] = [
@@ -95,6 +99,7 @@ export default function ExportRoute() {
   const [latestZipSizeBytes, setLatestZipSizeBytes] = useState<number | null>(null);
   const [isGeneratingZip, setIsGeneratingZip] = useState(false);
   const [isSharingZip, setIsSharingZip] = useState(false);
+  const [zipProgress, setZipProgress] = useState<ZipExportProgress | null>(null);
 
   const [yearItems, setYearItems] = useState<Item[]>([]);
   const [missingReceiptItemIds, setMissingReceiptItemIds] = useState<Set<string>>(new Set());
@@ -334,6 +339,7 @@ export default function ExportRoute() {
     }
 
     setIsGeneratingZip(true);
+    setZipProgress(null);
     setLoadError(null);
     try {
       const targetYear = parsedTaxYear ?? settings.taxYearDefault;
@@ -343,6 +349,7 @@ export default function ExportRoute() {
         categories,
         settings,
         includeDetailPages,
+        onProgress: (progress) => setZipProgress(progress),
       });
       setLatestZipUri(result.fileUri);
       setLatestZipName(result.fileName);
@@ -510,6 +517,11 @@ export default function ExportRoute() {
                   {latestZipSizeBytes !== null
                     ? ` (${(latestZipSizeBytes / 1024 / 1024).toFixed(2)} MB)`
                     : ""}
+                </ThemedText>
+              )}
+              {zipProgress && (
+                <ThemedText type="small" themeColor="textSecondary">
+                  ZIP progress: {zipProgress.percent}% - {zipProgress.message}
                 </ThemedText>
               )}
             </Card>
