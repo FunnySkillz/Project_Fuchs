@@ -8,7 +8,11 @@ import { AppLockGate } from "@/components/app-lock-gate";
 import { AnimatedSplashOverlay } from "@/components/animated-icon";
 import { InitErrorScreen } from "@/components/init-error-screen";
 import { getProfileSettingsRepository } from "@/repositories/create-profile-settings-repository";
-import { onLocalDataDeleted, onProfileSettingsSaved } from "@/services/app-events";
+import {
+  onDatabaseRestored,
+  onLocalDataDeleted,
+  onProfileSettingsSaved,
+} from "@/services/app-events";
 import { deleteAllLocalData } from "@/services/local-data";
 import { hasPinAsync, verifyPinAsync } from "@/services/pin-auth";
 
@@ -154,10 +158,14 @@ export default function RootLayout() {
       setHasProfile(true);
       setBootstrapState("loading");
     });
+    const unsubscribeDatabaseRestore = onDatabaseRestored(() => {
+      setBootstrapState("loading");
+    });
 
     return () => {
       unsubscribeDelete();
       unsubscribeProfileSave();
+      unsubscribeDatabaseRestore();
     };
   }, []);
 

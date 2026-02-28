@@ -1,13 +1,14 @@
 import React, { useEffect, useState } from "react";
 import { Alert, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from "react-native";
 import * as WebBrowser from "expo-web-browser";
+import * as DocumentPicker from "expo-document-picker";
 
 import { ProfileSettingsForm, type ProfileSettingsFormValues } from "@/components/profile-settings-form";
 import { ThemedText } from "@/components/themed-text";
 import { createDefaultProfileSettings, type ProfileSettings } from "@/models/profile-settings";
 import { getProfileSettingsRepository } from "@/repositories/create-profile-settings-repository";
 import { Spacing } from "@/constants/theme";
-import { emitLocalDataDeleted } from "@/services/app-events";
+import { emitDatabaseRestored, emitLocalDataDeleted } from "@/services/app-events";
 import { getOneDriveAuthProvider } from "@/services/auth/onedrive-auth-provider";
 import { deleteAllLocalData } from "@/services/local-data";
 import {
@@ -32,6 +33,13 @@ import {
 } from "@/services/pin-auth";
 import { estimateTaxImpact } from "@/domain/calculation-engine";
 import { formatCents } from "@/utils/money";
+import {
+  createLocalBackupZip,
+  restoreFromBackupZip,
+  shareBackupZip,
+  type BackupExportResult,
+} from "@/services/backup-restore";
+import { friendlyFileErrorMessage } from "@/services/friendly-errors";
 
 WebBrowser.maybeCompleteAuthSession();
 const oneDriveAuthProvider = getOneDriveAuthProvider();
@@ -78,6 +86,9 @@ export default function SettingsScreen() {
   const [pinError, setPinError] = useState<string | null>(null);
   const [pinSuccess, setPinSuccess] = useState<string | null>(null);
   const [dangerError, setDangerError] = useState<string | null>(null);
+  const [backupResult, setBackupResult] = useState<BackupExportResult | null>(null);
+  const [backupBusy, setBackupBusy] = useState(false);
+  const [backupError, setBackupError] = useState<string | null>(null);
   const [oneDriveConnected, setOneDriveConnected] = useState(false);
   const [oneDriveBusy, setOneDriveBusy] = useState(false);
   const [oneDriveError, setOneDriveError] = useState<string | null>(null);
@@ -186,6 +197,84 @@ export default function SettingsScreen() {
     } catch (error) {
       console.error("Failed to delete local data", error);
       setDangerError("Could not delete local data. Please try again.");
+    }
+  };
+
+  const confirmRestoreBackup = async (): Promise<boolean> => {
+    if (Platform.OS === "web") {
+      return globalThis.confirm(
+        "Importing backup will overwrite current local database data. Continue?"
+      );
+    }
+
+    return new Promise((resolve) => {
+      Alert.alert(
+        "Import backup snapshot",
+        "This will overwrite your current local database with the backup. Continue?",
+        [
+          { text: "Cancel", style: "cancel", onPress: () => resolve(false) },
+          { text: "Overwrite", style: "destructive", onPress: () => resolve(true) },
+        ]
+      );
+    });
+  };
+
+  const handleCreateBackup = async () => {
+    setBackupError(null);
+    setBackupBusy(true);
+    try {
+      const result = await createLocalBackupZip();
+      setBackupResult(result);
+    } catch (error) {
+      console.error("Failed to create backup ZIP", error);
+      setBackupError(friendlyFileErrorMessage(error, "Could not create backup ZIP."));
+    } finally {
+      setBackupBusy(false);
+    }
+  };
+
+  const handleShareBackup = async () => {
+    if (!backupResult) {
+      return;
+    }
+    setBackupError(null);
+    setBackupBusy(true);
+    try {
+      await shareBackupZip(backupResult.fileUri);
+    } catch (error) {
+      console.error("Failed to share backup ZIP", error);
+      setBackupError(friendlyFileErrorMessage(error, "Could not share backup ZIP."));
+    } finally {
+      setBackupBusy(false);
+    }
+  };
+
+  const handleImportBackup = async () => {
+    setBackupError(null);
+    const confirmed = await confirmRestoreBackup();
+    if (!confirmed) {
+      return;
+    }
+
+    setBackupBusy(true);
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ["application/zip", "application/x-zip-compressed"],
+        multiple: false,
+        copyToCacheDirectory: true,
+      });
+      if (result.canceled || result.assets.length === 0) {
+        return;
+      }
+
+      const asset = result.assets[0];
+      await restoreFromBackupZip(asset.uri);
+      emitDatabaseRestored();
+    } catch (error) {
+      console.error("Failed to import backup ZIP", error);
+      setBackupError(friendlyFileErrorMessage(error, "Could not import backup ZIP."));
+    } finally {
+      setBackupBusy(false);
     }
   };
 
@@ -421,6 +510,40 @@ export default function SettingsScreen() {
           onPress={() => void handleDeleteAllLocalData()}>
           <ThemedText type="smallBold">Delete All Local Data</ThemedText>
         </Pressable>
+      </View>
+      <View style={styles.oneDriveCard}>
+        <ThemedText type="smallBold">Local Backup / Restore</ThemedText>
+        <ThemedText type="small" themeColor="textSecondary">
+          Create a local snapshot ZIP (database + attachments manifest) and restore it later.
+        </ThemedText>
+        {backupError && <ThemedText style={styles.errorText}>{backupError}</ThemedText>}
+        <Pressable
+          style={({ pressed }) => [styles.oneDriveButton, pressed && styles.pressed]}
+          onPress={() => void handleCreateBackup()}
+          disabled={backupBusy}>
+          <ThemedText type="smallBold">
+            {backupBusy ? "Working..." : "Create Backup ZIP"}
+          </ThemedText>
+        </Pressable>
+        <Pressable
+          style={({ pressed }) => [styles.oneDriveDisconnectButton, pressed && styles.pressed]}
+          onPress={() => void handleShareBackup()}
+          disabled={backupBusy || !backupResult}>
+          <ThemedText type="smallBold">Share Latest Backup</ThemedText>
+        </Pressable>
+        <Pressable
+          style={({ pressed }) => [styles.dangerButton, pressed && styles.pressed]}
+          onPress={() => void handleImportBackup()}
+          disabled={backupBusy}>
+          <ThemedText type="smallBold">Import Backup (Overwrite)</ThemedText>
+        </Pressable>
+        {backupResult && (
+          <ThemedText type="small" themeColor="textSecondary">
+            Latest backup: {backupResult.fileName} | Size:{" "}
+            {(backupResult.sizeBytes / 1024 / 1024).toFixed(2)} MB | Attachments in manifest:{" "}
+            {backupResult.manifest.attachmentCount}
+          </ThemedText>
+        )}
       </View>
       <View style={styles.oneDriveCard}>
         <ThemedText type="smallBold">OneDrive (Export-Only)</ThemedText>
