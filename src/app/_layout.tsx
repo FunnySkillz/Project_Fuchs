@@ -1,22 +1,22 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
+﻿import { DarkTheme, DefaultTheme, ThemeProvider } from "@react-navigation/native";
 import * as LocalAuthentication from "expo-local-authentication";
-import React, { useCallback, useEffect, useRef } from 'react';
-import { AppState, type AppStateStatus, useColorScheme } from 'react-native';
+import { Redirect, Slot, useSegments } from "expo-router";
+import React, { useCallback, useEffect, useRef } from "react";
+import { AppState, type AppStateStatus, useColorScheme } from "react-native";
 
-import { AppLockGate } from '@/components/app-lock-gate';
-import { AnimatedSplashOverlay } from '@/components/animated-icon';
-import AppTabs from '@/components/app-tabs';
-import { InitErrorScreen } from '@/components/init-error-screen';
-import { OnboardingFlow } from '@/components/onboarding-flow';
-import { getProfileSettingsRepository } from '@/repositories/create-profile-settings-repository';
-import { type ProfileSettingsFormValues } from '@/components/profile-settings-form';
-import { onLocalDataDeleted } from '@/services/app-events';
-import { deleteAllLocalData } from '@/services/local-data';
-import { hasPinAsync, verifyPinAsync } from '@/services/pin-auth';
+import { AppLockGate } from "@/components/app-lock-gate";
+import { AnimatedSplashOverlay } from "@/components/animated-icon";
+import { InitErrorScreen } from "@/components/init-error-screen";
+import { getProfileSettingsRepository } from "@/repositories/create-profile-settings-repository";
+import { onLocalDataDeleted, onProfileSettingsSaved } from "@/services/app-events";
+import { deleteAllLocalData } from "@/services/local-data";
+import { hasPinAsync, verifyPinAsync } from "@/services/pin-auth";
 
-export default function TabLayout() {
+export default function RootLayout() {
   const colorScheme = useColorScheme();
-  const [bootstrapState, setBootstrapState] = React.useState<"loading" | "needs_onboarding" | "ready" | "init_error">("loading");
+  const segments = useSegments();
+  const [bootstrapState, setBootstrapState] = React.useState<"loading" | "ready" | "init_error">("loading");
+  const [hasProfile, setHasProfile] = React.useState(false);
   const [appLockEnabled, setAppLockEnabled] = React.useState(false);
   const [isUnlocked, setIsUnlocked] = React.useState(true);
   const [isAuthenticating, setIsAuthenticating] = React.useState(false);
@@ -98,7 +98,15 @@ export default function TabLayout() {
 
   const refreshAppLockState = useCallback(async () => {
     const repository = await getProfileSettingsRepository();
+    const hasSettings = await repository.hasSettings();
+    if (!hasSettings) {
+      setHasProfile(false);
+      setAppLockEnabled(false);
+      return false;
+    }
+
     const settings = await repository.getSettings();
+    setHasProfile(true);
     setAppLockEnabled(settings.appLockEnabled);
     return settings.appLockEnabled;
   }, []);
@@ -119,15 +127,10 @@ export default function TabLayout() {
       }
 
       if (result.lockedUntilEpochMs) {
-        const seconds = Math.max(
-          1,
-          Math.ceil((result.lockedUntilEpochMs - Date.now()) / 1000)
-        );
+        const seconds = Math.max(1, Math.ceil((result.lockedUntilEpochMs - Date.now()) / 1000));
         setAuthError(`Too many failed PIN attempts. Try again in ${seconds}s.`);
       } else {
-        setAuthError(
-          `Incorrect PIN. ${result.remainingAttempts} attempt(s) remaining before delay.`
-        );
+        setAuthError(`Incorrect PIN. ${result.remainingAttempts} attempt(s) remaining before delay.`);
       }
     } catch (error) {
       console.error("Failed to verify PIN", error);
@@ -136,8 +139,9 @@ export default function TabLayout() {
   }, [pinAvailable, pinInput]);
 
   useEffect(() => {
-    const unsubscribe = onLocalDataDeleted(() => {
-      setBootstrapState("needs_onboarding");
+    const unsubscribeDelete = onLocalDataDeleted(() => {
+      setHasProfile(false);
+      setBootstrapState("ready");
       setAppLockEnabled(false);
       setIsUnlocked(true);
       setAuthError(null);
@@ -146,8 +150,14 @@ export default function TabLayout() {
       setPinAvailable(false);
     });
 
+    const unsubscribeProfileSave = onProfileSettingsSaved(() => {
+      setHasProfile(true);
+      setBootstrapState("loading");
+    });
+
     return () => {
-      unsubscribe();
+      unsubscribeDelete();
+      unsubscribeProfileSave();
     };
   }, []);
 
@@ -161,10 +171,11 @@ export default function TabLayout() {
     }
 
     let active = true;
-    const retry = async () => {
+    const initialize = async () => {
       if (!active) {
         return;
       }
+
       try {
         setInitError(null);
         const repository = await getProfileSettingsRepository();
@@ -172,14 +183,21 @@ export default function TabLayout() {
         if (!active) {
           return;
         }
+
         if (!hasSettings) {
-          setBootstrapState("needs_onboarding");
+          setHasProfile(false);
+          setAppLockEnabled(false);
+          setIsUnlocked(true);
+          setBootstrapState("ready");
           return;
         }
+
+        setHasProfile(true);
         const settings = await repository.getSettings();
         if (!active) {
           return;
         }
+
         const hasPin = await refreshPinAvailability();
         setAppLockEnabled(settings.appLockEnabled);
         setBootstrapState("ready");
@@ -197,14 +215,14 @@ export default function TabLayout() {
         if (!active) {
           return;
         }
+
         console.error("Failed to initialize app", error);
-        setInitError(
-          error instanceof Error ? error.message : "Database initialization failed."
-        );
+        setInitError(error instanceof Error ? error.message : "Database initialization failed.");
         setBootstrapState("init_error");
       }
     };
-    void retry();
+
+    void initialize();
 
     return () => {
       active = false;
@@ -213,10 +231,9 @@ export default function TabLayout() {
 
   useEffect(() => {
     const subscription = AppState.addEventListener("change", (nextState) => {
-      const wasInBackground =
-        appStateRef.current === "background" || appStateRef.current === "inactive";
+      const wasInBackground = appStateRef.current === "background" || appStateRef.current === "inactive";
       appStateRef.current = nextState;
-      if (!wasInBackground || nextState !== "active" || bootstrapState !== "ready") {
+      if (!wasInBackground || nextState !== "active" || bootstrapState !== "ready" || !hasProfile) {
         return;
       }
 
@@ -243,26 +260,16 @@ export default function TabLayout() {
     return () => {
       subscription.remove();
     };
-  }, [authenticate, bootstrapState, refreshAppLockState, refreshPinAvailability]);
+  }, [authenticate, bootstrapState, hasProfile, refreshAppLockState, refreshPinAvailability]);
 
-  const handleOnboardingComplete = async (values: ProfileSettingsFormValues) => {
-    const repository = await getProfileSettingsRepository();
-    const updated = await repository.upsertSettings(values);
-    await refreshPinAvailability();
-    setAppLockEnabled(updated.appLockEnabled);
-    setBootstrapState("ready");
-    if (updated.appLockEnabled) {
-      setIsUnlocked(false);
-      void authenticate();
-    } else {
-      setIsUnlocked(true);
-    }
-  };
+  const inOnboarding = segments[0] === "(onboarding)";
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+    <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
       <AnimatedSplashOverlay />
-      {bootstrapState === "ready" && (!appLockEnabled || isUnlocked) && <AppTabs />}
+      {bootstrapState === "ready" && !hasProfile && !inOnboarding && <Redirect href="/(onboarding)/welcome" />}
+      {bootstrapState === "ready" && hasProfile && inOnboarding && <Redirect href="/(tabs)/home" />}
+      {bootstrapState === "ready" && (!appLockEnabled || isUnlocked || !hasProfile) && <Slot />}
       {bootstrapState === "ready" && appLockEnabled && !isUnlocked && (
         <AppLockGate
           isAuthenticating={isAuthenticating}
@@ -285,16 +292,14 @@ export default function TabLayout() {
           }}
         />
       )}
-      {bootstrapState === "needs_onboarding" && (
-        <OnboardingFlow onComplete={handleOnboardingComplete} />
-      )}
       {bootstrapState === "init_error" && (
         <InitErrorScreen
           message={initError ?? "Database initialization failed."}
           onRetry={retryInitialization}
           onResetData={() => {
             void deleteAllLocalData().then(() => {
-              setBootstrapState("needs_onboarding");
+              setHasProfile(false);
+              setBootstrapState("ready");
               setInitError(null);
             });
           }}

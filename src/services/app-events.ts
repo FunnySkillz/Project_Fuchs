@@ -1,15 +1,29 @@
 type Listener = () => void;
-const listeners = new Set<Listener>();
+const localDataDeletedListeners = new Set<Listener>();
+const profileSettingsSavedListeners = new Set<Listener>();
 
 export function emitLocalDataDeleted(): void {
-  listeners.forEach((listener) => {
+  localDataDeletedListeners.forEach((listener) => {
     listener();
   });
 }
 
 export function onLocalDataDeleted(listener: () => void): () => void {
-  listeners.add(listener);
+  localDataDeletedListeners.add(listener);
   return () => {
-    listeners.delete(listener);
+    localDataDeletedListeners.delete(listener);
+  };
+}
+
+export function emitProfileSettingsSaved(): void {
+  profileSettingsSavedListeners.forEach((listener) => {
+    listener();
+  });
+}
+
+export function onProfileSettingsSaved(listener: () => void): () => void {
+  profileSettingsSavedListeners.add(listener);
+  return () => {
+    profileSettingsSavedListeners.delete(listener);
   };
 }
