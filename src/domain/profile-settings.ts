@@ -4,6 +4,8 @@ const MIN_TAX_YEAR = 2000;
 const MAX_TAX_YEAR = 2100;
 const MIN_PERCENT = 0;
 const MAX_PERCENT = 100;
+const MIN_BPS = 0;
+const MAX_BPS = 10_000;
 const MIN_GWG_THRESHOLD_CENTS = 0;
 
 function clamp(value: number, min: number, max: number): number {
@@ -28,7 +30,15 @@ function sanitizePercent(input: number, fallback: number): number {
     return fallback;
   }
 
-  return clamp(input, MIN_PERCENT, MAX_PERCENT);
+  return sanitizeInteger(input, fallback, MIN_PERCENT, MAX_PERCENT);
+}
+
+function sanitizeBps(input: number, fallback: number): number {
+  if (!Number.isFinite(input)) {
+    return fallback;
+  }
+
+  return sanitizeInteger(input, fallback, MIN_BPS, MAX_BPS);
 }
 
 export function normalizeProfileSettings(
@@ -42,16 +52,20 @@ export function normalizeProfileSettings(
       MIN_TAX_YEAR,
       MAX_TAX_YEAR
     ),
-    marginalRate: sanitizePercent(partial.marginalRate ?? fallback.marginalRate, fallback.marginalRate),
+    marginalRateBps: sanitizeBps(
+      partial.marginalRateBps ?? fallback.marginalRateBps,
+      fallback.marginalRateBps
+    ),
     defaultWorkPercent: sanitizePercent(
       partial.defaultWorkPercent ?? fallback.defaultWorkPercent,
       fallback.defaultWorkPercent
     ),
-    gwgThreshold: sanitizeInteger(
-      partial.gwgThreshold ?? fallback.gwgThreshold,
-      fallback.gwgThreshold,
+    gwgThresholdCents: sanitizeInteger(
+      partial.gwgThresholdCents ?? fallback.gwgThresholdCents,
+      fallback.gwgThresholdCents,
       MIN_GWG_THRESHOLD_CENTS
     ),
     applyHalfYearRule: partial.applyHalfYearRule ?? fallback.applyHalfYearRule,
+    currency: "EUR",
   };
 }

@@ -1,21 +1,23 @@
 export interface ProfileSettings {
   taxYearDefault: number;
-  marginalRate: number;
+  marginalRateBps: number;
   defaultWorkPercent: number;
-  gwgThreshold: number;
+  gwgThresholdCents: number;
   applyHalfYearRule: boolean;
+  currency: "EUR";
 }
 
 export const DEFAULT_GWG_THRESHOLD_CENTS = 100_000;
-export const DEFAULT_MARGINAL_RATE_PERCENT = 30;
+export const DEFAULT_MARGINAL_RATE_BPS = 4_000;
 export const DEFAULT_WORK_PERCENT = 100;
 
 export function createDefaultProfileSettings(now: Date = new Date()): ProfileSettings {
   return {
     taxYearDefault: now.getFullYear(),
-    marginalRate: DEFAULT_MARGINAL_RATE_PERCENT,
+    marginalRateBps: DEFAULT_MARGINAL_RATE_BPS,
     defaultWorkPercent: DEFAULT_WORK_PERCENT,
-    gwgThreshold: DEFAULT_GWG_THRESHOLD_CENTS,
+    gwgThresholdCents: DEFAULT_GWG_THRESHOLD_CENTS,
     applyHalfYearRule: false,
+    currency: "EUR",
   };
 }

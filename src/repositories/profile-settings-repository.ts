@@ -1,14 +1,15 @@
 import type { ProfileSettings } from "@/models/profile-settings";
 import { createDefaultProfileSettings } from "@/models/profile-settings";
 import { normalizeProfileSettings } from "@/domain/profile-settings";
-import { ensureProfileSettingsTable, type SQLiteExecutor } from "@/db/profile-settings-db";
+import { PROFILE_SETTINGS_SINGLETON_ID, type SQLiteExecutor } from "@/db/profile-settings-db";
 
 interface ProfileSettingsRow {
   taxYearDefault: number;
-  marginalRate: number;
+  marginalRateBps: number;
   defaultWorkPercent: number;
-  gwgThreshold: number;
+  gwgThresholdCents: number;
   applyHalfYearRule: number;
+  currency: string;
 }
 
 export interface ProfileSettingsRepository {
@@ -17,27 +18,24 @@ export interface ProfileSettingsRepository {
 }
 
 export class SQLiteProfileSettingsRepository implements ProfileSettingsRepository {
-  private initialized = false;
-
   constructor(
     private readonly db: SQLiteExecutor,
     private readonly nowProvider: () => Date = () => new Date()
   ) {}
 
   async getSettings(): Promise<ProfileSettings> {
-    await this.ensureInitialized();
-
     const row = await this.db.getFirstAsync<ProfileSettingsRow>(
       `SELECT
-        tax_year_default AS taxYearDefault,
-        marginal_rate AS marginalRate,
-        default_work_percent AS defaultWorkPercent,
-        gwg_threshold AS gwgThreshold,
-        apply_half_year_rule AS applyHalfYearRule
-      FROM profile_settings
-      WHERE id = 1
+        TaxYearDefault AS taxYearDefault,
+        MarginalRateBps AS marginalRateBps,
+        DefaultWorkPercent AS defaultWorkPercent,
+        GwgThresholdCents AS gwgThresholdCents,
+        ApplyHalfYearRule AS applyHalfYearRule,
+        Currency AS currency
+      FROM ProfileSettings
+      WHERE Id = $id AND DeletedAt IS NULL
       LIMIT 1;`,
-      []
+      { $id: PROFILE_SETTINGS_SINGLETON_ID }
     );
 
     if (!row) {
@@ -48,10 +46,11 @@ export class SQLiteProfileSettingsRepository implements ProfileSettingsRepositor
 
     return normalizeProfileSettings({
       taxYearDefault: row.taxYearDefault,
-      marginalRate: row.marginalRate,
+      marginalRateBps: row.marginalRateBps,
       defaultWorkPercent: row.defaultWorkPercent,
-      gwgThreshold: row.gwgThreshold,
+      gwgThresholdCents: row.gwgThresholdCents,
       applyHalfYearRule: row.applyHalfYearRule === 1,
+      currency: row.currency === "EUR" ? "EUR" : "EUR",
     });
   }
 
@@ -62,38 +61,34 @@ export class SQLiteProfileSettingsRepository implements ProfileSettingsRepositor
     return merged;
   }
 
-  private async ensureInitialized(): Promise<void> {
-    if (this.initialized) {
-      return;
-    }
-
-    await ensureProfileSettingsTable(this.db);
-    this.initialized = true;
-  }
-
   private async writeSettings(settings: ProfileSettings): Promise<void> {
     await this.db.runAsync(
-      `INSERT INTO profile_settings (
-        id,
-        tax_year_default,
-        marginal_rate,
-        default_work_percent,
-        gwg_threshold,
-        apply_half_year_rule
-      ) VALUES (1, $taxYearDefault, $marginalRate, $defaultWorkPercent, $gwgThreshold, $applyHalfYearRule)
-      ON CONFLICT(id) DO UPDATE SET
-        tax_year_default = excluded.tax_year_default,
-        marginal_rate = excluded.marginal_rate,
-        default_work_percent = excluded.default_work_percent,
-        gwg_threshold = excluded.gwg_threshold,
-        apply_half_year_rule = excluded.apply_half_year_rule,
-        updated_at = CURRENT_TIMESTAMP;`,
+      `INSERT INTO ProfileSettings (
+        Id,
+        TaxYearDefault,
+        MarginalRateBps,
+        DefaultWorkPercent,
+        GwgThresholdCents,
+        ApplyHalfYearRule,
+        Currency,
+        DeletedAt
+      ) VALUES ($id, $taxYearDefault, $marginalRateBps, $defaultWorkPercent, $gwgThresholdCents, $applyHalfYearRule, $currency, NULL)
+      ON CONFLICT(Id) DO UPDATE SET
+        TaxYearDefault = excluded.TaxYearDefault,
+        MarginalRateBps = excluded.MarginalRateBps,
+        DefaultWorkPercent = excluded.DefaultWorkPercent,
+        GwgThresholdCents = excluded.GwgThresholdCents,
+        ApplyHalfYearRule = excluded.ApplyHalfYearRule,
+        Currency = excluded.Currency,
+        DeletedAt = NULL;`,
       {
+        $id: PROFILE_SETTINGS_SINGLETON_ID,
         $taxYearDefault: settings.taxYearDefault,
-        $marginalRate: settings.marginalRate,
+        $marginalRateBps: settings.marginalRateBps,
         $defaultWorkPercent: settings.defaultWorkPercent,
-        $gwgThreshold: settings.gwgThreshold,
+        $gwgThresholdCents: settings.gwgThresholdCents,
         $applyHalfYearRule: settings.applyHalfYearRule ? 1 : 0,
+        $currency: settings.currency,
       }
     );
   }
