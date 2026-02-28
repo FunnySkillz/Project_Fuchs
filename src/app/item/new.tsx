@@ -1,8 +1,30 @@
 ﻿import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Alert, ScrollView, StyleSheet, View } from "react-native";
+import { ScrollView, StyleSheet, View } from "react-native";
+import {
+  Badge as GBadge,
+  BadgeText as GBadgeText,
+  Box as GBox,
+  Button as GButton,
+  ButtonText as GButtonText,
+  Card as GCard,
+  Heading as GHeading,
+  HStack as GHStack,
+  Spinner as GSpinner,
+  Text as GText,
+  VStack as GVStack,
+} from "@gluestack-ui/themed";
 
-import { Badge, Button, Card, DatePickerTrigger, FormField, Input, Select, TextArea } from "@/components/ui";
+import {
+  Badge as LegacyBadge,
+  Button as LegacyButton,
+  Card as LegacyCard,
+  DatePickerTrigger,
+  FormField,
+  Input,
+  Select,
+  TextArea,
+} from "@/components/ui";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { Spacing } from "@/constants/theme";
@@ -14,6 +36,7 @@ import type { StoredAttachmentFile } from "@/services/attachment-storage";
 import { saveFromCamera, saveFromPicker } from "@/services/attachment-storage";
 import {
   addAttachmentToDraft,
+  clearItemDraft,
   createItemDraft,
   getItemDraftAttachments,
   linkDraftAttachmentsToItem,
@@ -267,6 +290,25 @@ export default function NewItemRoute() {
     }
   };
 
+  const cancelDraft = async () => {
+    if (!draftId) {
+      router.replace("/(tabs)/items");
+      return;
+    }
+
+    setIsBusy(true);
+    setErrorMessage(null);
+    try {
+      await clearItemDraft(draftId);
+      router.replace("/(tabs)/items");
+    } catch (error) {
+      console.error("Failed to clear item draft", error);
+      setErrorMessage("Could not cancel draft safely. Please retry.");
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
   const saveItem = async () => {
     if (!draftId || !validation.valid || parsedTotalCents === null) {
       return;
@@ -300,10 +342,12 @@ export default function NewItemRoute() {
 
   if (isInitializing) {
     return (
-      <ThemedView style={styles.centered}>
-        <ActivityIndicator />
-        <ThemedText>Preparing item draft...</ThemedText>
-      </ThemedView>
+      <GBox flex={1} alignItems="center" justifyContent="center" px="$5" py="$6">
+        <GVStack space="md" alignItems="center">
+          <GSpinner size="large" />
+          <GText size="sm">Preparing item draft...</GText>
+        </GVStack>
+      </GBox>
     );
   }
 
@@ -311,7 +355,7 @@ export default function NewItemRoute() {
     return (
       <ThemedView style={styles.container}>
         <ScrollView contentContainerStyle={styles.content}>
-          <Badge text="Step 2 of 2" />
+          <LegacyBadge text="Step 2 of 2" />
           <ThemedText type="title">Add Item: Core Fields</ThemedText>
           <ThemedText themeColor="textSecondary">
             Complete item details, validate input, and save. Draft attachments are linked after save.
@@ -320,7 +364,7 @@ export default function NewItemRoute() {
           {errorMessage && <ThemedText style={styles.errorText}>{errorMessage}</ThemedText>}
           {validationMessage && <ThemedText style={styles.errorText}>{validationMessage}</ThemedText>}
 
-          <Card>
+          <LegacyCard>
             <FormField label="Title *">
               <Input value={title} onChangeText={setTitle} placeholder="e.g. Laptop for work" />
             </FormField>
@@ -361,7 +405,7 @@ export default function NewItemRoute() {
                   placeholder="Create new category"
                   style={styles.flexInput}
                 />
-                <Button variant="secondary" label="Add" onPress={() => void createCategory()} />
+                <LegacyButton variant="secondary" label="Add" onPress={() => void createCategory()} />
               </View>
             </FormField>
 
@@ -410,21 +454,21 @@ export default function NewItemRoute() {
             </FormField>
 
             {(usageType === "WORK" || usageType === "MIXED") && notes.trim().length === 0 && (
-              <Badge text="Missing notes will be flagged" variant="warning" />
+              <LegacyBadge text="Missing notes will be flagged" variant="warning" />
             )}
-          </Card>
+          </LegacyCard>
 
-          <Card>
+          <LegacyCard>
             <ThemedText type="smallBold">Draft Attachment Summary</ThemedText>
             <ThemedText type="small">Receipts: {receiptAttachments.length}</ThemedText>
             <ThemedText type="small">Extra photos: {extraPhotos.length}</ThemedText>
             {receiptAttachments.length === 0 && (
-              <Badge text="No receipt attached (allowed, flagged later)" variant="warning" />
+              <LegacyBadge text="No receipt attached (allowed, flagged later)" variant="warning" />
             )}
-          </Card>
+          </LegacyCard>
 
           <View style={styles.row}>
-            <Button
+            <LegacyButton
               variant="secondary"
               label="Back to Step 1"
               onPress={() =>
@@ -434,7 +478,7 @@ export default function NewItemRoute() {
                 })
               }
             />
-            <Button
+            <LegacyButton
               label={isSavingItem ? "Saving..." : "Save Item"}
               onPress={() => void saveItem()}
               disabled={!canSave}
@@ -446,103 +490,140 @@ export default function NewItemRoute() {
   }
 
   return (
-    <ThemedView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.content}>
-        <Badge text="Step 1 of 2" />
-        <ThemedText type="title">Add Item: Attachments</ThemedText>
-        <ThemedText themeColor="textSecondary">
-          Add a receipt photo/upload and optional extra photos. You can continue without attachments.
-        </ThemedText>
+    <GBox flex={1} px="$5" py="$6">
+      <ScrollView
+        contentContainerStyle={{
+          width: "100%",
+          maxWidth: 760,
+          alignSelf: "center",
+          paddingBottom: 24,
+        }}
+      >
+        <GVStack space="lg">
+          <GBadge size="sm" variant="outline" action="muted" alignSelf="flex-start">
+            <GBadgeText>Step 1 of 2</GBadgeText>
+          </GBadge>
 
-        {errorMessage && <ThemedText style={styles.errorText}>{errorMessage}</ThemedText>}
+          <GVStack space="xs">
+            <GHeading size="xl">Add Item: Attachments</GHeading>
+            <GText size="sm">
+              Add receipt files first. Additional photos are optional.
+            </GText>
+          </GVStack>
 
-        <Card>
-          <ThemedText type="smallBold">Receipt</ThemedText>
-          <View style={styles.row}>
-            <Button
-              variant="secondary"
-              label={isBusy ? "Working..." : "Capture Receipt Photo"}
-              onPress={() => void addReceiptFromCamera()}
+          {errorMessage && (
+            <GCard borderWidth="$1" borderColor="$error300">
+              <GText size="sm">{errorMessage}</GText>
+            </GCard>
+          )}
+
+          <GCard borderWidth="$1" borderColor="$border200">
+            <GVStack space="md">
+              <GHeading size="md">Add receipt</GHeading>
+              <GHStack space="sm" flexWrap="wrap">
+                <GButton
+                  variant="outline"
+                  action="secondary"
+                  onPress={() => void addReceiptFromCamera()}
+                  disabled={isBusy}
+                  testID="new-item-step1-take-photo"
+                >
+                  <GButtonText>{isBusy ? "Working..." : "Take photo"}</GButtonText>
+                </GButton>
+                <GButton
+                  variant="outline"
+                  action="secondary"
+                  onPress={() => void uploadReceipt()}
+                  disabled={isBusy}
+                  testID="new-item-step1-upload"
+                >
+                  <GButtonText>{isBusy ? "Working..." : "Upload PDF/Image"}</GButtonText>
+                </GButton>
+              </GHStack>
+              <GText size="sm">Receipts attached: {receiptAttachments.length}</GText>
+            </GVStack>
+          </GCard>
+
+          <GCard borderWidth="$1" borderColor="$border200">
+            <GVStack space="md">
+              <GHeading size="md">Additional photos (optional)</GHeading>
+              <GButton
+                variant="outline"
+                action="secondary"
+                onPress={() => void addExtraPhoto()}
+                disabled={isBusy}
+                alignSelf="flex-start"
+                testID="new-item-step1-add-extra-photo"
+              >
+                <GButtonText>{isBusy ? "Working..." : "Add extra photo"}</GButtonText>
+              </GButton>
+              <GText size="sm">Extra photos attached: {extraPhotos.length}</GText>
+            </GVStack>
+          </GCard>
+
+          {attachments.length === 0 ? (
+            <GCard borderWidth="$1" borderColor="$border200">
+              <GVStack space="sm">
+                <GText bold size="md">
+                  No files attached yet
+                </GText>
+                <GText size="sm">
+                  You can continue to Step 2 without attachments. Missing receipts are flagged later.
+                </GText>
+              </GVStack>
+            </GCard>
+          ) : (
+            <GCard borderWidth="$1" borderColor="$border200">
+              <GVStack space="sm">
+                <GHeading size="md">Preview</GHeading>
+                {attachments.map((attachment) => (
+                  <GHStack key={attachment.filePath} justifyContent="space-between" alignItems="center" space="sm">
+                    <GVStack flex={1} space="xs">
+                      <GText bold size="sm">
+                        {attachment.type === "RECEIPT" ? "Receipt" : "Photo"}
+                      </GText>
+                      <GText size="sm">{attachment.originalFileName ?? "Unnamed file"}</GText>
+                      <GText size="sm">{formatFileSize(attachment.fileSizeBytes)}</GText>
+                    </GVStack>
+                    <GButton
+                      variant="link"
+                      action="secondary"
+                      onPress={() => void removeAttachment(attachment.filePath)}
+                    >
+                      <GButtonText>Remove</GButtonText>
+                    </GButton>
+                  </GHStack>
+                ))}
+              </GVStack>
+            </GCard>
+          )}
+
+          <GHStack space="sm" flexWrap="wrap">
+            <GButton
+              variant="outline"
+              action="secondary"
+              onPress={() => void cancelDraft()}
               disabled={isBusy}
-            />
-            <Button
-              variant="secondary"
-              label={isBusy ? "Working..." : "Upload PDF/Image"}
-              onPress={() => void uploadReceipt()}
+              testID="new-item-step1-cancel"
+            >
+              <GButtonText>Cancel</GButtonText>
+            </GButton>
+            <GButton
+              onPress={() =>
+                router.replace({
+                  pathname: "/item/new",
+                  params: { draftId: draftId ?? "", step: "2" },
+                })
+              }
               disabled={isBusy}
-            />
-          </View>
-          <ThemedText type="small" themeColor="textSecondary">
-            Receipts attached: {receiptAttachments.length}
-          </ThemedText>
-        </Card>
-
-        <Card>
-          <ThemedText type="smallBold">Extra Photos (product/box/serial)</ThemedText>
-          <Button
-            variant="secondary"
-            label={isBusy ? "Working..." : "Add Extra Photo"}
-            onPress={() => void addExtraPhoto()}
-            disabled={isBusy}
-          />
-          <ThemedText type="small" themeColor="textSecondary">
-            Extra photos attached: {extraPhotos.length}
-          </ThemedText>
-        </Card>
-
-        {attachments.length > 0 && (
-          <Card>
-            <ThemedText type="smallBold">Attached Files</ThemedText>
-            {attachments.map((attachment) => (
-              <View key={attachment.filePath} style={styles.attachmentRow}>
-                <View style={styles.attachmentMeta}>
-                  <ThemedText type="smallBold">
-                    {attachment.type === "RECEIPT" ? "Receipt" : "Photo"}
-                  </ThemedText>
-                  <ThemedText type="small" themeColor="textSecondary">
-                    {attachment.originalFileName ?? "Unnamed file"}
-                  </ThemedText>
-                  <ThemedText type="small" themeColor="textSecondary">
-                    {formatFileSize(attachment.fileSizeBytes)}
-                  </ThemedText>
-                </View>
-                <Button
-                  variant="ghost"
-                  label="Remove"
-                  onPress={() => {
-                    Alert.alert(
-                      "Remove attachment",
-                      "This will delete the local draft file. Continue?",
-                      [
-                        { text: "Cancel", style: "cancel" },
-                        {
-                          text: "Remove",
-                          style: "destructive",
-                          onPress: () => void removeAttachment(attachment.filePath),
-                        },
-                      ]
-                    );
-                  }}
-                />
-              </View>
-            ))}
-          </Card>
-        )}
-
-        <Button
-          label="Continue to Step 2"
-          onPress={() =>
-            router.replace({
-              pathname: "/item/new",
-              params: { draftId: draftId ?? "", step: "2" },
-            })
-          }
-        />
-        <ThemedText type="small" themeColor="textSecondary">
-          You can continue even with no attachments. Missing receipt is flagged later.
-        </ThemedText>
+              testID="new-item-step1-continue"
+            >
+              <GButtonText>Continue</GButtonText>
+            </GButton>
+          </GHStack>
+        </GVStack>
       </ScrollView>
-    </ThemedView>
+    </GBox>
   );
 }
 
