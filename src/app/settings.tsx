@@ -1,54 +1,112 @@
-import React, { useEffect, useState } from "react";
-import { Alert, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from "react-native";
-import * as WebBrowser from "expo-web-browser";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { ScrollView } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
+import * as WebBrowser from "expo-web-browser";
+import {
+  AlertDialog as GAlertDialog,
+  AlertDialogBackdrop as GAlertDialogBackdrop,
+  AlertDialogBody as GAlertDialogBody,
+  AlertDialogContent as GAlertDialogContent,
+  AlertDialogFooter as GAlertDialogFooter,
+  AlertDialogHeader as GAlertDialogHeader,
+  Box as GBox,
+  Button as GButton,
+  ButtonText as GButtonText,
+  Card as GCard,
+  Heading as GHeading,
+  HStack as GHStack,
+  Input as GInput,
+  InputField as GInputField,
+  Spinner as GSpinner,
+  Switch as GSwitch,
+  Text as GText,
+  VStack as GVStack,
+} from "@gluestack-ui/themed";
 
-import { ProfileSettingsForm, type ProfileSettingsFormValues } from "@/components/profile-settings-form";
-import { ThemedText } from "@/components/themed-text";
+import { useThemeMode, type ThemeModePreference } from "@/contexts/theme-mode-context";
+import { estimateTaxImpact } from "@/domain/calculation-engine";
 import { createDefaultProfileSettings, type ProfileSettings } from "@/models/profile-settings";
 import { getProfileSettingsRepository } from "@/repositories/create-profile-settings-repository";
-import { Spacing } from "@/constants/theme";
 import {
   emitDatabaseRestored,
   emitLocalDataDeleted,
   emitProfileSettingsSaved,
 } from "@/services/app-events";
 import { getOneDriveAuthProvider } from "@/services/auth/onedrive-auth-provider";
-import { deleteAllLocalData } from "@/services/local-data";
-import {
-  ensureSelectedFolderAccessible,
-  getOneDriveRedirectUri,
-  getSelectedOneDriveFolder,
-  listOneDriveFolders,
-  type OneDriveFolder,
-  type OneDriveFolderSelection,
-  setSelectedOneDriveFolder,
-} from "@/services/onedrive-auth";
-import {
-  runExportPipeline,
-  type ExportPipelineResult,
-  type ExportProgress,
-} from "@/services/export-pipeline";
-import {
-  hasPinAsync,
-  isValidPin,
-  setPinAsync,
-  verifyPinAsync,
-} from "@/services/pin-auth";
-import { estimateTaxImpact } from "@/domain/calculation-engine";
-import { formatCents } from "@/utils/money";
 import {
   createLocalBackupZip,
   restoreFromBackupZip,
   shareBackupZip,
   type BackupExportResult,
 } from "@/services/backup-restore";
+import {
+  runExportPipeline,
+  type ExportPipelineResult,
+  type ExportProgress,
+} from "@/services/export-pipeline";
 import { friendlyFileErrorMessage } from "@/services/friendly-errors";
+import { deleteAllLocalData } from "@/services/local-data";
+import {
+  ensureSelectedFolderAccessible,
+  getOneDriveRedirectUri,
+  getSelectedOneDriveFolder,
+  listOneDriveFolders,
+  setSelectedOneDriveFolder,
+  type OneDriveFolder,
+  type OneDriveFolderSelection,
+} from "@/services/onedrive-auth";
+import { hasPinAsync, isValidPin, setPinAsync, verifyPinAsync } from "@/services/pin-auth";
+import { formatCents } from "@/utils/money";
 
 WebBrowser.maybeCompleteAuthSession();
 const oneDriveAuthProvider = getOneDriveAuthProvider();
 
-function calculatePreview(values: ProfileSettingsFormValues) {
+interface TaxDefaultsFormState {
+  taxYearDefault: string;
+  marginalRatePercent: string;
+  defaultWorkPercent: string;
+  gwgThresholdEuros: string;
+  applyHalfYearRule: boolean;
+  appLockEnabled: boolean;
+  uploadToOneDriveAfterExport: boolean;
+}
+
+interface TaxDefaultsValues {
+  taxYearDefault: number;
+  marginalRateBps: number;
+  defaultWorkPercent: number;
+  gwgThresholdCents: number;
+  applyHalfYearRule: boolean;
+  appLockEnabled: boolean;
+  uploadToOneDriveAfterExport: boolean;
+}
+
+function createFormState(settings: ProfileSettings): TaxDefaultsFormState {
+  return {
+    taxYearDefault: String(settings.taxYearDefault),
+    marginalRatePercent: String(settings.marginalRateBps / 100),
+    defaultWorkPercent: String(settings.defaultWorkPercent),
+    gwgThresholdEuros: (settings.gwgThresholdCents / 100).toFixed(2),
+    applyHalfYearRule: settings.applyHalfYearRule,
+    appLockEnabled: settings.appLockEnabled,
+    uploadToOneDriveAfterExport: settings.uploadToOneDriveAfterExport,
+  };
+}
+
+function parseNumber(input: string): number | null {
+  const trimmed = input.trim().replace(",", ".");
+  if (trimmed.length === 0) {
+    return null;
+  }
+
+  const parsed = Number(trimmed);
+  if (!Number.isFinite(parsed)) {
+    return null;
+  }
+  return parsed;
+}
+
+function calculatePreview(values: TaxDefaultsValues) {
   const sampleItemCents = 150_000;
   const estimate = estimateTaxImpact(
     {
@@ -66,9 +124,7 @@ function calculatePreview(values: ProfileSettingsFormValues) {
     },
     values.taxYearDefault
   );
-  const workRelevantCents = Math.round(
-    (sampleItemCents * values.defaultWorkPercent) / 100
-  );
+  const workRelevantCents = Math.round((sampleItemCents * values.defaultWorkPercent) / 100);
 
   return {
     sampleItemCents,
@@ -79,65 +135,190 @@ function calculatePreview(values: ProfileSettingsFormValues) {
   };
 }
 
+const themeOptions: Array<{ label: string; value: ThemeModePreference }> = [
+  { label: "System", value: "system" },
+  { label: "Light", value: "light" },
+  { label: "Dark", value: "dark" },
+];
+
+type ConfirmAction = "deleteLocalData" | "importBackup";
+
 export default function SettingsScreen() {
+  const { preference, resolvedColorMode, setPreference } = useThemeMode();
+
   const [settings, setSettings] = useState<ProfileSettings | null>(null);
+  const [formState, setFormState] = useState<TaxDefaultsFormState | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [draftValues, setDraftValues] = useState<ProfileSettingsFormValues | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
+
   const [pinExists, setPinExists] = useState(false);
   const [currentPin, setCurrentPin] = useState("");
   const [newPin, setNewPin] = useState("");
   const [confirmPin, setConfirmPin] = useState("");
   const [pinError, setPinError] = useState<string | null>(null);
   const [pinSuccess, setPinSuccess] = useState<string | null>(null);
-  const [dangerError, setDangerError] = useState<string | null>(null);
+
   const [backupResult, setBackupResult] = useState<BackupExportResult | null>(null);
   const [backupBusy, setBackupBusy] = useState(false);
   const [backupError, setBackupError] = useState<string | null>(null);
+
   const [oneDriveConnected, setOneDriveConnected] = useState(false);
   const [oneDriveBusy, setOneDriveBusy] = useState(false);
   const [oneDriveError, setOneDriveError] = useState<string | null>(null);
   const [oneDriveFolders, setOneDriveFolders] = useState<OneDriveFolder[]>([]);
-  const [oneDriveSelectedFolder, setOneDriveSelectedFolderState] = useState<OneDriveFolderSelection | null>(null);
+  const [oneDriveSelectedFolder, setOneDriveSelectedFolderState] =
+    useState<OneDriveFolderSelection | null>(null);
   const [exportProgress, setExportProgress] = useState<ExportProgress | null>(null);
   const [exportResult, setExportResult] = useState<ExportPipelineResult | null>(null);
 
-  useEffect(() => {
-    let isMounted = true;
+  const [dangerError, setDangerError] = useState<string | null>(null);
+  const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
+  const [isConfirmBusy, setIsConfirmBusy] = useState(false);
 
-    const loadSettings = async () => {
-      try {
-        const repository = await getProfileSettingsRepository();
-        const loaded = await repository.getSettings();
-        if (isMounted) {
-          setSettings(loaded);
-          const hasPin = await hasPinAsync();
-          setPinExists(hasPin);
-          const connected = await oneDriveAuthProvider.isConnected();
-          setOneDriveConnected(connected);
-          const selected = await getSelectedOneDriveFolder();
-          setOneDriveSelectedFolderState(selected);
-        }
-      } catch (error) {
-        if (isMounted) {
-          console.error("Failed to load settings", error);
-          setLoadError("Could not load settings.");
-          setSettings(createDefaultProfileSettings());
-        }
-      }
-    };
+  const reloadSettings = useCallback(async () => {
+    setIsLoading(true);
+    setLoadError(null);
+    try {
+      const repository = await getProfileSettingsRepository();
+      const loaded = await repository.getSettings();
+      const [hasPin, connected, selectedFolder] = await Promise.all([
+        hasPinAsync(),
+        oneDriveAuthProvider.isConnected(),
+        getSelectedOneDriveFolder(),
+      ]);
 
-    void loadSettings();
-
-    return () => {
-      isMounted = false;
-    };
+      setSettings(loaded);
+      setFormState(createFormState(loaded));
+      setPinExists(hasPin);
+      setOneDriveConnected(connected);
+      setOneDriveSelectedFolderState(selectedFolder);
+    } catch (error) {
+      console.error("Failed to load settings", error);
+      const fallback = createDefaultProfileSettings();
+      setSettings(fallback);
+      setFormState(createFormState(fallback));
+      setLoadError("Could not load settings.");
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
 
-  const handleSubmit = async (values: ProfileSettingsFormValues) => {
-    const repository = await getProfileSettingsRepository();
-    const updated = await repository.upsertSettings(values);
-    setSettings(updated);
-    emitProfileSettingsSaved();
+  useEffect(() => {
+    void reloadSettings();
+  }, [reloadSettings]);
+
+  const validation = useMemo(() => {
+    if (!formState) {
+      return { valid: false, message: "Settings are still loading." } as const;
+    }
+
+    const parsedTaxYear = parseNumber(formState.taxYearDefault);
+    const parsedRate = parseNumber(formState.marginalRatePercent);
+    const parsedWorkPercent = parseNumber(formState.defaultWorkPercent);
+    const parsedGwgThresholdEuros = parseNumber(formState.gwgThresholdEuros);
+
+    if (parsedTaxYear === null || !Number.isInteger(parsedTaxYear)) {
+      return { valid: false, message: "Tax year must be a whole number." } as const;
+    }
+    if (parsedTaxYear < 2000 || parsedTaxYear > 2100) {
+      return { valid: false, message: "Tax year must be between 2000 and 2100." } as const;
+    }
+    if (parsedRate === null) {
+      return { valid: false, message: "Marginal tax rate is required." } as const;
+    }
+    if (parsedRate < 0 || parsedRate > 55) {
+      return { valid: false, message: "Marginal tax rate must be between 0 and 55%." } as const;
+    }
+    if (parsedWorkPercent === null) {
+      return { valid: false, message: "Default work percent is required." } as const;
+    }
+    if (parsedWorkPercent < 0 || parsedWorkPercent > 100) {
+      return { valid: false, message: "Default work percent must be between 0 and 100." } as const;
+    }
+    if (parsedGwgThresholdEuros === null) {
+      return { valid: false, message: "GWG threshold is required." } as const;
+    }
+    if (parsedGwgThresholdEuros < 0) {
+      return { valid: false, message: "GWG threshold must be 0 or higher." } as const;
+    }
+
+    return {
+      valid: true,
+      values: {
+        taxYearDefault: Math.round(parsedTaxYear),
+        marginalRateBps: Math.round(parsedRate * 100),
+        defaultWorkPercent: Math.round(parsedWorkPercent),
+        gwgThresholdCents: Math.round(parsedGwgThresholdEuros * 100),
+        applyHalfYearRule: formState.applyHalfYearRule,
+        appLockEnabled: formState.appLockEnabled,
+        uploadToOneDriveAfterExport: formState.uploadToOneDriveAfterExport,
+      },
+    } as const;
+  }, [formState]);
+
+  const preview = useMemo(() => {
+    if (!validation.valid) {
+      return null;
+    }
+    return calculatePreview(validation.values);
+  }, [validation]);
+
+  const updateFormField = <K extends keyof TaxDefaultsFormState>(
+    key: K,
+    value: TaxDefaultsFormState[K]
+  ) => {
+    setFormState((current) => (current ? { ...current, [key]: value } : current));
+    setSaveError(null);
+    setSaveSuccess(null);
+  };
+  const handleSaveSettings = async () => {
+    if (!validation.valid || isSavingSettings) {
+      return;
+    }
+
+    setIsSavingSettings(true);
+    setSaveError(null);
+    setSaveSuccess(null);
+    try {
+      const repository = await getProfileSettingsRepository();
+      const updated = await repository.upsertSettings(validation.values);
+      setSettings(updated);
+      setFormState(createFormState(updated));
+      setSaveSuccess("Settings saved.");
+      emitProfileSettingsSaved();
+    } catch (error) {
+      console.error("Failed to save settings", error);
+      setSaveError("Could not save settings. Please retry.");
+    } finally {
+      setIsSavingSettings(false);
+    }
+  };
+
+  const handleResetDefaults = async () => {
+    if (isSavingSettings) {
+      return;
+    }
+
+    setIsSavingSettings(true);
+    setSaveError(null);
+    setSaveSuccess(null);
+    try {
+      const repository = await getProfileSettingsRepository();
+      const defaults = createDefaultProfileSettings();
+      const updated = await repository.upsertSettings(defaults);
+      setSettings(updated);
+      setFormState(createFormState(updated));
+      setSaveSuccess("Defaults restored.");
+      emitProfileSettingsSaved();
+    } catch (error) {
+      console.error("Failed to reset settings", error);
+      setSaveError("Could not reset settings.");
+    } finally {
+      setIsSavingSettings(false);
+    }
   };
 
   const handleSavePin = async () => {
@@ -148,7 +329,6 @@ export default function SettingsScreen() {
       setPinError("PIN must be 4 to 6 digits.");
       return;
     }
-
     if (newPin !== confirmPin) {
       setPinError("PIN confirmation does not match.");
       return;
@@ -168,81 +348,6 @@ export default function SettingsScreen() {
     setNewPin("");
     setConfirmPin("");
     setPinSuccess("PIN saved successfully.");
-  };
-
-  const confirmDeleteAllData = async (): Promise<boolean> => {
-    if (Platform.OS === "web") {
-      const initial = globalThis.confirm(
-        "Delete all local data? This will permanently remove your items, settings, attachments, and app lock PIN from this device."
-      );
-      if (!initial) {
-        return false;
-      }
-      return globalThis.confirm(
-        "Final confirmation: This action is irreversible and will remove all local app data now."
-      );
-    }
-
-    const firstConfirmation = await new Promise<boolean>((resolve) => {
-      Alert.alert(
-        "Delete all local data",
-        "This permanently removes all local app data from this device. This action cannot be undone.",
-        [
-          { text: "Cancel", style: "cancel", onPress: () => resolve(false) },
-          { text: "Continue", style: "destructive", onPress: () => resolve(true) },
-        ]
-      );
-    });
-
-    if (!firstConfirmation) {
-      return false;
-    }
-
-    return new Promise<boolean>((resolve) => {
-      Alert.alert(
-        "Final confirmation required",
-        "Delete all items, attachments, settings, and PIN from this device now?",
-        [
-          { text: "Cancel", style: "cancel", onPress: () => resolve(false) },
-          { text: "Delete Everything", style: "destructive", onPress: () => resolve(true) },
-        ]
-      );
-    });
-  };
-
-  const handleDeleteAllLocalData = async () => {
-    setDangerError(null);
-    const confirmed = await confirmDeleteAllData();
-    if (!confirmed) {
-      return;
-    }
-
-    try {
-      await deleteAllLocalData();
-      emitLocalDataDeleted();
-    } catch (error) {
-      console.error("Failed to delete local data", error);
-      setDangerError("Could not delete local data. Please try again.");
-    }
-  };
-
-  const confirmRestoreBackup = async (): Promise<boolean> => {
-    if (Platform.OS === "web") {
-      return globalThis.confirm(
-        "Importing backup will overwrite current local database data. Continue?"
-      );
-    }
-
-    return new Promise((resolve) => {
-      Alert.alert(
-        "Import backup snapshot",
-        "This will overwrite your current local database with the backup. Continue?",
-        [
-          { text: "Cancel", style: "cancel", onPress: () => resolve(false) },
-          { text: "Overwrite", style: "destructive", onPress: () => resolve(true) },
-        ]
-      );
-    });
   };
 
   const handleCreateBackup = async () => {
@@ -275,35 +380,6 @@ export default function SettingsScreen() {
     }
   };
 
-  const handleImportBackup = async () => {
-    setBackupError(null);
-    const confirmed = await confirmRestoreBackup();
-    if (!confirmed) {
-      return;
-    }
-
-    setBackupBusy(true);
-    try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: ["application/zip", "application/x-zip-compressed"],
-        multiple: false,
-        copyToCacheDirectory: true,
-      });
-      if (result.canceled || result.assets.length === 0) {
-        return;
-      }
-
-      const asset = result.assets[0];
-      await restoreFromBackupZip(asset.uri);
-      emitDatabaseRestored();
-    } catch (error) {
-      console.error("Failed to import backup ZIP", error);
-      setBackupError(friendlyFileErrorMessage(error, "Could not import backup ZIP."));
-    } finally {
-      setBackupBusy(false);
-    }
-  };
-
   const handleConnectOneDrive = async () => {
     setOneDriveError(null);
     setOneDriveBusy(true);
@@ -314,9 +390,7 @@ export default function SettingsScreen() {
       setOneDriveSelectedFolderState(selected);
     } catch (error) {
       console.error("Failed to connect OneDrive", error);
-      setOneDriveError(
-        error instanceof Error ? error.message : "Could not connect OneDrive."
-      );
+      setOneDriveError(error instanceof Error ? error.message : "Could not connect OneDrive.");
     } finally {
       setOneDriveBusy(false);
     }
@@ -359,14 +433,8 @@ export default function SettingsScreen() {
     setOneDriveBusy(true);
     setOneDriveError(null);
     try {
-      await setSelectedOneDriveFolder({
-        id: folder.id,
-        path: folder.path,
-      });
-      setOneDriveSelectedFolderState({
-        id: folder.id,
-        path: folder.path,
-      });
+      await setSelectedOneDriveFolder({ id: folder.id, path: folder.path });
+      setOneDriveSelectedFolderState({ id: folder.id, path: folder.path });
     } catch (error) {
       console.error("Failed to persist selected OneDrive folder", error);
       setOneDriveError("Could not save selected OneDrive folder.");
@@ -390,23 +458,6 @@ export default function SettingsScreen() {
     } finally {
       setOneDriveBusy(false);
     }
-  };
-
-  const handleReset = async () => {
-    const repository = await getProfileSettingsRepository();
-    const defaults = createDefaultProfileSettings();
-    const updated = await repository.upsertSettings(defaults);
-    setSettings(updated);
-    setDraftValues({
-      taxYearDefault: updated.taxYearDefault,
-      marginalRateBps: updated.marginalRateBps,
-      defaultWorkPercent: updated.defaultWorkPercent,
-      gwgThresholdCents: updated.gwgThresholdCents,
-      applyHalfYearRule: updated.applyHalfYearRule,
-      appLockEnabled: updated.appLockEnabled,
-      uploadToOneDriveAfterExport: updated.uploadToOneDriveAfterExport,
-    });
-    emitProfileSettingsSaved();
   };
 
   const handleRunTestExport = async () => {
@@ -443,330 +494,453 @@ export default function SettingsScreen() {
     }
   };
 
-  if (!settings) {
+  const handleConfirmAction = async () => {
+    if (!confirmAction) {
+      return;
+    }
+
+    setIsConfirmBusy(true);
+    if (confirmAction === "deleteLocalData") {
+      setDangerError(null);
+      try {
+        await deleteAllLocalData();
+        emitLocalDataDeleted();
+        const defaults = createDefaultProfileSettings();
+        setSettings(defaults);
+        setFormState(createFormState(defaults));
+      } catch (error) {
+        console.error("Failed to delete local data", error);
+        setDangerError("Could not delete local data. Please retry.");
+      } finally {
+        setConfirmAction(null);
+        setIsConfirmBusy(false);
+      }
+      return;
+    }
+
+    if (confirmAction === "importBackup") {
+      setBackupError(null);
+      try {
+        const result = await DocumentPicker.getDocumentAsync({
+          type: ["application/zip", "application/x-zip-compressed"],
+          multiple: false,
+          copyToCacheDirectory: true,
+        });
+        if (!result.canceled && result.assets.length > 0) {
+          await restoreFromBackupZip(result.assets[0].uri);
+          emitDatabaseRestored();
+          await reloadSettings();
+        }
+      } catch (error) {
+        console.error("Failed to import backup ZIP", error);
+        setBackupError(friendlyFileErrorMessage(error, "Could not import backup ZIP."));
+      } finally {
+        setConfirmAction(null);
+        setIsConfirmBusy(false);
+      }
+    }
+  };
+
+  if (isLoading || !formState) {
     return (
-      <View style={styles.loadingContainer}>
-        <ThemedText>Loading settings...</ThemedText>
-      </View>
+      <GBox flex={1} px="$5" py="$6" alignItems="center" justifyContent="center">
+        <GVStack space="md" alignItems="center">
+          <GSpinner size="large" />
+          <GText size="sm">Loading settings...</GText>
+        </GVStack>
+      </GBox>
     );
   }
 
-  const preview = draftValues ? calculatePreview(draftValues) : null;
-
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <ThemedText type="title">Settings</ThemedText>
-      <ThemedText themeColor="textSecondary">
-        Update your local profile defaults. These values affect future calculations.
-      </ThemedText>
-      {loadError && <ThemedText style={styles.errorText}>{loadError}</ThemedText>}
-      <ProfileSettingsForm
-        initialValues={settings}
-        submitLabel="Save Settings"
-        showAdvanced
-        onSubmit={handleSubmit}
-        onResetToDefault={handleReset}
-        onValuesChange={setDraftValues}
-      />
-      {preview && (
-        <View style={styles.previewCard}>
-          <ThemedText type="smallBold">Calculation Preview (sample item)</ThemedText>
-          <ThemedText type="small">Sample item price: {formatCents(preview.sampleItemCents)}</ThemedText>
-          <ThemedText type="small">
-            Work-relevant amount: {formatCents(preview.workRelevantCents)}
-          </ThemedText>
-          <ThemedText type="small">
-            Deductible this year: {formatCents(preview.deductibleThisYearCents)}
-          </ThemedText>
-          <ThemedText type="small">
-            Estimated refund: {formatCents(preview.estimatedRefundCents)}
-          </ThemedText>
-          <ThemedText type="small" themeColor="textSecondary">
-            Mode: {preview.immediate ? "Immediate deduction (below GWG)" : "AfA schedule (above GWG)"}
-          </ThemedText>
-        </View>
-      )}
-      <View style={styles.pinCard}>
-        <ThemedText type="smallBold">PIN Fallback</ThemedText>
-        <ThemedText type="small" themeColor="textSecondary">
-          {pinExists ? "PIN is configured. You can change it below." : "Set a PIN fallback for app lock."}
-        </ThemedText>
-        {pinExists && (
-          <TextInput
-            value={currentPin}
-            onChangeText={setCurrentPin}
-            style={styles.pinInput}
-            secureTextEntry
-            keyboardType="number-pad"
-            maxLength={6}
-            placeholder="Current PIN"
-          />
-        )}
-        <TextInput
-          value={newPin}
-          onChangeText={setNewPin}
-          style={styles.pinInput}
-          secureTextEntry
-          keyboardType="number-pad"
-          maxLength={6}
-          placeholder={pinExists ? "New PIN (4-6 digits)" : "PIN (4-6 digits)"}
-        />
-        <TextInput
-          value={confirmPin}
-          onChangeText={setConfirmPin}
-          style={styles.pinInput}
-          secureTextEntry
-          keyboardType="number-pad"
-          maxLength={6}
-          placeholder="Confirm PIN"
-        />
-        {pinError && <ThemedText style={styles.errorText}>{pinError}</ThemedText>}
-        {pinSuccess && <ThemedText style={styles.successText}>{pinSuccess}</ThemedText>}
-        <Pressable style={({ pressed }) => [styles.pinButton, pressed && styles.pressed]} onPress={() => void handleSavePin()}>
-          <ThemedText type="smallBold">{pinExists ? "Change PIN" : "Set PIN"}</ThemedText>
-        </Pressable>
-      </View>
-      <View style={styles.dangerCard}>
-        <ThemedText type="smallBold">Danger Zone</ThemedText>
-        <ThemedText type="small" themeColor="textSecondary">
-          Deleting all local data permanently removes items, attachments, settings, and app lock PIN from this device.
-        </ThemedText>
-        {dangerError && <ThemedText style={styles.errorText}>{dangerError}</ThemedText>}
-        <Pressable
-          style={({ pressed }) => [styles.dangerButton, pressed && styles.pressed]}
-          onPress={() => void handleDeleteAllLocalData()}>
-          <ThemedText type="smallBold">Delete All Local Data</ThemedText>
-        </Pressable>
-      </View>
-      <View style={styles.oneDriveCard}>
-        <ThemedText type="smallBold">Local Backup / Restore</ThemedText>
-        <ThemedText type="small" themeColor="textSecondary">
-          Create a local snapshot ZIP (database + attachments manifest) and restore it later.
-        </ThemedText>
-        {backupError && <ThemedText style={styles.errorText}>{backupError}</ThemedText>}
-        <Pressable
-          style={({ pressed }) => [styles.oneDriveButton, pressed && styles.pressed]}
-          onPress={() => void handleCreateBackup()}
-          disabled={backupBusy}>
-          <ThemedText type="smallBold">
-            {backupBusy ? "Working..." : "Create Backup ZIP"}
-          </ThemedText>
-        </Pressable>
-        <Pressable
-          style={({ pressed }) => [styles.oneDriveDisconnectButton, pressed && styles.pressed]}
-          onPress={() => void handleShareBackup()}
-          disabled={backupBusy || !backupResult}>
-          <ThemedText type="smallBold">Share Latest Backup</ThemedText>
-        </Pressable>
-        <Pressable
-          style={({ pressed }) => [styles.dangerButton, pressed && styles.pressed]}
-          onPress={() => void handleImportBackup()}
-          disabled={backupBusy}>
-          <ThemedText type="smallBold">Import Backup (Overwrite)</ThemedText>
-        </Pressable>
-        {backupResult && (
-          <ThemedText type="small" themeColor="textSecondary">
-            Latest backup: {backupResult.fileName} | Size:{" "}
-            {(backupResult.sizeBytes / 1024 / 1024).toFixed(2)} MB | Attachments in manifest:{" "}
-            {backupResult.manifest.attachmentCount}
-          </ThemedText>
-        )}
-      </View>
-      <View style={styles.oneDriveCard}>
-        <ThemedText type="smallBold">OneDrive (Export-Only)</ThemedText>
-        <ThemedText type="small" themeColor="textSecondary">
-          Connect OneDrive only for user-triggered export/backup uploads. App works fully without it.
-        </ThemedText>
-        <ThemedText type="small" themeColor="textSecondary">
-          Redirect URI: {getOneDriveRedirectUri()}
-        </ThemedText>
-        <ThemedText type="small">
-          Status: {oneDriveConnected ? "Connected" : "Not connected"}
-        </ThemedText>
-        <ThemedText type="small">
-          Selected folder: {oneDriveSelectedFolder ? oneDriveSelectedFolder.path : "Not selected"}
-        </ThemedText>
-        {oneDriveError && <ThemedText style={styles.errorText}>{oneDriveError}</ThemedText>}
-        {!oneDriveConnected ? (
-          <Pressable
-            style={({ pressed }) => [styles.oneDriveButton, pressed && styles.pressed]}
-            onPress={() => void handleConnectOneDrive()}
-            disabled={oneDriveBusy}>
-            <ThemedText type="smallBold">
-              {oneDriveBusy ? "Connecting..." : "Connect OneDrive"}
-            </ThemedText>
-          </Pressable>
-        ) : (
-          <Pressable
-            style={({ pressed }) => [styles.oneDriveDisconnectButton, pressed && styles.pressed]}
-            onPress={() => void handleDisconnectOneDrive()}
-            disabled={oneDriveBusy}>
-            <ThemedText type="smallBold">
-              {oneDriveBusy ? "Disconnecting..." : "Disconnect OneDrive"}
-            </ThemedText>
-          </Pressable>
-        )}
-        {oneDriveConnected && (
-          <>
-            <Pressable
-              style={({ pressed }) => [styles.oneDriveButton, pressed && styles.pressed]}
-              onPress={() => void handleLoadOneDriveFolders()}
-              disabled={oneDriveBusy}>
-              <ThemedText type="smallBold">
-                {oneDriveBusy ? "Loading..." : "Load OneDrive Folders"}
-              </ThemedText>
-            </Pressable>
-            {oneDriveFolders.map((folder) => (
-              <Pressable
-                key={folder.id}
-                style={({ pressed }) => [styles.folderRow, pressed && styles.pressed]}
-                onPress={() => void handleSelectOneDriveFolder(folder)}
-                disabled={oneDriveBusy}>
-                <ThemedText type="smallBold">{folder.name}</ThemedText>
-                <ThemedText type="small" themeColor="textSecondary">
-                  {folder.path}
-                </ThemedText>
-              </Pressable>
-            ))}
-            <Pressable
-              style={({ pressed }) => [styles.oneDriveDisconnectButton, pressed && styles.pressed]}
-              onPress={() => void handleVerifySelectedFolder()}
-              disabled={oneDriveBusy || !oneDriveSelectedFolder}>
-              <ThemedText type="smallBold">Verify Selected Folder Access</ThemedText>
-            </Pressable>
-          </>
-        )}
-        <Pressable
-          style={({ pressed }) => [styles.oneDriveButton, pressed && styles.pressed]}
-          onPress={() => void handleRunTestExport()}
-          disabled={oneDriveBusy}>
-          <ThemedText type="smallBold">Run Test Export Pipeline</ThemedText>
-        </Pressable>
-        {exportProgress && (
-          <ThemedText type="small" themeColor="textSecondary">
-            {exportProgress.stage.toUpperCase()}: {exportProgress.progressPercent}% - {exportProgress.message}
-          </ThemedText>
-        )}
-        {exportResult && (
-          <ThemedText type="small" themeColor="textSecondary">
-            Local export file: {exportResult.localFileName}
-            {exportResult.uploadStatus === "uploaded"
-              ? ` | Uploaded: ${exportResult.uploadedFileName ?? exportResult.localFileName}`
-              : exportResult.uploadStatus === "failed"
-                ? " | Upload failed (local export still saved)"
-                : " | Upload skipped"}
-          </ThemedText>
-        )}
-      </View>
-    </ScrollView>
+    <GBox flex={1} px="$5" py="$6">
+      <ScrollView
+        contentContainerStyle={{
+          width: "100%",
+          maxWidth: 860,
+          alignSelf: "center",
+          paddingBottom: 24,
+        }}
+      >
+        <GVStack space="lg">
+          <GVStack space="xs">
+            <GHeading size="2xl">Settings</GHeading>
+            <GText size="sm">Configure theme, tax defaults, and local device controls.</GText>
+          </GVStack>
+
+          {loadError && (
+            <GCard borderWidth="$1" borderColor="$error300">
+              <GText size="sm">{loadError}</GText>
+            </GCard>
+          )}
+
+          <GCard borderWidth="$1" borderColor="$border200">
+            <GVStack space="md">
+              <GHeading size="md">Theme</GHeading>
+              <GText size="sm">Choose how the app appearance is resolved.</GText>
+              <GHStack space="sm" flexWrap="wrap">
+                {themeOptions.map((option) => (
+                  <GButton
+                    key={option.value}
+                    size="sm"
+                    variant={preference === option.value ? "solid" : "outline"}
+                    action={preference === option.value ? "primary" : "secondary"}
+                    onPress={() => setPreference(option.value)}
+                    testID={`settings-theme-${option.value}`}
+                  >
+                    <GButtonText>{option.label}</GButtonText>
+                  </GButton>
+                ))}
+              </GHStack>
+              <GText size="xs">Resolved mode now: {resolvedColorMode}</GText>
+            </GVStack>
+          </GCard>
+
+          <GCard borderWidth="$1" borderColor="$border200">
+            <GVStack space="md">
+              <GHeading size="md">Tax defaults</GHeading>
+
+              <GVStack space="xs">
+                <GText bold size="sm">Tax year default</GText>
+                <GInput variant="outline">
+                  <GInputField
+                    value={formState.taxYearDefault}
+                    onChangeText={(value) => updateFormField("taxYearDefault", value)}
+                    keyboardType="number-pad"
+                    maxLength={4}
+                    placeholder="2026"
+                    testID="settings-tax-year-input"
+                  />
+                </GInput>
+              </GVStack>
+
+              <GVStack space="xs">
+                <GText bold size="sm">Marginal tax rate (%)</GText>
+                <GInput variant="outline">
+                  <GInputField
+                    value={formState.marginalRatePercent}
+                    onChangeText={(value) => updateFormField("marginalRatePercent", value)}
+                    keyboardType="decimal-pad"
+                    placeholder="40"
+                    testID="settings-marginal-rate-input"
+                  />
+                </GInput>
+              </GVStack>
+
+              <GVStack space="xs">
+                <GText bold size="sm">Default work percent (%)</GText>
+                <GInput variant="outline">
+                  <GInputField
+                    value={formState.defaultWorkPercent}
+                    onChangeText={(value) => updateFormField("defaultWorkPercent", value)}
+                    keyboardType="number-pad"
+                    placeholder="100"
+                    testID="settings-default-work-percent-input"
+                  />
+                </GInput>
+              </GVStack>
+
+              <GVStack space="xs">
+                <GText bold size="sm">GWG threshold (EUR)</GText>
+                <GInput variant="outline">
+                  <GInputField
+                    value={formState.gwgThresholdEuros}
+                    onChangeText={(value) => updateFormField("gwgThresholdEuros", value)}
+                    keyboardType="decimal-pad"
+                    placeholder="1000.00"
+                    testID="settings-gwg-threshold-input"
+                  />
+                </GInput>
+              </GVStack>
+
+              <GHStack justifyContent="space-between" alignItems="center">
+                <GText size="sm">Apply half-year rule</GText>
+                <GSwitch
+                  value={formState.applyHalfYearRule}
+                  onValueChange={(value) => updateFormField("applyHalfYearRule", value)}
+                />
+              </GHStack>
+
+              <GHStack justifyContent="space-between" alignItems="center">
+                <GText size="sm">App lock enabled</GText>
+                <GSwitch
+                  value={formState.appLockEnabled}
+                  onValueChange={(value) => updateFormField("appLockEnabled", value)}
+                />
+              </GHStack>
+
+              <GHStack justifyContent="space-between" alignItems="center">
+                <GText size="sm">Upload to OneDrive after export</GText>
+                <GSwitch
+                  value={formState.uploadToOneDriveAfterExport}
+                  onValueChange={(value) =>
+                    updateFormField("uploadToOneDriveAfterExport", value)
+                  }
+                />
+              </GHStack>
+
+              {!validation.valid && (
+                <GText size="sm" color="$error600">{validation.message}</GText>
+              )}
+              {saveError && <GText size="sm" color="$error600">{saveError}</GText>}
+              {saveSuccess && <GText size="sm" color="$success600">{saveSuccess}</GText>}
+
+              <GHStack space="sm" flexWrap="wrap">
+                <GButton
+                  onPress={() => void handleSaveSettings()}
+                  disabled={!validation.valid || isSavingSettings}
+                  testID="settings-save"
+                >
+                  <GButtonText>{isSavingSettings ? "Saving..." : "Save settings"}</GButtonText>
+                </GButton>
+                <GButton
+                  variant="outline"
+                  action="secondary"
+                  onPress={() => void handleResetDefaults()}
+                  disabled={isSavingSettings}
+                >
+                  <GButtonText>Reset to defaults</GButtonText>
+                </GButton>
+              </GHStack>
+            </GVStack>
+          </GCard>
+
+          {preview && (
+            <GCard borderWidth="$1" borderColor="$border200">
+              <GVStack space="xs">
+                <GHeading size="sm">Calculation preview (sample item)</GHeading>
+                <GText size="sm">Sample item: {formatCents(preview.sampleItemCents)}</GText>
+                <GText size="sm">Work-relevant: {formatCents(preview.workRelevantCents)}</GText>
+                <GText size="sm">
+                  Deductible this year: {formatCents(preview.deductibleThisYearCents)}
+                </GText>
+                <GText size="sm">Estimated refund: {formatCents(preview.estimatedRefundCents)}</GText>
+                <GText size="sm">Mode: {preview.immediate ? "Immediate deduction" : "AfA schedule"}</GText>
+              </GVStack>
+            </GCard>
+          )}
+
+          <GCard borderWidth="$1" borderColor="$border200">
+            <GVStack space="md">
+              <GHeading size="md">PIN fallback</GHeading>
+              <GText size="sm">
+                {pinExists ? "PIN is configured. You can change it below." : "Set a PIN fallback for app lock."}
+              </GText>
+              {pinExists && (
+                <GInput variant="outline">
+                  <GInputField
+                    value={currentPin}
+                    onChangeText={setCurrentPin}
+                    secureTextEntry
+                    keyboardType="number-pad"
+                    maxLength={6}
+                    placeholder="Current PIN"
+                  />
+                </GInput>
+              )}
+              <GInput variant="outline">
+                <GInputField
+                  value={newPin}
+                  onChangeText={setNewPin}
+                  secureTextEntry
+                  keyboardType="number-pad"
+                  maxLength={6}
+                  placeholder={pinExists ? "New PIN (4-6 digits)" : "PIN (4-6 digits)"}
+                />
+              </GInput>
+              <GInput variant="outline">
+                <GInputField
+                  value={confirmPin}
+                  onChangeText={setConfirmPin}
+                  secureTextEntry
+                  keyboardType="number-pad"
+                  maxLength={6}
+                  placeholder="Confirm PIN"
+                />
+              </GInput>
+              {pinError && <GText size="sm" color="$error600">{pinError}</GText>}
+              {pinSuccess && <GText size="sm" color="$success600">{pinSuccess}</GText>}
+              <GButton variant="outline" action="secondary" onPress={() => void handleSavePin()}>
+                <GButtonText>{pinExists ? "Change PIN" : "Set PIN"}</GButtonText>
+              </GButton>
+            </GVStack>
+          </GCard>
+
+          <GCard borderWidth="$1" borderColor="$border200">
+            <GVStack space="md">
+              <GHeading size="md">Local backup / restore</GHeading>
+              <GText size="sm">Create and restore local backup ZIP snapshots.</GText>
+              {backupError && <GText size="sm" color="$error600">{backupError}</GText>}
+              <GHStack space="sm" flexWrap="wrap">
+                <GButton onPress={() => void handleCreateBackup()} disabled={backupBusy}>
+                  <GButtonText>{backupBusy ? "Working..." : "Create backup ZIP"}</GButtonText>
+                </GButton>
+                <GButton
+                  variant="outline"
+                  action="secondary"
+                  onPress={() => void handleShareBackup()}
+                  disabled={backupBusy || !backupResult}
+                >
+                  <GButtonText>Share latest backup</GButtonText>
+                </GButton>
+                <GButton
+                  variant="outline"
+                  action="negative"
+                  onPress={() => setConfirmAction("importBackup")}
+                  disabled={backupBusy}
+                >
+                  <GButtonText>Import backup (overwrite)</GButtonText>
+                </GButton>
+              </GHStack>
+              {backupResult && (
+                <GText size="sm">
+                  Latest backup: {backupResult.fileName} | Size: {(backupResult.sizeBytes / 1024 / 1024).toFixed(2)} MB | Attachments: {backupResult.manifest.attachmentCount}
+                </GText>
+              )}
+            </GVStack>
+          </GCard>
+
+          <GCard borderWidth="$1" borderColor="$border200">
+            <GVStack space="md">
+              <GHeading size="md">OneDrive (export-only)</GHeading>
+              <GText size="sm">Connect OneDrive for user-triggered export uploads. App works fully without it.</GText>
+              <GText size="sm">Redirect URI: {getOneDriveRedirectUri()}</GText>
+              <GText size="sm">Status: {oneDriveConnected ? "Connected" : "Not connected"}</GText>
+              <GText size="sm">Selected folder: {oneDriveSelectedFolder ? oneDriveSelectedFolder.path : "Not selected"}</GText>
+              {oneDriveError && <GText size="sm" color="$error600">{oneDriveError}</GText>}
+
+              {!oneDriveConnected ? (
+                <GButton onPress={() => void handleConnectOneDrive()} disabled={oneDriveBusy}>
+                  <GButtonText>{oneDriveBusy ? "Connecting..." : "Connect OneDrive"}</GButtonText>
+                </GButton>
+              ) : (
+                <GButton
+                  variant="outline"
+                  action="secondary"
+                  onPress={() => void handleDisconnectOneDrive()}
+                  disabled={oneDriveBusy}
+                >
+                  <GButtonText>{oneDriveBusy ? "Disconnecting..." : "Disconnect OneDrive"}</GButtonText>
+                </GButton>
+              )}
+
+              {oneDriveConnected && (
+                <>
+                  <GButton
+                    variant="outline"
+                    action="secondary"
+                    onPress={() => void handleLoadOneDriveFolders()}
+                    disabled={oneDriveBusy}
+                  >
+                    <GButtonText>{oneDriveBusy ? "Loading..." : "Load OneDrive folders"}</GButtonText>
+                  </GButton>
+                  {oneDriveFolders.map((folder) => (
+                    <GButton
+                      key={folder.id}
+                      variant="outline"
+                      action="secondary"
+                      onPress={() => void handleSelectOneDriveFolder(folder)}
+                      disabled={oneDriveBusy}
+                    >
+                      <GButtonText>{folder.path}</GButtonText>
+                    </GButton>
+                  ))}
+                  <GButton
+                    variant="outline"
+                    action="secondary"
+                    onPress={() => void handleVerifySelectedFolder()}
+                    disabled={oneDriveBusy || !oneDriveSelectedFolder}
+                  >
+                    <GButtonText>Verify selected folder access</GButtonText>
+                  </GButton>
+                </>
+              )}
+
+              <GButton
+                variant="outline"
+                action="secondary"
+                onPress={() => void handleRunTestExport()}
+                disabled={oneDriveBusy}
+              >
+                <GButtonText>Run test export pipeline</GButtonText>
+              </GButton>
+
+              {exportProgress && (
+                <GText size="sm">
+                  {exportProgress.stage.toUpperCase()}: {exportProgress.progressPercent}% - {exportProgress.message}
+                </GText>
+              )}
+              {exportResult && (
+                <GText size="sm">
+                  Local file: {exportResult.localFileName}
+                  {exportResult.uploadStatus === "uploaded"
+                    ? ` | Uploaded: ${exportResult.uploadedFileName ?? exportResult.localFileName}`
+                    : exportResult.uploadStatus === "failed"
+                      ? " | Upload failed (local export still saved)"
+                      : " | Upload skipped"}
+                </GText>
+              )}
+            </GVStack>
+          </GCard>
+
+          <GCard borderWidth="$1" borderColor="$error300">
+            <GVStack space="md">
+              <GHeading size="md">Danger zone</GHeading>
+              <GText size="sm">Delete all local data (items, attachments, settings, and PIN) from this device.</GText>
+              {dangerError && <GText size="sm" color="$error600">{dangerError}</GText>}
+              <GButton
+                action="negative"
+                variant="solid"
+                onPress={() => setConfirmAction("deleteLocalData")}
+                testID="settings-delete-local-data"
+              >
+                <GButtonText>Delete all local data</GButtonText>
+              </GButton>
+            </GVStack>
+          </GCard>
+        </GVStack>
+      </ScrollView>
+
+      <GAlertDialog isOpen={confirmAction !== null} onClose={() => setConfirmAction(null)}>
+        <GAlertDialogBackdrop />
+        <GAlertDialogContent>
+          <GAlertDialogHeader>
+            <GHeading size="md">
+              {confirmAction === "deleteLocalData"
+                ? "Delete all local data?"
+                : "Import backup snapshot?"}
+            </GHeading>
+          </GAlertDialogHeader>
+          <GAlertDialogBody>
+            <GText size="sm">
+              {confirmAction === "deleteLocalData"
+                ? "This action is irreversible and removes all local app data from this device."
+                : "Importing backup will overwrite your current local database data."}
+            </GText>
+          </GAlertDialogBody>
+          <GAlertDialogFooter>
+            <GHStack space="sm">
+              <GButton
+                variant="outline"
+                action="secondary"
+                onPress={() => setConfirmAction(null)}
+                disabled={isConfirmBusy}
+                testID="settings-confirm-cancel"
+              >
+                <GButtonText>Cancel</GButtonText>
+              </GButton>
+              <GButton
+                action="negative"
+                onPress={() => void handleConfirmAction()}
+                disabled={isConfirmBusy}
+                testID="settings-confirm-accept"
+              >
+                <GButtonText>{isConfirmBusy ? "Working..." : "Confirm"}</GButtonText>
+              </GButton>
+            </GHStack>
+          </GAlertDialogFooter>
+        </GAlertDialogContent>
+      </GAlertDialog>
+    </GBox>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  content: {
-    padding: Spacing.four,
-    gap: Spacing.three,
-    width: "100%",
-    maxWidth: 720,
-    alignSelf: "center",
-  },
-  loadingContainer: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  errorText: {
-    color: "#B00020",
-  },
-  previewCard: {
-    borderWidth: 1,
-    borderColor: "#9BA1A6",
-    borderRadius: 10,
-    padding: Spacing.three,
-    gap: Spacing.one,
-    backgroundColor: "#FFFFFF",
-  },
-  pinCard: {
-    borderWidth: 1,
-    borderColor: "#9BA1A6",
-    borderRadius: 10,
-    padding: Spacing.three,
-    gap: Spacing.two,
-    backgroundColor: "#FFFFFF",
-  },
-  pinInput: {
-    borderWidth: 1,
-    borderColor: "#9BA1A6",
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 16,
-    backgroundColor: "#FFFFFF",
-  },
-  pinButton: {
-    borderWidth: 1,
-    borderColor: "#9BA1A6",
-    borderRadius: 10,
-    alignItems: "center",
-    paddingVertical: 12,
-    backgroundColor: "#ECEDEE",
-  },
-  dangerCard: {
-    borderWidth: 1,
-    borderColor: "#B00020",
-    borderRadius: 10,
-    padding: Spacing.three,
-    gap: Spacing.two,
-    backgroundColor: "#FFF5F5",
-  },
-  dangerButton: {
-    borderWidth: 1,
-    borderColor: "#B00020",
-    borderRadius: 10,
-    alignItems: "center",
-    paddingVertical: 12,
-    backgroundColor: "#FFDCDC",
-  },
-  oneDriveCard: {
-    borderWidth: 1,
-    borderColor: "#9BA1A6",
-    borderRadius: 10,
-    padding: Spacing.three,
-    gap: Spacing.two,
-    backgroundColor: "#FFFFFF",
-  },
-  oneDriveButton: {
-    borderWidth: 1,
-    borderColor: "#9BA1A6",
-    borderRadius: 10,
-    alignItems: "center",
-    paddingVertical: 12,
-    backgroundColor: "#ECEDEE",
-  },
-  oneDriveDisconnectButton: {
-    borderWidth: 1,
-    borderColor: "#9BA1A6",
-    borderRadius: 10,
-    alignItems: "center",
-    paddingVertical: 12,
-    backgroundColor: "#FFFFFF",
-  },
-  folderRow: {
-    borderWidth: 1,
-    borderColor: "#D6D8DB",
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    gap: 2,
-    backgroundColor: "#FFFFFF",
-  },
-  successText: {
-    color: "#0B7D47",
-  },
-  pressed: {
-    opacity: 0.75,
-  },
-});

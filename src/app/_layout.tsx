@@ -8,6 +8,10 @@ import "../../global.css";
 import { AppLockGate } from "@/components/app-lock-gate";
 import { AnimatedSplashOverlay } from "@/components/animated-icon";
 import { AppGluestackUIProvider } from "@/components/gluestack-ui-provider";
+import {
+  ThemeModeContext,
+  type ThemeModePreference,
+} from "@/contexts/theme-mode-context";
 import { InitErrorScreen } from "@/components/init-error-screen";
 import { getProfileSettingsRepository } from "@/repositories/create-profile-settings-repository";
 import {
@@ -17,6 +21,10 @@ import {
 } from "@/services/app-events";
 import { deleteAllLocalData } from "@/services/local-data";
 import { hasPinAsync, verifyPinAsync } from "@/services/pin-auth";
+import {
+  loadThemePreference,
+  saveThemePreference,
+} from "@/services/theme-preference";
 
 function friendlyInitErrorMessage(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
@@ -44,6 +52,8 @@ export default function RootLayout() {
   const [pinAvailable, setPinAvailable] = React.useState(false);
   const [showPinEntry, setShowPinEntry] = React.useState(false);
   const [pinInput, setPinInput] = React.useState("");
+  const [themePreference, setThemePreferenceState] =
+    React.useState<ThemeModePreference>("system");
   const authInFlightRef = useRef(false);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
 
@@ -189,6 +199,27 @@ export default function RootLayout() {
   }, []);
 
   useEffect(() => {
+    let active = true;
+    const restoreThemePreference = async () => {
+      const persisted = await loadThemePreference();
+      if (active) {
+        setThemePreferenceState(persisted);
+      }
+    };
+
+    void restoreThemePreference();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const setThemePreference = useCallback((next: ThemeModePreference) => {
+    setThemePreferenceState(next);
+    void saveThemePreference(next);
+  }, []);
+
+  useEffect(() => {
     if (bootstrapState !== "loading") {
       return;
     }
@@ -286,11 +317,22 @@ export default function RootLayout() {
   }, [authenticate, bootstrapState, hasProfile, refreshAppLockState, refreshPinAvailability]);
 
   const inOnboarding = segments[0] === "(onboarding)";
-  const resolvedColorMode = colorScheme === "dark" ? "dark" : "light";
+  const systemColorMode = colorScheme === "dark" ? "dark" : "light";
+  const resolvedColorMode =
+    themePreference === "system" ? systemColorMode : themePreference;
+  const themeModeContextValue = React.useMemo(
+    () => ({
+      preference: themePreference,
+      resolvedColorMode,
+      setPreference: setThemePreference,
+    }),
+    [resolvedColorMode, setThemePreference, themePreference]
+  );
 
   return (
-    <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
-      <AppGluestackUIProvider colorMode={resolvedColorMode}>
+    <ThemeModeContext.Provider value={themeModeContextValue}>
+      <ThemeProvider value={resolvedColorMode === "dark" ? DarkTheme : DefaultTheme}>
+        <AppGluestackUIProvider colorMode={resolvedColorMode}>
         <AnimatedSplashOverlay />
         {bootstrapState === "ready" && !hasProfile && !inOnboarding && <Redirect href="/(onboarding)/welcome" />}
         {bootstrapState === "ready" && hasProfile && inOnboarding && <Redirect href="/(tabs)/home" />}
@@ -330,7 +372,8 @@ export default function RootLayout() {
             }}
           />
         )}
-      </AppGluestackUIProvider>
-    </ThemeProvider>
+        </AppGluestackUIProvider>
+      </ThemeProvider>
+    </ThemeModeContext.Provider>
   );
 }
