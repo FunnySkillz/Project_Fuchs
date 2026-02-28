@@ -2,6 +2,7 @@ import * as Crypto from "expo-crypto";
 
 import type { SQLiteExecutor } from "@/db/profile-settings-db";
 import type { Item, ItemUsageType } from "@/models/item";
+import { deleteLocalAttachmentFile } from "@/services/attachment-storage";
 
 interface ItemRow {
   id: string;
@@ -19,6 +20,11 @@ interface ItemRow {
   createdAt: string;
   updatedAt: string;
   deletedAt: string | null;
+}
+
+interface ItemAttachmentFileRow {
+  id: string;
+  filePath: string;
 }
 
 export interface CreateItemInput {
@@ -166,6 +172,25 @@ export class SQLiteItemRepository implements ItemRepository {
   }
 
   async delete(id: string): Promise<void> {
+    const attachments = await this.db.getAllAsync<ItemAttachmentFileRow>(
+      `SELECT
+        Id AS id,
+        FilePath AS filePath
+      FROM Attachment
+      WHERE ItemId = $itemId AND DeletedAt IS NULL;`,
+      { $itemId: id }
+    );
+
+    for (const attachment of attachments) {
+      await this.db.runAsync(
+        `UPDATE Attachment
+         SET DeletedAt = (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+         WHERE Id = $id AND DeletedAt IS NULL;`,
+        { $id: attachment.id }
+      );
+      await deleteLocalAttachmentFile(attachment.filePath);
+    }
+
     await this.db.runAsync(
       `UPDATE Item
        SET DeletedAt = (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
