@@ -1,23 +1,52 @@
-﻿import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, FlatList, StyleSheet, View } from "react-native";
+import { FlatList, ScrollView } from "react-native";
+import {
+  Actionsheet,
+  ActionsheetBackdrop,
+  ActionsheetContent,
+  ActionsheetDragIndicator,
+  ActionsheetDragIndicatorWrapper,
+  ActionsheetItem,
+  ActionsheetItemText,
+  Badge,
+  BadgeText,
+  Box,
+  Button,
+  ButtonText,
+  Card,
+  Heading,
+  HStack,
+  Input,
+  InputField,
+  Pressable,
+  Spinner,
+  Text,
+  VStack,
+} from "@gluestack-ui/themed";
 
-import { Badge, Button, Card, FormField, Input, Select } from "@/components/ui";
-import { ThemedText } from "@/components/themed-text";
-import { ThemedView } from "@/components/themed-view";
-import { Spacing } from "@/constants/theme";
 import { computeDeductibleImpactCents } from "@/domain/deductible-impact";
 import type { Category } from "@/models/category";
 import type { Item, ItemUsageType } from "@/models/item";
 import type { ProfileSettings } from "@/models/profile-settings";
 import { getCategoryRepository, getItemRepository } from "@/repositories/create-core-repositories";
 import { getProfileSettingsRepository } from "@/repositories/create-profile-settings-repository";
-import { formatCents } from "@/utils/money";
 import {
   getItemListSessionState,
   updateItemListSessionState,
   type ItemSortMode,
 } from "@/services/item-list-session";
+import { formatCents } from "@/utils/money";
+
+type FilterSheetKind = "year" | "usageType" | "category" | null;
+
+const usageTypeOptions: Array<{ label: string; value: ItemUsageType | null }> = [
+  { label: "All usage types", value: null },
+  { label: "WORK", value: "WORK" },
+  { label: "PRIVATE", value: "PRIVATE" },
+  { label: "MIXED", value: "MIXED" },
+  { label: "OTHER", value: "OTHER" },
+];
 
 function toSingleParam(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
@@ -32,57 +61,9 @@ function parseYearInput(rawYear: string): number | undefined {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
-const usageOptions: { value: string; label: string }[] = [
-  { value: "__all", label: "All usage types" },
-  { value: "WORK", label: "Work" },
-  { value: "PRIVATE", label: "Private" },
-  { value: "MIXED", label: "Mixed" },
-  { value: "OTHER", label: "Other" },
-];
-
-const sortOptions: { value: ItemSortMode; label: string }[] = [
-  { value: "purchase_date_desc", label: "Purchase date (newest first)" },
-  { value: "price_desc", label: "Price (highest first)" },
-  { value: "deductible_desc", label: "Deductible impact (highest first)" },
-];
-
-interface ItemRowCardProps {
-  item: Item;
-  categoryName: string;
-  deductibleImpact: number;
-  isMissingReceipt: boolean;
-  onOpenDetail: (itemId: string) => void;
+function missingNotesForItem(item: Item): boolean {
+  return (item.usageType === "WORK" || item.usageType === "MIXED") && !item.notes?.trim();
 }
-
-const ItemRowCard = React.memo(function ItemRowCard({
-  item,
-  categoryName,
-  deductibleImpact,
-  isMissingReceipt,
-  onOpenDetail,
-}: ItemRowCardProps) {
-  return (
-    <Card style={styles.itemCard}>
-      <ThemedText type="smallBold">{item.title}</ThemedText>
-      <ThemedText type="small" themeColor="textSecondary">
-        {item.purchaseDate} | {formatCents(item.totalCents)} | {item.usageType}
-      </ThemedText>
-      <ThemedText type="small" themeColor="textSecondary">
-        Vendor: {item.vendor?.trim() ? item.vendor : "-"} | Category: {categoryName}
-      </ThemedText>
-      <ThemedText type="small" themeColor="textSecondary">
-        Deductible impact: {formatCents(deductibleImpact)}
-      </ThemedText>
-      <View style={styles.row}>
-        {isMissingReceipt && <Badge text="Missing receipt" variant="warning" />}
-        {!item.notes?.trim() && (item.usageType === "WORK" || item.usageType === "MIXED") && (
-          <Badge text="Missing notes" variant="warning" />
-        )}
-        <Button variant="secondary" label="Open Detail" onPress={() => onOpenDetail(item.id)} />
-      </View>
-    </Card>
-  );
-});
 
 export default function ItemsRoute() {
   const router = useRouter();
@@ -91,7 +72,6 @@ export default function ItemsRoute() {
     missingReceipt?: string | string[];
     missingNotes?: string | string[];
   }>();
-
   const sessionDefaults = useMemo(() => getItemListSessionState(), []);
 
   const [search, setSearch] = useState(sessionDefaults.search);
@@ -100,11 +80,13 @@ export default function ItemsRoute() {
   const [usageType, setUsageType] = useState<ItemUsageType | null>(sessionDefaults.usageType);
   const [missingReceipt, setMissingReceipt] = useState(sessionDefaults.missingReceipt);
   const [missingNotes, setMissingNotes] = useState(sessionDefaults.missingNotes);
-  const [sortMode, setSortMode] = useState<ItemSortMode>(sessionDefaults.sortMode);
+  const [sortMode] = useState<ItemSortMode>(sessionDefaults.sortMode);
 
+  const [activeSheet, setActiveSheet] = useState<FilterSheetKind>(null);
   const [allItems, setAllItems] = useState<Item[]>([]);
   const [missingReceiptItemIds, setMissingReceiptItemIds] = useState<Set<string>>(new Set());
   const [categories, setCategories] = useState<Category[]>([]);
+  const [availableYears, setAvailableYears] = useState<number[]>([]);
   const [settings, setSettings] = useState<ProfileSettings | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -114,21 +96,13 @@ export default function ItemsRoute() {
     () => new Map(categories.map((category) => [category.id, category])),
     [categories]
   );
-
-  const categorySelectOptions = useMemo(
-    () => [
-      { value: "__all", label: "All categories" },
-      ...categories.map((category) => ({ value: category.id, label: category.name })),
-    ],
-    [categories]
-  );
-
   const targetYear = parsedYear ?? settings?.taxYearDefault ?? new Date().getFullYear();
 
   const deductibleImpactByItemId = useMemo(() => {
     if (!settings) {
       return new Map<string, number>();
     }
+
     return new Map(
       allItems.map((item) => [
         item.id,
@@ -174,6 +148,7 @@ export default function ItemsRoute() {
   const loadData = useCallback(async () => {
     setIsLoading(true);
     setLoadError(null);
+
     try {
       const [itemRepository, categoryRepository, profileSettingsRepository] = await Promise.all([
         getItemRepository(),
@@ -189,24 +164,36 @@ export default function ItemsRoute() {
         missingNotes,
       };
 
-      const [loadedItems, loadedCategories, loadedSettings] = await Promise.all([
-        itemRepository.list(baseFilters),
-        categoryRepository.list(),
-        profileSettingsRepository.getSettings(),
-      ]);
-      const missingReceiptIds = await itemRepository.listMissingReceiptItemIds({
-        year: parsedYear,
-        categoryId: categoryId ?? undefined,
-        usageType: usageType ?? undefined,
-        missingNotes,
-      });
+      const [loadedItems, allUnfilteredItems, loadedCategories, loadedSettings, missingReceiptIds] =
+        await Promise.all([
+          itemRepository.list(baseFilters),
+          itemRepository.list(),
+          categoryRepository.list(),
+          profileSettingsRepository.getSettings(),
+          itemRepository.listMissingReceiptItemIds({
+            year: parsedYear,
+            categoryId: categoryId ?? undefined,
+            usageType: usageType ?? undefined,
+            missingNotes,
+          }),
+        ]);
+
+      const discoveredYears = new Set<number>([loadedSettings.taxYearDefault]);
+      for (const item of allUnfilteredItems) {
+        const itemYear = Number.parseInt(item.purchaseDate.slice(0, 4), 10);
+        if (Number.isFinite(itemYear)) {
+          discoveredYears.add(itemYear);
+        }
+      }
 
       setAllItems(loadedItems);
-      setMissingReceiptItemIds(new Set(missingReceiptIds));
       setCategories(loadedCategories);
       setSettings(loadedSettings);
+      setMissingReceiptItemIds(new Set(missingReceiptIds));
+      setAvailableYears(Array.from(discoveredYears).sort((left, right) => right - left));
     } catch (error) {
-      console.error("Failed to load items", error);
+      console.error("Failed to load items list", error);
+      setAllItems([]);
       setMissingReceiptItemIds(new Set());
       setLoadError("Could not load items.");
     } finally {
@@ -222,7 +209,6 @@ export default function ItemsRoute() {
 
   const displayedItems = useMemo(() => {
     const searchTerm = search.trim().toLowerCase();
-
     const searched =
       searchTerm.length === 0
         ? allItems
@@ -232,211 +218,259 @@ export default function ItemsRoute() {
           });
 
     const sorted = [...searched];
-    sorted.sort((left, right) => {
-      if (sortMode === "price_desc") {
-        return right.totalCents - left.totalCents;
-      }
-
-      if (sortMode === "deductible_desc" && settings) {
+    if (sortMode === "price_desc") {
+      sorted.sort((left, right) => right.totalCents - left.totalCents);
+      return sorted;
+    }
+    if (sortMode === "deductible_desc") {
+      sorted.sort((left, right) => {
         const rightImpact = deductibleImpactByItemId.get(right.id) ?? 0;
         const leftImpact = deductibleImpactByItemId.get(left.id) ?? 0;
         if (rightImpact !== leftImpact) {
           return rightImpact - leftImpact;
         }
-      }
+        return right.purchaseDate.localeCompare(left.purchaseDate);
+      });
+      return sorted;
+    }
 
+    sorted.sort((left, right) => {
       if (right.purchaseDate !== left.purchaseDate) {
         return right.purchaseDate.localeCompare(left.purchaseDate);
       }
       return right.createdAt.localeCompare(left.createdAt);
     });
-
     return sorted;
-  }, [allItems, deductibleImpactByItemId, search, settings, sortMode]);
+  }, [allItems, deductibleImpactByItemId, search, sortMode]);
 
-  const hasActiveFilters =
-    search.trim().length > 0 ||
-    year.trim().length > 0 ||
-    categoryId !== null ||
-    usageType !== null ||
-    missingReceipt ||
-    missingNotes ||
-    sortMode !== "purchase_date_desc";
+  const yearChipLabel = parsedYear ? `Year: ${parsedYear}` : "Year: All";
+  const usageTypeChipLabel = usageType ? `Usage: ${usageType}` : "Usage: All";
+  const categoryChipLabel = categoryId
+    ? `Category: ${categoryMap.get(categoryId)?.name ?? "Unknown"}`
+    : "Category: All";
 
-  const resetFilters = () => {
-    setSearch("");
-    setYear("");
-    setCategoryId(null);
-    setUsageType(null);
-    setMissingReceipt(false);
-    setMissingNotes(false);
-    setSortMode("purchase_date_desc");
+  const rowPriceAndDate = (item: Item) => {
+    const categoryName = item.categoryId ? categoryMap.get(item.categoryId)?.name ?? "Unknown" : "No category";
+    return `${categoryName} • ${item.purchaseDate}`;
   };
 
-  const handleOpenDetail = useCallback(
-    (nextId: string) => {
-      router.push(`/item/${nextId}`);
-    },
-    [router]
-  );
-
   return (
-    <ThemedView style={styles.container}>
+    <Box flex={1} px="$5" py="$6">
       <FlatList
         data={displayedItems}
         keyExtractor={(item) => item.id}
-        initialNumToRender={14}
-        windowSize={10}
-        maxToRenderPerBatch={12}
-        updateCellsBatchingPeriod={40}
-        removeClippedSubviews
-        contentContainerStyle={styles.content}
+        contentContainerStyle={{ paddingBottom: 24 }}
         ListHeaderComponent={
-          <View style={styles.headerSection}>
-            <ThemedText type="title">Items</ThemedText>
-            <ThemedText themeColor="textSecondary">
-              Search, filter, and sort items for review and export preparation.
-            </ThemedText>
+          <VStack space="lg" maxWidth={900} width="$full" alignSelf="center" pb="$4">
+            <VStack space="xs">
+              <Heading size="2xl">Items</Heading>
+              <Text size="sm">Search, filter and review deductible impact by item.</Text>
+            </VStack>
 
-            <Card>
-              <FormField label="Search (Title/Vendor)">
-                <Input value={search} onChangeText={setSearch} placeholder="Search by title or vendor" />
-              </FormField>
+            <Input variant="outline" size="md">
+              <InputField
+                value={search}
+                onChangeText={setSearch}
+                placeholder="Search title or vendor"
+                testID="items-search-input"
+              />
+            </Input>
 
-              <FormField label="Year">
-                <Input
-                  value={year}
-                  onChangeText={setYear}
-                  keyboardType="number-pad"
-                  placeholder="e.g. 2026"
-                  maxLength={4}
-                />
-              </FormField>
-
-              <FormField label="Category">
-                <Select
-                  value={categoryId ?? "__all"}
-                  options={categorySelectOptions}
-                  onChange={(nextValue) => setCategoryId(nextValue === "__all" ? null : nextValue)}
-                />
-              </FormField>
-
-              <FormField label="Usage Type">
-                <Select
-                  value={usageType ?? "__all"}
-                  options={usageOptions}
-                  onChange={(nextValue) =>
-                    setUsageType(nextValue === "__all" ? null : (nextValue as ItemUsageType))
-                  }
-                />
-              </FormField>
-
-              <FormField label="Sort By">
-                <Select
-                  value={sortMode}
-                  options={sortOptions}
-                  onChange={(nextValue) => setSortMode(nextValue as ItemSortMode)}
-                />
-              </FormField>
-
-              <View style={styles.toggleRow}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              <HStack space="sm" alignItems="center" pr="$2">
                 <Button
-                  variant={missingReceipt ? "primary" : "secondary"}
-                  label={missingReceipt ? "Missing Receipt: ON" : "Missing Receipt: OFF"}
+                  size="sm"
+                  variant={parsedYear ? "solid" : "outline"}
+                  action="secondary"
+                  onPress={() => setActiveSheet("year")}
+                  testID="items-filter-year"
+                >
+                  <ButtonText>{yearChipLabel}</ButtonText>
+                </Button>
+                <Button
+                  size="sm"
+                  variant={usageType ? "solid" : "outline"}
+                  action="secondary"
+                  onPress={() => setActiveSheet("usageType")}
+                  testID="items-filter-usage"
+                >
+                  <ButtonText>{usageTypeChipLabel}</ButtonText>
+                </Button>
+                <Button
+                  size="sm"
+                  variant={missingReceipt ? "solid" : "outline"}
+                  action={missingReceipt ? "primary" : "secondary"}
                   onPress={() => setMissingReceipt((current) => !current)}
-                />
+                  testID="items-filter-missing-receipt"
+                >
+                  <ButtonText>Missing receipt</ButtonText>
+                </Button>
                 <Button
-                  variant={missingNotes ? "primary" : "secondary"}
-                  label={missingNotes ? "Missing Notes: ON" : "Missing Notes: OFF"}
+                  size="sm"
+                  variant={missingNotes ? "solid" : "outline"}
+                  action={missingNotes ? "primary" : "secondary"}
                   onPress={() => setMissingNotes((current) => !current)}
-                />
-              </View>
-
-              <View style={styles.toggleRow}>
-                <Button variant="secondary" label="Add Receipt" onPress={() => router.push("/item/new")} />
+                  testID="items-filter-missing-notes"
+                >
+                  <ButtonText>Missing notes</ButtonText>
+                </Button>
                 <Button
-                  variant="ghost"
-                  label="Clear Filters"
-                  onPress={resetFilters}
-                  disabled={!hasActiveFilters}
-                />
-              </View>
-            </Card>
-
-            <View style={styles.metaRow}>
-              <Badge text={`${displayedItems.length} result(s)`} />
-              {loadError && <ThemedText style={styles.errorText}>{loadError}</ThemedText>}
-            </View>
-
-            {isLoading && <ActivityIndicator />}
-          </View>
+                  size="sm"
+                  variant={categoryId ? "solid" : "outline"}
+                  action="secondary"
+                  onPress={() => setActiveSheet("category")}
+                  testID="items-filter-category"
+                >
+                  <ButtonText>{categoryChipLabel}</ButtonText>
+                </Button>
+              </HStack>
+            </ScrollView>
+          </VStack>
+        }
+        ListEmptyComponent={
+          <VStack maxWidth={900} width="$full" alignSelf="center" space="md">
+            {isLoading ? (
+              <Card borderWidth="$1" borderColor="$border200">
+                <HStack space="sm" alignItems="center">
+                  <Spinner size="small" />
+                  <Text>Loading items...</Text>
+                </HStack>
+              </Card>
+            ) : loadError ? (
+              <Card borderWidth="$1" borderColor="$error300">
+                <VStack space="sm">
+                  <Text bold size="md">
+                    Could not load items
+                  </Text>
+                  <Text size="sm">{loadError}</Text>
+                  <Button onPress={() => void loadData()} alignSelf="flex-start">
+                    <ButtonText>Retry</ButtonText>
+                  </Button>
+                </VStack>
+              </Card>
+            ) : (
+              <Card borderWidth="$1" borderColor="$border200">
+                <Text size="sm">No items found. Adjust filters or add a new item.</Text>
+              </Card>
+            )}
+          </VStack>
         }
         renderItem={({ item }) => {
-          const categoryName = item.categoryId ? categoryMap.get(item.categoryId)?.name ?? "Unknown" : "None";
           const deductibleImpact = deductibleImpactByItemId.get(item.id) ?? 0;
+          const hasMissingReceipt = missingReceiptItemIds.has(item.id);
+          const hasMissingNotes = missingNotesForItem(item);
 
           return (
-            <ItemRowCard
-              item={item}
-              categoryName={categoryName}
-              deductibleImpact={deductibleImpact}
-              isMissingReceipt={missingReceiptItemIds.has(item.id)}
-              onOpenDetail={handleOpenDetail}
-            />
+            <Pressable
+              onPress={() => router.push(`/item/${item.id}`)}
+              testID={`items-row-${item.id}`}
+              mb="$3"
+              maxWidth={900}
+              alignSelf="center"
+              width="$full"
+            >
+              <Card borderWidth="$1" borderColor="$border200">
+                <VStack space="sm">
+                  <HStack alignItems="flex-start" justifyContent="space-between" space="md">
+                    <Text bold size="md" flex={1}>
+                      {item.title}
+                    </Text>
+                    <Text bold size="md">
+                      {formatCents(item.totalCents)}
+                    </Text>
+                  </HStack>
+
+                  <Text size="sm">{rowPriceAndDate(item)}</Text>
+                  <Text size="sm">Deductible this year: {formatCents(deductibleImpact)}</Text>
+
+                  <HStack space="sm" flexWrap="wrap">
+                    {hasMissingReceipt && (
+                      <Badge size="sm" action="warning" variant="outline">
+                        <BadgeText>Missing receipt</BadgeText>
+                      </Badge>
+                    )}
+                    {hasMissingNotes && (
+                      <Badge size="sm" action="warning" variant="outline">
+                        <BadgeText>Missing notes</BadgeText>
+                      </Badge>
+                    )}
+                  </HStack>
+                </VStack>
+              </Card>
+            </Pressable>
           );
         }}
-        ListEmptyComponent={
-          !isLoading && !loadError ? (
-            <Card>
-              <ThemedText type="smallBold">No items found</ThemedText>
-              <ThemedText themeColor="textSecondary">
-                No entries match your current search/filter settings.
-              </ThemedText>
-            </Card>
-          ) : null
-        }
       />
-    </ThemedView>
+
+      <Actionsheet isOpen={activeSheet !== null} onClose={() => setActiveSheet(null)}>
+        <ActionsheetBackdrop />
+        <ActionsheetContent>
+          <ActionsheetDragIndicatorWrapper>
+            <ActionsheetDragIndicator />
+          </ActionsheetDragIndicatorWrapper>
+
+          {activeSheet === "year" && (
+            <>
+              <ActionsheetItem
+                onPress={() => {
+                  setYear("");
+                  setActiveSheet(null);
+                }}
+              >
+                <ActionsheetItemText>All years</ActionsheetItemText>
+              </ActionsheetItem>
+              {availableYears.map((optionYear) => (
+                <ActionsheetItem
+                  key={optionYear}
+                  onPress={() => {
+                    setYear(String(optionYear));
+                    setActiveSheet(null);
+                  }}
+                >
+                  <ActionsheetItemText>{optionYear}</ActionsheetItemText>
+                </ActionsheetItem>
+              ))}
+            </>
+          )}
+
+          {activeSheet === "usageType" &&
+            usageTypeOptions.map((option) => (
+              <ActionsheetItem
+                key={option.label}
+                onPress={() => {
+                  setUsageType(option.value);
+                  setActiveSheet(null);
+                }}
+              >
+                <ActionsheetItemText>{option.label}</ActionsheetItemText>
+              </ActionsheetItem>
+            ))}
+
+          {activeSheet === "category" && (
+            <>
+              <ActionsheetItem
+                onPress={() => {
+                  setCategoryId(null);
+                  setActiveSheet(null);
+                }}
+              >
+                <ActionsheetItemText>All categories</ActionsheetItemText>
+              </ActionsheetItem>
+              {categories.map((category) => (
+                <ActionsheetItem
+                  key={category.id}
+                  onPress={() => {
+                    setCategoryId(category.id);
+                    setActiveSheet(null);
+                  }}
+                >
+                  <ActionsheetItemText>{category.name}</ActionsheetItemText>
+                </ActionsheetItem>
+              ))}
+            </>
+          )}
+        </ActionsheetContent>
+      </Actionsheet>
+    </Box>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  content: {
-    padding: Spacing.four,
-    gap: Spacing.three,
-    width: "100%",
-    maxWidth: 860,
-    alignSelf: "center",
-  },
-  headerSection: {
-    gap: Spacing.three,
-  },
-  toggleRow: {
-    flexDirection: "row",
-    gap: Spacing.two,
-    flexWrap: "wrap",
-  },
-  metaRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: Spacing.two,
-    flexWrap: "wrap",
-  },
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: Spacing.two,
-    flexWrap: "wrap",
-  },
-  itemCard: {
-    marginBottom: Spacing.two,
-  },
-  errorText: {
-    color: "#B00020",
-  },
-});
