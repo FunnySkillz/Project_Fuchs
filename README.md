@@ -30,6 +30,24 @@ You:
 - Explicit tax assumptions (transparent, configurable)
 - Strong test coverage (unit + integration + workflow tests)
 
+## V1 Scope Definition
+
+This project has a frozen V1 scope (see `docs/adr/0002-v1-scope.md`).
+
+In scope for V1:
+- Local-first storage (SQLite + local files)
+- Manual entry (no OCR)
+- Receipt/photo attachments
+- Item list + detail + edit
+- Deduction estimation (GWG threshold + AfA splitting)
+- PDF export + optional ZIP with attachments
+
+Out of scope for V1:
+- OCR
+- Cloud sync (except OneDrive export)
+- Backend
+- Tax filing submission
+
 ## Tech Stack
 
 - React Native (Expo)
