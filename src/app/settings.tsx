@@ -799,7 +799,7 @@ export default function SettingsScreen() {
               </GHStack>
               {backupResult && (
                 <GText size="sm">
-                  Latest backup: {backupResult.fileName} | Size: {(backupResult.sizeBytes / 1024 / 1024).toFixed(2)} MB | Attachments: {backupResult.manifest.attachmentCount}
+                  Latest backup: {backupResult.fileName} | Size: {(backupResult.sizeBytes / 1024 / 1024).toFixed(2)} MB | Attachments: {backupResult.manifest.attachmentCount} | Missing: {backupResult.manifest.missingAttachmentCount}
                 </GText>
               )}
             </GVStack>
@@ -920,7 +920,7 @@ export default function SettingsScreen() {
             <GText size="sm">
               {confirmAction === "deleteLocalData"
                 ? "This action is irreversible and removes all local app data from this device."
-                : "Importing backup will overwrite your current local database data."}
+                : "Importing backup will overwrite your current local data, including DB and attachment files. This action cannot be undone."}
             </GText>
           </GAlertDialogBody>
           <GAlertDialogFooter>

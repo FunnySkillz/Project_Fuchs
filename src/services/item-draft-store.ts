@@ -45,15 +45,14 @@ export async function removeAttachmentFromDraft(
   attachmentFilePath: string
 ): Promise<void> {
   const draft = ensureDraft(draftId);
-  const index = draft.attachments.findIndex(
-    (attachment) => attachment.filePath === attachmentFilePath
-  );
+  const index = draft.attachments.findIndex((attachment) => attachment.filePath === attachmentFilePath);
   if (index === -1) {
     return;
   }
 
-  const [removed] = draft.attachments.splice(index, 1);
-  await deleteLocalAttachmentFile(removed.filePath);
+  const attachment = draft.attachments[index];
+  await deleteLocalAttachmentFile(attachment.filePath);
+  draft.attachments.splice(index, 1);
 }
 
 export async function clearItemDraft(draftId: string): Promise<void> {

@@ -8,6 +8,6 @@ export async function deleteAttachment(attachmentId: string): Promise<void> {
     return;
   }
 
-  await repository.softDelete(attachmentId);
   await deleteLocalAttachmentFile(existing.filePath);
+  await repository.softDelete(attachmentId);
 }

@@ -18,6 +18,7 @@ import {
 } from "@/repositories/create-core-repositories";
 import type { StoredAttachmentFile } from "@/services/attachment-storage";
 import {
+  deleteLocalAttachmentFile,
   saveFromCamera,
   saveFromPicker,
 } from "@/services/attachment-storage";
@@ -248,8 +249,9 @@ export default function ItemEditRoute() {
     }
     setIsAttachmentBusy(true);
     setLoadError(null);
+    let picked: StoredAttachmentFile | null = null;
+    let attachmentPersisted = false;
     try {
-      let picked: StoredAttachmentFile | null = null;
       if (kind === "receipt_camera") {
         const captured = await saveFromCamera();
         picked = captured ? withType(captured, "RECEIPT") : null;
@@ -274,6 +276,7 @@ export default function ItemEditRoute() {
         originalFileName: picked.originalFileName,
         fileSizeBytes: picked.fileSizeBytes,
       });
+      attachmentPersisted = true;
 
       const refreshed = await repository.listByItem(itemId);
       setAttachments(refreshed);
@@ -291,6 +294,13 @@ export default function ItemEditRoute() {
         Object.fromEntries(checks.map((entry) => [entry.id, entry.previewUri]))
       );
     } catch (error) {
+      if (picked?.filePath && !attachmentPersisted) {
+        try {
+          await deleteLocalAttachmentFile(picked.filePath);
+        } catch (cleanupError) {
+          console.error("Failed to clean up attachment file after add error", cleanupError);
+        }
+      }
       console.error("Failed to add attachment", error);
       setLoadError(friendlyFileErrorMessage(error, "Could not add attachment."));
     } finally {

@@ -54,6 +54,23 @@ async function ensureAttachmentRootDir(): Promise<void> {
   }
 }
 
+function sanitizeAttachmentFileName(fileName: string): string {
+  return fileName.replace(/[<>:"/\\|?*\x00-\x1F]/g, "_").trim();
+}
+
+export function getAttachmentRootDir(): string {
+  return ATTACHMENT_ROOT_DIR;
+}
+
+export function buildAttachmentFilePath(fileName: string): string {
+  const sanitized = sanitizeAttachmentFileName(fileName);
+  if (!sanitized) {
+    throw new Error("Attachment file name cannot be empty.");
+  }
+
+  return `${ATTACHMENT_ROOT_DIR}/${sanitized}`;
+}
+
 function buildThumbnailPath(filePath: string): string {
   return filePath.replace(/\.[^.]+$/, ".thumb.jpg");
 }
