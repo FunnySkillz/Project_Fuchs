@@ -6,8 +6,10 @@ import NewItemRoute from "@/app/item/new";
 const mockRouterReplace = jest.fn();
 const mockRouter = { replace: mockRouterReplace };
 const mockGetCategoryRepository = jest.fn();
+const mockCreateItem = jest.fn();
 const mockSaveFromCamera = jest.fn();
 const mockSaveFromPicker = jest.fn();
+const mockDeleteLocalAttachmentFile = jest.fn();
 const mockClearItemDraft = jest.fn();
 const mockAddAttachmentToDraft = jest.fn();
 const mockGetItemDraftAttachments = jest.fn();
@@ -104,13 +106,14 @@ jest.mock("@/components/ui", () => {
 jest.mock("@/repositories/create-core-repositories", () => ({
   getCategoryRepository: () => mockGetCategoryRepository(),
   getItemRepository: async () => ({
-    create: jest.fn(),
+    create: mockCreateItem,
   }),
 }));
 
 jest.mock("@/services/attachment-storage", () => ({
   saveFromCamera: () => mockSaveFromCamera(),
   saveFromPicker: () => mockSaveFromPicker(),
+  deleteLocalAttachmentFile: (filePath: string) => mockDeleteLocalAttachmentFile(filePath),
 }));
 
 jest.mock("@/services/item-draft-store", () => ({
@@ -126,8 +129,10 @@ describe("NewItemRoute step 1", () => {
   beforeEach(() => {
     mockRouterReplace.mockReset();
     mockGetCategoryRepository.mockReset();
+    mockCreateItem.mockReset();
     mockSaveFromCamera.mockReset();
     mockSaveFromPicker.mockReset();
+    mockDeleteLocalAttachmentFile.mockReset();
     mockClearItemDraft.mockReset();
     mockAddAttachmentToDraft.mockReset();
     mockGetItemDraftAttachments.mockReset();
@@ -139,6 +144,9 @@ describe("NewItemRoute step 1", () => {
 
     mockSaveFromPicker.mockResolvedValue(null);
     mockClearItemDraft.mockImplementation(async () => {
+      for (const attachment of mockDraftAttachments) {
+        await mockDeleteLocalAttachmentFile(attachment.filePath);
+      }
       mockDraftAttachments.splice(0, mockDraftAttachments.length);
     });
     mockAddAttachmentToDraft.mockImplementation((draftId: string, attachment: any) => {
@@ -171,6 +179,8 @@ describe("NewItemRoute step 1", () => {
 
     await waitFor(() => {
       expect(mockClearItemDraft).toHaveBeenCalledWith("draft-1");
+      expect(mockDeleteLocalAttachmentFile).toHaveBeenCalledWith("/tmp/receipt-a.jpg");
+      expect(mockCreateItem).not.toHaveBeenCalled();
       expect(mockRouterReplace).toHaveBeenCalledWith("/(tabs)/items");
     });
   });

@@ -163,6 +163,7 @@ describe("NewItemRoute step 2", () => {
     fireEvent.press(screen.getByTestId("new-item-step1-take-photo"));
 
     await waitFor(() => {
+      expect(mockSaveFromCamera).toHaveBeenCalledTimes(1);
       expect(mockAddAttachmentToDraft).toHaveBeenCalledWith(
         "draft-1",
         expect.objectContaining({ filePath: "/tmp/receipt-a.jpg", type: "RECEIPT" })
@@ -181,8 +182,10 @@ describe("NewItemRoute step 2", () => {
 
     expect(await screen.findByText("Add Item: Fields")).toBeTruthy();
 
-    fireEvent.changeText(screen.getByTestId("new-item-step2-title-input"), "Work monitor");
+    fireEvent.changeText(screen.getByTestId("new-item-step2-title-input"), "  Work monitor  ");
     fireEvent.changeText(screen.getByTestId("new-item-step2-total-price-input"), "499.99");
+    fireEvent.changeText(screen.getByTestId("new-item-step2-vendor-input"), "  Saturn  ");
+    fireEvent.changeText(screen.getByTestId("new-item-step2-notes-input"), "  invoice attached  ");
 
     fireEvent.press(screen.getByTestId("new-item-step2-save"));
 
@@ -194,6 +197,8 @@ describe("NewItemRoute step 2", () => {
           totalCents: 49_999,
           usageType: "WORK",
           workPercent: null,
+          vendor: "Saturn",
+          notes: "invoice attached",
         })
       );
     });
