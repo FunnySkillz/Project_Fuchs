@@ -184,4 +184,30 @@ describe("NewItemRoute step 1", () => {
       expect(mockRouterReplace).toHaveBeenCalledWith("/(tabs)/items");
     });
   });
+
+  it("cleans draft files when leaving the route without pressing cancel", async () => {
+    mockSaveFromPicker.mockResolvedValue({
+      filePath: "/tmp/receipt-exit.pdf",
+      mimeType: "application/pdf",
+      originalFileName: "receipt-exit.pdf",
+      fileSizeBytes: 12_000,
+      type: "RECEIPT",
+    });
+
+    const view = render(<NewItemRoute />);
+    expect(await screen.findByText("Add Item: Attachments")).toBeTruthy();
+
+    fireEvent.press(screen.getByTestId("new-item-step1-upload"));
+    await waitFor(() => {
+      expect(mockAddAttachmentToDraft).toHaveBeenCalled();
+      expect(screen.getByText("receipt-exit.pdf")).toBeTruthy();
+    });
+
+    view.unmount();
+
+    await waitFor(() => {
+      expect(mockClearItemDraft).toHaveBeenCalledWith("draft-1");
+      expect(mockDeleteLocalAttachmentFile).toHaveBeenCalledWith("/tmp/receipt-exit.pdf");
+    });
+  });
 });

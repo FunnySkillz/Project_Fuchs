@@ -1,7 +1,10 @@
 const mockDeleteLocalAttachmentFile = jest.fn();
+const mockPromoteStagedDraftAttachmentToPermanent = jest.fn();
 
 jest.mock("@/services/attachment-storage", () => ({
   deleteLocalAttachmentFile: (filePath: string) => mockDeleteLocalAttachmentFile(filePath),
+  promoteStagedDraftAttachmentToPermanent: (filePath: string) =>
+    mockPromoteStagedDraftAttachmentToPermanent(filePath),
 }));
 
 import {
@@ -16,6 +19,8 @@ describe("item-draft-store", () => {
   beforeEach(() => {
     mockDeleteLocalAttachmentFile.mockReset();
     mockDeleteLocalAttachmentFile.mockResolvedValue(undefined);
+    mockPromoteStagedDraftAttachmentToPermanent.mockReset();
+    mockPromoteStagedDraftAttachmentToPermanent.mockImplementation(async (filePath: string) => filePath);
   });
 
   it("keeps draft attachment reference when local file deletion fails", async () => {

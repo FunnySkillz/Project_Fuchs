@@ -2,7 +2,10 @@ import * as Crypto from "expo-crypto";
 
 import { getAttachmentRepository } from "@/repositories/create-core-repositories";
 import type { StoredAttachmentFile } from "@/services/attachment-storage";
-import { deleteLocalAttachmentFile } from "@/services/attachment-storage";
+import {
+  deleteLocalAttachmentFile,
+  promoteStagedDraftAttachmentToPermanent,
+} from "@/services/attachment-storage";
 
 interface ItemDraftState {
   id: string;
@@ -79,11 +82,13 @@ export async function linkDraftAttachmentsToItem(
 
   const attachmentRepository = await getAttachmentRepository();
   for (const attachment of draft.attachments) {
+    const promotedPath = await promoteStagedDraftAttachmentToPermanent(attachment.filePath);
+    attachment.filePath = promotedPath;
     await attachmentRepository.add({
       itemId,
       type: attachment.type,
       mimeType: attachment.mimeType,
-      filePath: attachment.filePath,
+      filePath: promotedPath,
       originalFileName: attachment.originalFileName,
       fileSizeBytes: attachment.fileSizeBytes,
     });

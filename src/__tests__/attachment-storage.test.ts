@@ -41,6 +41,7 @@ jest.mock("expo-image-picker", () => ({
 }));
 
 import { attachmentFileExists, saveFromPicker } from "@/services/attachment-storage";
+import { manipulateAsync } from "expo-image-manipulator";
 
 describe("attachment storage", () => {
   beforeEach(() => {
@@ -76,6 +77,10 @@ describe("attachment storage", () => {
       mockFiles.delete(path);
       mockDirs.delete(path);
     });
+
+    (manipulateAsync as jest.Mock).mockResolvedValue({
+      uri: "file:///tmp/steuerfuchs-tests/generated-thumb.jpg",
+    });
   });
 
   it("saves picked files into the attachment temp sandbox and reports file existence", async () => {
@@ -104,6 +109,28 @@ describe("attachment storage", () => {
     expect(saved?.filePath).toBe(mockCopyAsync.mock.calls[0][0].to);
     expect(mockMakeDirectoryAsync).toHaveBeenCalledWith(
       "file:///tmp/steuerfuchs-tests/attachments",
+      { intermediates: true }
+    );
+  });
+
+  it("stores draft-picked files in the staging directory", async () => {
+    mockGetDocumentAsync.mockResolvedValue({
+      canceled: false,
+      assets: [
+        {
+          uri: "file:///tmp/source/photo.jpg",
+          mimeType: "image/jpeg",
+          name: "photo.jpg",
+          size: 2_048,
+        },
+      ],
+    });
+
+    const saved = await saveFromPicker("draft");
+    expect(saved).not.toBeNull();
+    expect(saved?.filePath.includes("attachment-staging/")).toBe(true);
+    expect(mockMakeDirectoryAsync).toHaveBeenCalledWith(
+      "file:///tmp/steuerfuchs-tests/attachment-staging",
       { intermediates: true }
     );
   });

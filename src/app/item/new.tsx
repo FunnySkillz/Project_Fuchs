@@ -1,5 +1,5 @@
 ﻿import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ScrollView } from "react-native";
 import {
   Actionsheet as GActionsheet,
@@ -85,6 +85,7 @@ export default function NewItemRoute() {
   const params = useLocalSearchParams<{ draftId?: string | string[]; step?: string | string[] }>();
   const draftId = toSingleParam(params.draftId);
   const step = toSingleParam(params.step) ?? "1";
+  const shouldCleanupDraftOnExitRef = useRef(true);
 
   const [isInitializing, setIsInitializing] = useState(true);
   const [isBusy, setIsBusy] = useState(false);
@@ -235,6 +236,18 @@ export default function NewItemRoute() {
     });
   }, [draftId, loadCategories, reloadDraftAttachments, router]);
 
+  useEffect(() => {
+    return () => {
+      if (!draftId || !shouldCleanupDraftOnExitRef.current) {
+        return;
+      }
+
+      void clearItemDraft(draftId).catch((error) => {
+        console.error("Failed to clear draft during route exit cleanup", error);
+      });
+    };
+  }, [draftId]);
+
   const addReceiptFromCamera = async () => {
     if (!draftId) {
       return;
@@ -242,7 +255,7 @@ export default function NewItemRoute() {
     setIsBusy(true);
     setErrorMessage(null);
     try {
-      const captured = await saveFromCamera();
+      const captured = await saveFromCamera("draft");
       if (!captured) {
         return;
       }
@@ -263,7 +276,7 @@ export default function NewItemRoute() {
     setIsBusy(true);
     setErrorMessage(null);
     try {
-      const picked = await saveFromPicker();
+      const picked = await saveFromPicker("draft");
       if (!picked) {
         return;
       }
@@ -284,7 +297,7 @@ export default function NewItemRoute() {
     setIsBusy(true);
     setErrorMessage(null);
     try {
-      const captured = await saveFromCamera();
+      const captured = await saveFromCamera("draft");
       if (!captured) {
         return;
       }
@@ -385,6 +398,7 @@ export default function NewItemRoute() {
       });
 
       await linkDraftAttachmentsToItem(draftId, created.id);
+      shouldCleanupDraftOnExitRef.current = false;
       router.replace(`/item/${created.id}`);
     } catch (error) {
       console.error("Failed to save item", error);

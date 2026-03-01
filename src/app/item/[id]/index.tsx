@@ -39,8 +39,8 @@ import {
 } from "@/repositories/create-core-repositories";
 import { getProfileSettingsRepository } from "@/repositories/create-profile-settings-repository";
 import { attachmentFileExists, resolveAttachmentPreviewUri } from "@/services/attachment-storage";
-import { deleteAttachment } from "@/services/attachment-service";
 import { friendlyFileErrorMessage } from "@/services/friendly-errors";
+import { deleteItemWithAttachments } from "@/services/item-service";
 import { addMonthsToYmd } from "@/utils/date";
 import { formatCents } from "@/utils/money";
 
@@ -232,13 +232,7 @@ export default function ItemDetailRoute() {
 
     setIsDeleting(true);
     try {
-      const [itemRepository, attachmentRepository] = await Promise.all([
-        getItemRepository(),
-        getAttachmentRepository(),
-      ]);
-      const linkedAttachments = await attachmentRepository.listByItem(itemId);
-      await Promise.all(linkedAttachments.map((attachment) => deleteAttachment(attachment.id)));
-      await itemRepository.softDelete(itemId);
+      await deleteItemWithAttachments(itemId);
       router.replace("/(tabs)/items");
     } catch (error) {
       console.error("Failed to delete item", error);

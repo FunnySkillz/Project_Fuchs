@@ -7,6 +7,9 @@ import { manipulateAsync, SaveFormat } from "expo-image-manipulator";
 import type { AttachmentType } from "@/models/attachment";
 
 const ATTACHMENT_ROOT_DIR = `${FileSystem.documentDirectory}attachments`;
+const ATTACHMENT_STAGING_DIR = `${FileSystem.documentDirectory}attachment-staging`;
+
+export type AttachmentStorageScope = "item" | "draft";
 
 export interface StoredAttachmentFile {
   filePath: string;
@@ -54,6 +57,13 @@ async function ensureAttachmentRootDir(): Promise<void> {
   }
 }
 
+async function ensureAttachmentStagingDir(): Promise<void> {
+  const info = await FileSystem.getInfoAsync(ATTACHMENT_STAGING_DIR);
+  if (!info.exists) {
+    await FileSystem.makeDirectoryAsync(ATTACHMENT_STAGING_DIR, { intermediates: true });
+  }
+}
+
 function sanitizeAttachmentFileName(fileName: string): string {
   return fileName.replace(/[<>:"/\\|?*\x00-\x1F]/g, "_").trim();
 }
@@ -69,6 +79,10 @@ export function buildAttachmentFilePath(fileName: string): string {
   }
 
   return `${ATTACHMENT_ROOT_DIR}/${sanitized}`;
+}
+
+function getScopeRootDir(scope: AttachmentStorageScope): string {
+  return scope === "draft" ? ATTACHMENT_STAGING_DIR : ATTACHMENT_ROOT_DIR;
 }
 
 function buildThumbnailPath(filePath: string): string {
@@ -88,13 +102,25 @@ async function createImageThumbnail(filePath: string): Promise<void> {
   });
 }
 
-async function copyAssetIntoSandbox(asset: PickedAsset): Promise<StoredAttachmentFile> {
+async function ensureScopeRootDir(scope: AttachmentStorageScope): Promise<void> {
+  if (scope === "draft") {
+    await ensureAttachmentStagingDir();
+    return;
+  }
+
   await ensureAttachmentRootDir();
+}
+
+async function copyAssetIntoSandbox(
+  asset: PickedAsset,
+  scope: AttachmentStorageScope
+): Promise<StoredAttachmentFile> {
+  await ensureScopeRootDir(scope);
 
   const normalizedMimeType = asset.mimeType ?? "image/jpeg";
   const extension = extensionFromMimeType(normalizedMimeType);
   const fileName = `${Crypto.randomUUID()}.${extension}`;
-  const destinationPath = `${ATTACHMENT_ROOT_DIR}/${fileName}`;
+  const destinationPath = `${getScopeRootDir(scope)}/${fileName}`;
   await FileSystem.copyAsync({
     from: asset.uri,
     to: destinationPath,
@@ -121,7 +147,9 @@ async function copyAssetIntoSandbox(asset: PickedAsset): Promise<StoredAttachmen
   };
 }
 
-export async function capturePhotoAttachment(): Promise<StoredAttachmentFile | null> {
+export async function capturePhotoAttachment(
+  scope: AttachmentStorageScope = "item"
+): Promise<StoredAttachmentFile | null> {
   let permission: ImagePicker.PermissionResponse;
   try {
     permission = await ImagePicker.requestCameraPermissionsAsync();
@@ -145,15 +173,20 @@ export async function capturePhotoAttachment(): Promise<StoredAttachmentFile | n
   }
 
   const asset = result.assets[0];
-  return copyAssetIntoSandbox({
-    uri: asset.uri,
-    mimeType: asset.mimeType ?? "image/jpeg",
-    fileName: asset.fileName ?? null,
-    fileSize: asset.fileSize ?? null,
-  });
+  return copyAssetIntoSandbox(
+    {
+      uri: asset.uri,
+      mimeType: asset.mimeType ?? "image/jpeg",
+      fileName: asset.fileName ?? null,
+      fileSize: asset.fileSize ?? null,
+    },
+    scope
+  );
 }
 
-export async function pickAttachmentFromDevice(): Promise<StoredAttachmentFile | null> {
+export async function pickAttachmentFromDevice(
+  scope: AttachmentStorageScope = "item"
+): Promise<StoredAttachmentFile | null> {
   let result: DocumentPicker.DocumentPickerResult;
   try {
     result = await DocumentPicker.getDocumentAsync({
@@ -171,20 +204,69 @@ export async function pickAttachmentFromDevice(): Promise<StoredAttachmentFile |
   }
 
   const asset = result.assets[0];
-  return copyAssetIntoSandbox({
-    uri: asset.uri,
-    mimeType: asset.mimeType ?? "application/pdf",
-    fileName: asset.name ?? null,
-    fileSize: asset.size ?? null,
+  return copyAssetIntoSandbox(
+    {
+      uri: asset.uri,
+      mimeType: asset.mimeType ?? "application/pdf",
+      fileName: asset.name ?? null,
+      fileSize: asset.size ?? null,
+    },
+    scope
+  );
+}
+
+function pathStartsWith(path: string, root: string): boolean {
+  const normalizedPath = path.replace(/\\/g, "/");
+  const normalizedRoot = root.replace(/\\/g, "/");
+  return normalizedPath.startsWith(`${normalizedRoot}/`);
+}
+
+function extensionFromPath(filePath: string): string {
+  const fileName = filePath.split("/").pop() ?? "";
+  const index = fileName.lastIndexOf(".");
+  if (index <= 0 || index === fileName.length - 1) {
+    return "bin";
+  }
+  return fileName.slice(index + 1);
+}
+
+export async function promoteStagedDraftAttachmentToPermanent(filePath: string): Promise<string> {
+  if (!pathStartsWith(filePath, ATTACHMENT_STAGING_DIR)) {
+    return filePath;
+  }
+
+  await ensureAttachmentRootDir();
+
+  const extension = extensionFromPath(filePath);
+  const targetPath = `${ATTACHMENT_ROOT_DIR}/${Crypto.randomUUID()}.${extension}`;
+  await FileSystem.copyAsync({
+    from: filePath,
+    to: targetPath,
   });
+
+  const sourceThumbnailPath = buildThumbnailPath(filePath);
+  const sourceThumbInfo = await FileSystem.getInfoAsync(sourceThumbnailPath);
+  if (sourceThumbInfo.exists) {
+    await FileSystem.copyAsync({
+      from: sourceThumbnailPath,
+      to: buildThumbnailPath(targetPath),
+    });
+  }
+
+  await deleteLocalAttachmentFile(filePath);
+  return targetPath;
 }
 
-export async function saveFromCamera(): Promise<StoredAttachmentFile | null> {
-  return capturePhotoAttachment();
+export async function saveFromCamera(
+  scope: AttachmentStorageScope = "item"
+): Promise<StoredAttachmentFile | null> {
+  return capturePhotoAttachment(scope);
 }
 
-export async function saveFromPicker(): Promise<StoredAttachmentFile | null> {
-  return pickAttachmentFromDevice();
+export async function saveFromPicker(
+  scope: AttachmentStorageScope = "item"
+): Promise<StoredAttachmentFile | null> {
+  return pickAttachmentFromDevice(scope);
 }
 
 export async function deleteLocalAttachmentFile(filePath: string): Promise<void> {
@@ -201,12 +283,15 @@ export async function deleteLocalAttachmentFile(filePath: string): Promise<void>
 }
 
 export async function deleteAllLocalAttachmentFiles(): Promise<void> {
-  const info = await FileSystem.getInfoAsync(ATTACHMENT_ROOT_DIR);
-  if (!info.exists) {
-    return;
+  const attachmentInfo = await FileSystem.getInfoAsync(ATTACHMENT_ROOT_DIR);
+  if (attachmentInfo.exists) {
+    await FileSystem.deleteAsync(ATTACHMENT_ROOT_DIR, { idempotent: true });
   }
 
-  await FileSystem.deleteAsync(ATTACHMENT_ROOT_DIR, { idempotent: true });
+  const stagingInfo = await FileSystem.getInfoAsync(ATTACHMENT_STAGING_DIR);
+  if (stagingInfo.exists) {
+    await FileSystem.deleteAsync(ATTACHMENT_STAGING_DIR, { idempotent: true });
+  }
 }
 
 export async function attachmentFileExists(filePath: string): Promise<boolean> {
