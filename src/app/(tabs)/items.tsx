@@ -1,5 +1,6 @@
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { FlatList, ScrollView } from "react-native";
 import { Plus } from "lucide-react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
@@ -71,6 +72,7 @@ function missingNotesForItem(item: Item): boolean {
 export default function ItemsRoute() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const tabBarHeight = useBottomTabBarHeight();
   const theme = useTheme();
   const params = useLocalSearchParams<{
     year?: string | string[];
@@ -258,9 +260,8 @@ export default function ItemsRoute() {
     const categoryName = item.categoryId ? categoryMap.get(item.categoryId)?.name ?? "Unknown" : "No category";
     return `${categoryName} • ${item.purchaseDate}`;
   };
-  const tabBarHeight = 56 + Math.max(insets.bottom, 8);
   const fabSize = 56;
-  const fabBottom = tabBarHeight + 16;
+  const fabBottom = tabBarHeight + insets.bottom + 12;
   const listBottomPadding = fabBottom + fabSize + 24;
 
   return (
