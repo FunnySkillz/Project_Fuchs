@@ -12,31 +12,11 @@ import {
 
 const EXPORT_DIR = `${FileSystem.documentDirectory}exports`;
 const SQLITE_DIR = `${FileSystem.documentDirectory}SQLite`;
-const BACKUP_MANIFEST_FILE = "backup-manifest.json";
+const MANIFEST_FILE = "manifest.json";
+const META_FILE = "meta.json";
 const BACKUP_VERSION = 1;
-const BACKUP_SCHEMA_VERSION = 1;
-const LEGACY_MANIFEST_FILE = "attachments-manifest.json";
-
-interface AttachmentManifestEntry {
-  itemId: string;
-  attachmentId: string;
-  type: string;
-  mimeType: string;
-  filePath: string;
-  exists: boolean;
-  originalFileName: string | null;
-  archivePath: string;
-}
-
-interface BackupManifest {
-  backupVersion: number;
-  schemaVersion: number;
-  generatedAt: string;
-  databaseName: string;
-  attachmentCount: number;
-  missingAttachmentCount: number;
-  attachments: AttachmentManifestEntry[];
-}
+const SUPPORTED_SCHEMA_VERSION = 1;
+const LEGACY_MANIFEST_FILES = ["backup-manifest.json", "attachments-manifest.json"];
 
 interface AttachmentManifestRow {
   itemId: string;
@@ -45,6 +25,31 @@ interface AttachmentManifestRow {
   mimeType: string;
   filePath: string;
   originalFileName: string | null;
+  fileSizeBytes: number | null;
+}
+
+export interface BackupManifestEntry {
+  itemId: string;
+  attachmentId: string;
+  type: string;
+  mimeType: string;
+  relativePath: string;
+  fileSizeBytes: number | null;
+  originalFileName: string | null;
+}
+
+export interface BackupManifest {
+  attachmentCount: number;
+  missingAttachmentCount: number;
+  attachments: BackupManifestEntry[];
+}
+
+export interface BackupMeta {
+  backupVersion: number;
+  appVersion: string;
+  schemaVersion: number;
+  databaseName: string;
+  createdAt: string;
 }
 
 export interface BackupExportResult {
@@ -52,6 +57,13 @@ export interface BackupExportResult {
   fileName: string;
   sizeBytes: number;
   manifest: BackupManifest;
+  meta: BackupMeta;
+}
+
+export interface RestoreResultSummary {
+  itemCountRestored: number;
+  attachmentCountRestored: number;
+  missingFilesCount: number;
 }
 
 function ensureDocumentDirectory(): string {
@@ -59,6 +71,14 @@ function ensureDocumentDirectory(): string {
     throw new Error("Document directory is not available.");
   }
   return FileSystem.documentDirectory;
+}
+
+function resolveAppVersion(): string {
+  const envVersion = process.env.EXPO_PUBLIC_APP_VERSION ?? process.env.npm_package_version;
+  if (typeof envVersion === "string" && envVersion.trim().length > 0) {
+    return envVersion.trim();
+  }
+  return "unknown";
 }
 
 function sanitizePathSegment(value: string): string {
@@ -79,23 +99,21 @@ function extensionFromFileName(fileName: string): string {
   return normalized.slice(index);
 }
 
-function buildArchiveAttachmentPath(row: AttachmentManifestRow): string {
+function buildManifestRelativePath(row: AttachmentManifestRow): string {
   const sourceName = fileNameFromPath(row.filePath);
   const extension = extensionFromFileName(sourceName);
   const safeId = sanitizePathSegment(row.attachmentId);
-  const suffix = extension || ".bin";
-  return `attachments/${safeId}${suffix}`;
+  return `attachments/${safeId}${extension || ".bin"}`;
 }
 
-function buildRestoredFileName(entry: AttachmentManifestEntry): string {
-  const sourceName = sanitizePathSegment(fileNameFromPath(entry.filePath));
-  if (sourceName) {
-    return sourceName;
+function buildRestoredFileNameFromRelativePath(relativePath: string): string {
+  const normalized = relativePath.replace(/\\/g, "/");
+  const fileName = normalized.split("/").pop() ?? "";
+  const sanitized = sanitizePathSegment(fileName);
+  if (!sanitized) {
+    throw new Error(`Invalid attachment relative path in manifest: ${relativePath}`);
   }
-
-  const safeAttachmentId = sanitizePathSegment(entry.attachmentId);
-  const extension = extensionFromFileName(entry.archivePath);
-  return `${safeAttachmentId}${extension || ".bin"}`;
+  return sanitized;
 }
 
 function getDatabaseFileUri(): string {
@@ -115,7 +133,23 @@ async function ensureDirectories(): Promise<void> {
   }
 }
 
-async function buildAttachmentManifest(): Promise<BackupManifest> {
+async function ensureParentDirectory(path: string): Promise<void> {
+  const normalized = path.replace(/\\/g, "/");
+  const lastSlash = normalized.lastIndexOf("/");
+  if (lastSlash <= 0) {
+    return;
+  }
+  const parent = normalized.slice(0, lastSlash);
+  const parentInfo = await FileSystem.getInfoAsync(parent);
+  if (!parentInfo.exists) {
+    await FileSystem.makeDirectoryAsync(parent, { intermediates: true });
+  }
+}
+
+async function buildManifestEntries(): Promise<{
+  manifest: BackupManifest;
+  entryLookup: Map<string, string>;
+}> {
   const db = await getDatabase();
   const rows = await db.getAllAsync<AttachmentManifestRow>(
     `SELECT
@@ -124,30 +158,280 @@ async function buildAttachmentManifest(): Promise<BackupManifest> {
       Type AS type,
       MimeType AS mimeType,
       FilePath AS filePath,
-      OriginalFileName AS originalFileName
+      OriginalFileName AS originalFileName,
+      FileSizeBytes AS fileSizeBytes
      FROM Attachment
      WHERE DeletedAt IS NULL
      ORDER BY ItemId ASC, CreatedAt ASC;`,
     []
   );
 
-  const attachments = await Promise.all(
-    rows.map(async (row) => ({
-      ...row,
-      exists: await attachmentFileExists(row.filePath),
-      archivePath: buildArchiveAttachmentPath(row),
-    }))
-  );
-  const missingAttachmentCount = attachments.filter((entry) => !entry.exists).length;
+  const entryLookup = new Map<string, string>();
+  const entries: BackupManifestEntry[] = [];
+  let missingAttachmentCount = 0;
+
+  for (const row of rows) {
+    const relativePath = buildManifestRelativePath(row);
+    entryLookup.set(row.attachmentId, row.filePath);
+    entries.push({
+      itemId: row.itemId,
+      attachmentId: row.attachmentId,
+      type: row.type,
+      mimeType: row.mimeType,
+      relativePath,
+      fileSizeBytes: row.fileSizeBytes,
+      originalFileName: row.originalFileName,
+    });
+    const exists = await attachmentFileExists(row.filePath);
+    if (!exists) {
+      missingAttachmentCount += 1;
+    }
+  }
 
   return {
-    backupVersion: BACKUP_VERSION,
-    schemaVersion: BACKUP_SCHEMA_VERSION,
-    generatedAt: new Date().toISOString(),
-    databaseName: DATABASE_NAME,
-    attachmentCount: attachments.length,
-    missingAttachmentCount,
-    attachments,
+    manifest: {
+      attachmentCount: entries.length,
+      missingAttachmentCount,
+      attachments: entries,
+    },
+    entryLookup,
+  };
+}
+
+function parseJsonOrThrow<T>(input: string, errorMessage: string): T {
+  try {
+    return JSON.parse(input) as T;
+  } catch {
+    throw new Error(errorMessage);
+  }
+}
+
+function parseMeta(rawMeta: string): BackupMeta {
+  const meta = parseJsonOrThrow<Partial<BackupMeta>>(rawMeta, "Backup meta.json is invalid JSON.");
+  if (!meta || typeof meta !== "object") {
+    throw new Error("Backup meta.json is invalid.");
+  }
+  if (typeof meta.schemaVersion !== "number") {
+    throw new Error("Backup meta.json is missing schemaVersion.");
+  }
+  if (meta.schemaVersion !== SUPPORTED_SCHEMA_VERSION) {
+    throw new Error(
+      `Unsupported backup schema version (${String(meta.schemaVersion)}). Expected ${String(SUPPORTED_SCHEMA_VERSION)}.`
+    );
+  }
+  if (typeof meta.databaseName !== "string" || meta.databaseName.trim().length === 0) {
+    throw new Error("Backup meta.json is missing databaseName.");
+  }
+  if (typeof meta.createdAt !== "string" || meta.createdAt.trim().length === 0) {
+    throw new Error("Backup meta.json is missing createdAt.");
+  }
+  if (typeof meta.appVersion !== "string" || meta.appVersion.trim().length === 0) {
+    throw new Error("Backup meta.json is missing appVersion.");
+  }
+
+  return {
+    backupVersion:
+      typeof meta.backupVersion === "number" ? meta.backupVersion : BACKUP_VERSION,
+    appVersion: meta.appVersion,
+    schemaVersion: meta.schemaVersion,
+    databaseName: meta.databaseName,
+    createdAt: meta.createdAt,
+  };
+}
+
+function parseManifest(rawManifest: string): BackupManifest {
+  const manifest = parseJsonOrThrow<Partial<BackupManifest>>(
+    rawManifest,
+    "Backup manifest.json is invalid JSON."
+  );
+  if (!manifest || typeof manifest !== "object") {
+    throw new Error("Backup manifest.json is invalid.");
+  }
+  if (!Array.isArray(manifest.attachments)) {
+    throw new Error("Backup manifest.json is missing attachments.");
+  }
+
+  for (const entry of manifest.attachments) {
+    if (!entry || typeof entry !== "object") {
+      throw new Error("Backup manifest entry is invalid.");
+    }
+    const typed = entry as Partial<BackupManifestEntry>;
+    if (
+      typeof typed.itemId !== "string" ||
+      typeof typed.attachmentId !== "string" ||
+      typeof typed.type !== "string" ||
+      typeof typed.mimeType !== "string" ||
+      typeof typed.relativePath !== "string"
+    ) {
+      throw new Error("Backup manifest entry is malformed.");
+    }
+  }
+
+  return {
+    attachmentCount:
+      typeof manifest.attachmentCount === "number"
+        ? manifest.attachmentCount
+        : manifest.attachments.length,
+    missingAttachmentCount:
+      typeof manifest.missingAttachmentCount === "number" ? manifest.missingAttachmentCount : 0,
+    attachments: manifest.attachments as BackupManifestEntry[],
+  };
+}
+
+function resolveRequiredZipEntry(zip: JSZip, fileName: string): JSZip.JSZipObject {
+  const entry = zip.file(fileName);
+  if (!entry) {
+    throw new Error(`Backup ZIP is missing required file: ${fileName}`);
+  }
+  return entry;
+}
+
+function resolveDatabaseEntry(zip: JSZip, expectedDatabaseName: string): JSZip.JSZipObject {
+  const direct = zip.file(`db/${expectedDatabaseName}`);
+  if (direct) {
+    return direct;
+  }
+
+  const fallback = Object.values(zip.files).find(
+    (entry) =>
+      !entry.dir &&
+      entry.name.toLowerCase().endsWith(`/${expectedDatabaseName}`.toLowerCase())
+  );
+  if (!fallback) {
+    throw new Error("Backup ZIP does not contain a valid database snapshot.");
+  }
+  return fallback;
+}
+
+function ensureNoLegacyOnlyManifest(zip: JSZip): void {
+  const hasManifest = zip.file(MANIFEST_FILE);
+  if (hasManifest) {
+    return;
+  }
+
+  const legacy = LEGACY_MANIFEST_FILES.find((name) => zip.file(name));
+  if (legacy) {
+    throw new Error(
+      "Backup ZIP uses an old manifest format. Create a new backup from the latest app version."
+    );
+  }
+}
+
+function validateManifestAttachmentPayloads(zip: JSZip, manifest: BackupManifest): void {
+  for (const entry of manifest.attachments) {
+    const payload = zip.file(entry.relativePath);
+    if (!payload) {
+      throw new Error(
+        `Backup ZIP is missing attachment payload: ${entry.attachmentId} (${entry.relativePath})`
+      );
+    }
+  }
+}
+
+async function extractBackupToTemp(
+  zip: JSZip,
+  manifest: BackupManifest,
+  databaseName: string
+): Promise<{ tempDir: string; tempDbFilePath: string }> {
+  const tempDir = `${EXPORT_DIR}/restore-temp-${Date.now()}`;
+  await FileSystem.makeDirectoryAsync(tempDir, { intermediates: true });
+
+  const dbEntry = resolveDatabaseEntry(zip, databaseName);
+  const tempDbFilePath = `${tempDir}/${databaseName}`;
+  const extractedDbBase64 = await dbEntry.async("base64");
+  await FileSystem.writeAsStringAsync(tempDbFilePath, extractedDbBase64, {
+    encoding: FileSystem.EncodingType.Base64,
+  });
+
+  for (const entry of manifest.attachments) {
+    const zipEntry = zip.file(entry.relativePath);
+    if (!zipEntry) {
+      throw new Error(
+        `Backup ZIP is missing attachment payload: ${entry.attachmentId} (${entry.relativePath})`
+      );
+    }
+    const target = `${tempDir}/${entry.relativePath}`;
+    await ensureParentDirectory(target);
+    const base64 = await zipEntry.async("base64");
+    await FileSystem.writeAsStringAsync(target, base64, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+  }
+
+  return { tempDir, tempDbFilePath };
+}
+
+async function applyRestoredAttachments(
+  tempDir: string,
+  manifest: BackupManifest
+): Promise<void> {
+  await deleteAllLocalAttachmentFiles();
+
+  const attachmentRoot = getAttachmentRootDir();
+  const rootInfo = await FileSystem.getInfoAsync(attachmentRoot);
+  if (!rootInfo.exists) {
+    await FileSystem.makeDirectoryAsync(attachmentRoot, { intermediates: true });
+  }
+
+  const db = await getDatabase();
+  const usedPaths = new Set<string>();
+  for (const entry of manifest.attachments) {
+    const tempAttachmentPath = `${tempDir}/${entry.relativePath}`;
+    const fileName = buildRestoredFileNameFromRelativePath(entry.relativePath);
+    let targetPath = buildAttachmentFilePath(fileName);
+    while (usedPaths.has(targetPath)) {
+      const extension = extensionFromFileName(fileName);
+      const base = extension ? fileName.slice(0, -extension.length) : fileName;
+      targetPath = buildAttachmentFilePath(`${base}-${usedPaths.size + 1}${extension}`);
+    }
+    usedPaths.add(targetPath);
+
+    await FileSystem.copyAsync({
+      from: tempAttachmentPath,
+      to: targetPath,
+    });
+
+    await db.runAsync(
+      `UPDATE Attachment
+       SET FilePath = $filePath
+       WHERE Id = $attachmentId;`,
+      {
+        $attachmentId: entry.attachmentId,
+        $filePath: targetPath,
+      }
+    );
+  }
+}
+
+async function verifyRestoreResult(): Promise<RestoreResultSummary> {
+  const db = await getDatabase();
+  const itemCountRow = await db.getFirstAsync<{ count: number }>(
+    `SELECT COUNT(*) AS count
+     FROM Item
+     WHERE DeletedAt IS NULL;`,
+    []
+  );
+  const attachmentRows = await db.getAllAsync<{ id: string; filePath: string }>(
+    `SELECT
+      Id AS id,
+      FilePath AS filePath
+     FROM Attachment
+     WHERE DeletedAt IS NULL;`,
+    []
+  );
+
+  let missingFilesCount = 0;
+  for (const attachment of attachmentRows) {
+    const exists = await attachmentFileExists(attachment.filePath);
+    if (!exists) {
+      missingFilesCount += 1;
+    }
+  }
+
+  return {
+    itemCountRestored: itemCountRow?.count ?? 0,
+    attachmentCountRestored: attachmentRows.length,
+    missingFilesCount,
   };
 }
 
@@ -155,7 +439,15 @@ export async function createLocalBackupZip(): Promise<BackupExportResult> {
   await getDatabase();
   await ensureDirectories();
 
-  const manifest = await buildAttachmentManifest();
+  const { manifest, entryLookup } = await buildManifestEntries();
+  const meta: BackupMeta = {
+    backupVersion: BACKUP_VERSION,
+    appVersion: resolveAppVersion(),
+    schemaVersion: SUPPORTED_SCHEMA_VERSION,
+    databaseName: DATABASE_NAME,
+    createdAt: new Date().toISOString(),
+  };
+
   const dbFileUri = getDatabaseFileUri();
   const dbInfo = await FileSystem.getInfoAsync(dbFileUri);
   if (!dbInfo.exists) {
@@ -168,17 +460,26 @@ export async function createLocalBackupZip(): Promise<BackupExportResult> {
 
   const zip = new JSZip();
   zip.file(`db/${DATABASE_NAME}`, dbBase64, { base64: true });
-  for (const attachment of manifest.attachments) {
-    if (!attachment.exists) {
+
+  for (const entry of manifest.attachments) {
+    const sourcePath = entryLookup.get(entry.attachmentId);
+    if (!sourcePath) {
       continue;
     }
 
-    const base64 = await FileSystem.readAsStringAsync(attachment.filePath, {
+    const exists = await attachmentFileExists(sourcePath);
+    if (!exists) {
+      continue;
+    }
+
+    const base64 = await FileSystem.readAsStringAsync(sourcePath, {
       encoding: FileSystem.EncodingType.Base64,
     });
-    zip.file(attachment.archivePath, base64, { base64: true });
+    zip.file(entry.relativePath, base64, { base64: true });
   }
-  zip.file(BACKUP_MANIFEST_FILE, JSON.stringify(manifest, null, 2));
+
+  zip.file(MANIFEST_FILE, JSON.stringify(manifest, null, 2));
+  zip.file(META_FILE, JSON.stringify(meta, null, 2));
 
   const zipBase64 = await zip.generateAsync({ type: "base64" });
   const safeTimestamp = new Date().toISOString().replaceAll(":", "-");
@@ -196,163 +497,28 @@ export async function createLocalBackupZip(): Promise<BackupExportResult> {
     fileName,
     sizeBytes,
     manifest,
+    meta,
   };
 }
 
-function parseManifest(rawManifest: string): BackupManifest {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(rawManifest);
-  } catch {
-    throw new Error("Backup ZIP manifest is invalid JSON.");
-  }
-
-  if (!parsed || typeof parsed !== "object") {
-    throw new Error("Backup ZIP manifest is invalid.");
-  }
-
-  const candidate = parsed as Partial<BackupManifest>;
-  const backupVersion = candidate.backupVersion ?? 0;
-  if (backupVersion !== BACKUP_VERSION) {
-    throw new Error(
-      `Unsupported backup format version (${String(backupVersion)}). Expected ${String(BACKUP_VERSION)}.`
-    );
-  }
-  if (candidate.schemaVersion !== BACKUP_SCHEMA_VERSION) {
-    throw new Error(
-      `Unsupported backup schema version (${String(candidate.schemaVersion)}). Expected ${String(BACKUP_SCHEMA_VERSION)}.`
-    );
-  }
-  if (!Array.isArray(candidate.attachments)) {
-    throw new Error("Backup ZIP manifest has no attachments array.");
-  }
-
-  for (const entry of candidate.attachments) {
-    if (!entry || typeof entry !== "object") {
-      throw new Error("Backup ZIP manifest attachment entry is invalid.");
-    }
-    const attachment = entry as Partial<AttachmentManifestEntry>;
-    if (
-      typeof attachment.attachmentId !== "string" ||
-      typeof attachment.itemId !== "string" ||
-      typeof attachment.filePath !== "string" ||
-      typeof attachment.archivePath !== "string" ||
-      typeof attachment.exists !== "boolean"
-    ) {
-      throw new Error("Backup ZIP manifest attachment entry is malformed.");
-    }
-  }
-
-  return candidate as BackupManifest;
-}
-
-function resolveManifestEntry(zip: JSZip): JSZip.JSZipObject {
-  const preferred = zip.file(BACKUP_MANIFEST_FILE);
-  if (preferred) {
-    return preferred;
-  }
-
-  const legacy = zip.file(LEGACY_MANIFEST_FILE);
-  if (legacy) {
-    throw new Error(
-      "Backup ZIP uses an old DB-only manifest format. Create a new full backup from a recent app version."
-    );
-  }
-
-  throw new Error("Backup ZIP does not contain a backup manifest.");
-}
-
-function resolveDatabaseEntry(zip: JSZip): JSZip.JSZipObject {
-  const direct = zip.file(`db/${DATABASE_NAME}`);
-  if (direct) {
-    return direct;
-  }
-
-  const fallback = Object.values(zip.files).find(
-    (entry) => !entry.dir && entry.name.toLowerCase().endsWith(`/${DATABASE_NAME}`.toLowerCase())
-  );
-  if (!fallback) {
-    throw new Error("Backup ZIP does not contain a valid database snapshot.");
-  }
-  return fallback;
-}
-
-function ensureManifestAttachmentEntries(zip: JSZip, manifest: BackupManifest): void {
-  for (const entry of manifest.attachments) {
-    if (!entry.exists) {
-      continue;
-    }
-
-    const zipEntry = zip.file(entry.archivePath);
-    if (!zipEntry) {
-      throw new Error(
-        `Backup ZIP attachment entry is missing: ${entry.attachmentId} (${entry.archivePath})`
-      );
-    }
-  }
-}
-
-async function restoreAttachmentFiles(zip: JSZip, manifest: BackupManifest): Promise<void> {
-  await deleteAllLocalAttachmentFiles();
-  const attachmentRoot = getAttachmentRootDir();
-  const rootInfo = await FileSystem.getInfoAsync(attachmentRoot);
-  if (!rootInfo.exists) {
-    await FileSystem.makeDirectoryAsync(attachmentRoot, { intermediates: true });
-  }
-
-  const restoredDb = await getDatabase();
-  const reservedPaths = new Set<string>();
-  for (const entry of manifest.attachments) {
-    const fileName = buildRestoredFileName(entry);
-    let filePath = buildAttachmentFilePath(fileName);
-    while (reservedPaths.has(filePath)) {
-      const extension = extensionFromFileName(fileName);
-      const stem = extension ? fileName.slice(0, -extension.length) : fileName;
-      filePath = buildAttachmentFilePath(`${stem}-${reservedPaths.size + 1}${extension}`);
-    }
-    reservedPaths.add(filePath);
-
-    if (entry.exists) {
-      const zipEntry = zip.file(entry.archivePath);
-      if (!zipEntry) {
-        throw new Error(`Backup ZIP attachment payload missing for ${entry.attachmentId}.`);
-      }
-
-      const base64 = await zipEntry.async("base64");
-      await FileSystem.writeAsStringAsync(filePath, base64, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
-    }
-
-    await restoredDb.runAsync(
-      `UPDATE Attachment
-       SET FilePath = $filePath
-       WHERE Id = $attachmentId;`,
-      {
-        $attachmentId: entry.attachmentId,
-        $filePath: filePath,
-      }
-    );
-  }
-}
-
-export async function restoreFromBackupZip(backupZipUri: string): Promise<void> {
+export async function restoreFromBackupZip(
+  backupZipUri: string
+): Promise<RestoreResultSummary> {
   await ensureDirectories();
 
   const zipBase64 = await FileSystem.readAsStringAsync(backupZipUri, {
     encoding: FileSystem.EncodingType.Base64,
   });
   const zip = await JSZip.loadAsync(zipBase64, { base64: true });
-  const manifestEntry = resolveManifestEntry(zip);
-  const manifest = parseManifest(await manifestEntry.async("text"));
-  ensureManifestAttachmentEntries(zip, manifest);
-  const dbEntry = resolveDatabaseEntry(zip);
 
-  const extractedDbBase64 = await dbEntry.async("base64");
-  const tempRestoreUri = `${EXPORT_DIR}/restore-${Date.now()}-${DATABASE_NAME}`;
-  await FileSystem.writeAsStringAsync(tempRestoreUri, extractedDbBase64, {
-    encoding: FileSystem.EncodingType.Base64,
-  });
+  ensureNoLegacyOnlyManifest(zip);
+  const metaEntry = resolveRequiredZipEntry(zip, META_FILE);
+  const manifestEntry = resolveRequiredZipEntry(zip, MANIFEST_FILE);
+  const meta = parseMeta(await metaEntry.async("text"));
+  const manifest = parseManifest(await manifestEntry.async("text"));
+
+  validateManifestAttachmentPayloads(zip, manifest);
+  const { tempDir, tempDbFilePath } = await extractBackupToTemp(zip, manifest, meta.databaseName);
 
   try {
     await closeDatabase();
@@ -360,13 +526,14 @@ export async function restoreFromBackupZip(backupZipUri: string): Promise<void> 
 
     const targetDbUri = getDatabaseFileUri();
     await FileSystem.copyAsync({
-      from: tempRestoreUri,
+      from: tempDbFilePath,
       to: targetDbUri,
     });
 
-    await restoreAttachmentFiles(zip, manifest);
+    await applyRestoredAttachments(tempDir, manifest);
+    return await verifyRestoreResult();
   } finally {
-    await FileSystem.deleteAsync(tempRestoreUri, { idempotent: true });
+    await FileSystem.deleteAsync(tempDir, { idempotent: true });
   }
 }
 

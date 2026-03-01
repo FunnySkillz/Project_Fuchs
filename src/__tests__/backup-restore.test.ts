@@ -162,6 +162,7 @@ describe("backup-restore service", () => {
           mimeType: "image/jpeg",
           filePath: attachmentPath,
           originalFileName: "receipt.jpg",
+          fileSizeBytes: null,
         },
       ]),
     });
@@ -172,12 +173,13 @@ describe("backup-restore service", () => {
 
     const zip = await JSZip.loadAsync(zipBase64!, { base64: true });
     expect(zip.file("db/steuerfuchs.db")).toBeTruthy();
-    const manifestRaw = await zip.file("backup-manifest.json")!.async("text");
+    expect(zip.file("meta.json")).toBeTruthy();
+    const manifestRaw = await zip.file("manifest.json")!.async("text");
     const manifest = JSON.parse(manifestRaw);
-    expect(manifest.backupVersion).toBe(1);
     expect(manifest.attachmentCount).toBe(1);
     expect(manifest.attachments[0].itemId).toBe("item-1");
-    expect(manifest.attachments[0].archivePath).toBe("attachments/att-1.jpg");
+    expect(manifest.attachments[0].relativePath).toBe("attachments/att-1.jpg");
+    expect(manifest.attachments[0].fileSizeBytes).toBeNull();
     expect(zip.file("attachments/att-1.jpg")).toBeTruthy();
   });
 
@@ -185,13 +187,13 @@ describe("backup-restore service", () => {
     const runAsync = jest.fn(async () => undefined);
     mockGetDatabase.mockResolvedValue({
       runAsync,
+      getFirstAsync: jest.fn(async () => ({ count: 3 })),
+      getAllAsync: jest.fn(async () => [
+        { id: "att-1", filePath: `${mockAttachmentRootDir}/att-1.jpg` },
+      ]),
     });
 
     const manifest = {
-      backupVersion: 1,
-      schemaVersion: 1,
-      generatedAt: "2026-03-01T12:00:00.000Z",
-      databaseName: "steuerfuchs.db",
       attachmentCount: 1,
       missingAttachmentCount: 0,
       attachments: [
@@ -200,35 +202,47 @@ describe("backup-restore service", () => {
           attachmentId: "att-1",
           type: "RECEIPT",
           mimeType: "image/jpeg",
-          filePath: "file:///old-device/attachments/a1.jpg",
-          exists: true,
+          relativePath: "attachments/att-1.jpg",
+          fileSizeBytes: 1234,
           originalFileName: "a1.jpg",
-          archivePath: "attachments/att-1.jpg",
         },
       ],
+    };
+    const meta = {
+      backupVersion: 1,
+      appVersion: "1.0.0",
+      schemaVersion: 1,
+      databaseName: "steuerfuchs.db",
+      createdAt: "2026-03-01T12:00:00.000Z",
     };
 
     const zip = new JSZip();
     zip.file("db/steuerfuchs.db", "cmVzdG9yZWQtZGI=", { base64: true });
     zip.file("attachments/att-1.jpg", "cmVzdG9yZWQtYXR0YWNobWVudA==", { base64: true });
-    zip.file("backup-manifest.json", JSON.stringify(manifest));
+    zip.file("manifest.json", JSON.stringify(manifest));
+    zip.file("meta.json", JSON.stringify(meta));
     const backupUri = `${mockDocumentDirectory}import.zip`;
     mockInMemoryFiles.set(backupUri, await zip.generateAsync({ type: "base64" }));
 
-    await restoreFromBackupZip(backupUri);
+    const summary = await restoreFromBackupZip(backupUri);
 
     expect(mockCloseDatabase).toHaveBeenCalledTimes(1);
     expect(mockResetDatabase).toHaveBeenCalledTimes(1);
     expect(mockDeleteAllLocalAttachmentFiles).toHaveBeenCalledTimes(1);
     expect(mockInMemoryFiles.has(`${mockSqliteDir}/steuerfuchs.db`)).toBe(true);
-    expect(mockInMemoryFiles.has(`${mockAttachmentRootDir}/a1.jpg`)).toBe(true);
+    expect(mockInMemoryFiles.has(`${mockAttachmentRootDir}/att-1.jpg`)).toBe(true);
     expect(runAsync).toHaveBeenCalledWith(
       expect.stringContaining("UPDATE Attachment"),
       {
         $attachmentId: "att-1",
-        $filePath: `${mockAttachmentRootDir}/a1.jpg`,
+        $filePath: `${mockAttachmentRootDir}/att-1.jpg`,
       }
     );
+    expect(summary).toEqual({
+      itemCountRestored: 3,
+      attachmentCountRestored: 1,
+      missingFilesCount: 0,
+    });
   });
 
   it("rejects invalid backup ZIP before overwrite when attachment payload is missing", async () => {
@@ -237,10 +251,6 @@ describe("backup-restore service", () => {
     });
 
     const invalidManifest = {
-      backupVersion: 1,
-      schemaVersion: 1,
-      generatedAt: "2026-03-01T12:00:00.000Z",
-      databaseName: "steuerfuchs.db",
       attachmentCount: 1,
       missingAttachmentCount: 0,
       attachments: [
@@ -249,21 +259,28 @@ describe("backup-restore service", () => {
           attachmentId: "att-1",
           type: "PHOTO",
           mimeType: "image/jpeg",
-          filePath: "file:///old-device/attachments/photo.jpg",
-          exists: true,
+          relativePath: "attachments/att-1.jpg",
+          fileSizeBytes: 123,
           originalFileName: "photo.jpg",
-          archivePath: "attachments/att-1.jpg",
         },
       ],
+    };
+    const meta = {
+      backupVersion: 1,
+      appVersion: "1.0.0",
+      schemaVersion: 1,
+      databaseName: "steuerfuchs.db",
+      createdAt: "2026-03-01T12:00:00.000Z",
     };
 
     const zip = new JSZip();
     zip.file("db/steuerfuchs.db", "c29tZS1kYg==", { base64: true });
-    zip.file("backup-manifest.json", JSON.stringify(invalidManifest));
+    zip.file("manifest.json", JSON.stringify(invalidManifest));
+    zip.file("meta.json", JSON.stringify(meta));
     const backupUri = `${mockDocumentDirectory}invalid.zip`;
     mockInMemoryFiles.set(backupUri, await zip.generateAsync({ type: "base64" }));
 
-    await expect(restoreFromBackupZip(backupUri)).rejects.toThrow("attachment entry is missing");
+    await expect(restoreFromBackupZip(backupUri)).rejects.toThrow("missing attachment payload");
     expect(mockResetDatabase).not.toHaveBeenCalled();
   });
 });

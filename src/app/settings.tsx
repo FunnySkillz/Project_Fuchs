@@ -38,6 +38,7 @@ import {
   restoreFromBackupZip,
   shareBackupZip,
   type BackupExportResult,
+  type RestoreResultSummary,
 } from "@/services/backup-restore";
 import {
   runExportPipeline,
@@ -163,6 +164,7 @@ export default function SettingsScreen() {
   const [pinSuccess, setPinSuccess] = useState<string | null>(null);
 
   const [backupResult, setBackupResult] = useState<BackupExportResult | null>(null);
+  const [restoreSummary, setRestoreSummary] = useState<RestoreResultSummary | null>(null);
   const [backupBusy, setBackupBusy] = useState(false);
   const [backupError, setBackupError] = useState<string | null>(null);
 
@@ -356,6 +358,7 @@ export default function SettingsScreen() {
 
   const handleCreateBackup = async () => {
     setBackupError(null);
+    setRestoreSummary(null);
     setBackupBusy(true);
     try {
       const result = await createLocalBackupZip();
@@ -373,6 +376,7 @@ export default function SettingsScreen() {
       return;
     }
     setBackupError(null);
+    setRestoreSummary(null);
     setBackupBusy(true);
     try {
       await shareBackupZip(backupResult.fileUri);
@@ -525,6 +529,7 @@ export default function SettingsScreen() {
 
     if (confirmAction === "importBackup") {
       setBackupError(null);
+      setRestoreSummary(null);
       try {
         const result = await DocumentPicker.getDocumentAsync({
           type: ["application/zip", "application/x-zip-compressed"],
@@ -532,7 +537,8 @@ export default function SettingsScreen() {
           copyToCacheDirectory: true,
         });
         if (!result.canceled && result.assets.length > 0) {
-          await restoreFromBackupZip(result.assets[0].uri);
+          const summary = await restoreFromBackupZip(result.assets[0].uri);
+          setRestoreSummary(summary);
           emitDatabaseRestored();
           await reloadSettings();
         }
@@ -800,6 +806,11 @@ export default function SettingsScreen() {
               {backupResult && (
                 <GText size="sm">
                   Latest backup: {backupResult.fileName} | Size: {(backupResult.sizeBytes / 1024 / 1024).toFixed(2)} MB | Attachments: {backupResult.manifest.attachmentCount} | Missing: {backupResult.manifest.missingAttachmentCount}
+                </GText>
+              )}
+              {restoreSummary && (
+                <GText size="sm" color={restoreSummary.missingFilesCount > 0 ? "$warning600" : "$success600"}>
+                  Restored items: {restoreSummary.itemCountRestored} | Attachments: {restoreSummary.attachmentCountRestored} | Missing files: {restoreSummary.missingFilesCount}
                 </GText>
               )}
             </GVStack>
