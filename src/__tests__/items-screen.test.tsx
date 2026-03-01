@@ -141,6 +141,7 @@ describe("ItemsRoute", () => {
       applyHalfYearRule: false,
       appLockEnabled: false,
       uploadToOneDriveAfterExport: false,
+      themeModePreference: "system",
       currency: "EUR",
     });
     mockListItems.mockResolvedValue([item]);
@@ -181,6 +182,7 @@ describe("ItemsRoute", () => {
       applyHalfYearRule: false,
       appLockEnabled: false,
       uploadToOneDriveAfterExport: false,
+      themeModePreference: "system",
       currency: "EUR",
     });
     mockListItems.mockResolvedValue([]);
@@ -203,6 +205,7 @@ describe("ItemsRoute", () => {
       applyHalfYearRule: false,
       appLockEnabled: false,
       uploadToOneDriveAfterExport: false,
+      themeModePreference: "system",
       currency: "EUR",
     });
     mockListItems.mockResolvedValue([]);

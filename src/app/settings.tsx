@@ -23,7 +23,7 @@ import {
   VStack as GVStack,
 } from "@gluestack-ui/themed";
 
-import { useThemeMode, type ThemeModePreference } from "@/contexts/theme-mode-context";
+import { useThemeMode } from "@/contexts/theme-mode-context";
 import { estimateTaxImpact } from "@/domain/calculation-engine";
 import { createDefaultProfileSettings, type ProfileSettings } from "@/models/profile-settings";
 import { getProfileSettingsRepository } from "@/repositories/create-profile-settings-repository";
@@ -56,6 +56,7 @@ import {
   type OneDriveFolderSelection,
 } from "@/services/onedrive-auth";
 import { hasPinAsync, isValidPin, setPinAsync, verifyPinAsync } from "@/services/pin-auth";
+import type { ThemeMode } from "@/theme/theme-mode";
 import { formatCents } from "@/utils/money";
 
 WebBrowser.maybeCompleteAuthSession();
@@ -135,7 +136,7 @@ function calculatePreview(values: TaxDefaultsValues) {
   };
 }
 
-const themeOptions: Array<{ label: string; value: ThemeModePreference }> = [
+const themeOptions: Array<{ label: string; value: ThemeMode }> = [
   { label: "System", value: "system" },
   { label: "Light", value: "light" },
   { label: "Dark", value: "dark" },
@@ -144,7 +145,7 @@ const themeOptions: Array<{ label: string; value: ThemeModePreference }> = [
 type ConfirmAction = "deleteLocalData" | "importBackup";
 
 export default function SettingsScreen() {
-  const { preference, resolvedColorMode, setPreference } = useThemeMode();
+  const { mode, resolvedMode, setMode } = useThemeMode();
 
   const [settings, setSettings] = useState<ProfileSettings | null>(null);
   const [formState, setFormState] = useState<TaxDefaultsFormState | null>(null);
@@ -307,7 +308,10 @@ export default function SettingsScreen() {
     setSaveSuccess(null);
     try {
       const repository = await getProfileSettingsRepository();
-      const defaults = createDefaultProfileSettings();
+      const defaults = {
+        ...createDefaultProfileSettings(),
+        themeModePreference: mode,
+      };
       const updated = await repository.upsertSettings(defaults);
       setSettings(updated);
       setFormState(createFormState(updated));
@@ -505,6 +509,7 @@ export default function SettingsScreen() {
       try {
         await deleteAllLocalData();
         emitLocalDataDeleted();
+        setMode("system");
         const defaults = createDefaultProfileSettings();
         setSettings(defaults);
         setFormState(createFormState(defaults));
@@ -583,16 +588,16 @@ export default function SettingsScreen() {
                   <GButton
                     key={option.value}
                     size="sm"
-                    variant={preference === option.value ? "solid" : "outline"}
-                    action={preference === option.value ? "primary" : "secondary"}
-                    onPress={() => setPreference(option.value)}
+                    variant={mode === option.value ? "solid" : "outline"}
+                    action={mode === option.value ? "primary" : "secondary"}
+                    onPress={() => setMode(option.value)}
                     testID={`settings-theme-${option.value}`}
                   >
                     <GButtonText>{option.label}</GButtonText>
                   </GButton>
                 ))}
               </GHStack>
-              <GText size="xs">Resolved mode now: {resolvedColorMode}</GText>
+              <GText size="xs">Resolved mode now: {resolvedMode}</GText>
             </GVStack>
           </GCard>
 

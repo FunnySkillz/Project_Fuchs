@@ -1,41 +1,35 @@
-import type { ThemeModePreference } from "@/contexts/theme-mode-context";
+import { getProfileSettingsRepository } from "@/repositories/create-profile-settings-repository";
+import { DEFAULT_THEME_MODE, type ThemeMode } from "@/theme/theme-mode";
 
-const STORAGE_KEY = "steuerfuchs.theme.preference";
-let memoryPreference: ThemeModePreference = "system";
+let memoryPreference: ThemeMode = DEFAULT_THEME_MODE;
+let hasLoadedPreference = false;
 
-function isThemeModePreference(value: string): value is ThemeModePreference {
-  return value === "system" || value === "light" || value === "dark";
-}
+export async function loadThemePreference(): Promise<ThemeMode> {
+  if (hasLoadedPreference) {
+    return memoryPreference;
+  }
 
-function readFromLocalStorage(): ThemeModePreference | null {
   try {
-    const candidate = globalThis.localStorage?.getItem(STORAGE_KEY);
-    if (!candidate || !isThemeModePreference(candidate)) {
-      return null;
-    }
-    return candidate;
-  } catch {
-    return null;
+    const repository = await getProfileSettingsRepository();
+    const settings = await repository.getSettings();
+    memoryPreference = settings.themeModePreference;
+  } catch (error) {
+    console.warn("Failed to load theme preference from ProfileSettings", error);
+  } finally {
+    hasLoadedPreference = true;
   }
-}
 
-function writeToLocalStorage(value: ThemeModePreference): void {
-  try {
-    globalThis.localStorage?.setItem(STORAGE_KEY, value);
-  } catch {
-    // Ignore persistence errors (e.g. private mode or unavailable storage).
-  }
-}
-
-export async function loadThemePreference(): Promise<ThemeModePreference> {
-  const persisted = readFromLocalStorage();
-  if (persisted) {
-    memoryPreference = persisted;
-  }
   return memoryPreference;
 }
 
-export async function saveThemePreference(next: ThemeModePreference): Promise<void> {
+export async function saveThemePreference(next: ThemeMode): Promise<void> {
   memoryPreference = next;
-  writeToLocalStorage(next);
+  hasLoadedPreference = true;
+
+  try {
+    const repository = await getProfileSettingsRepository();
+    await repository.upsertSettings({ themeModePreference: next });
+  } catch (error) {
+    console.warn("Failed to persist theme preference to ProfileSettings", error);
+  }
 }

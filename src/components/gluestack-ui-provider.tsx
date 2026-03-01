@@ -1,6 +1,6 @@
-import { config } from "@gluestack-ui/config";
 import { GluestackUIProvider } from "@gluestack-ui/themed";
 import React from "react";
+import { gluestackConfig } from "@/theme/gluestack.config";
 
 interface AppGluestackUIProviderProps {
   children: React.ReactNode;
@@ -9,7 +9,7 @@ interface AppGluestackUIProviderProps {
 
 export function AppGluestackUIProvider({ children, colorMode }: AppGluestackUIProviderProps) {
   return (
-    <GluestackUIProvider config={config} colorMode={colorMode}>
+    <GluestackUIProvider config={gluestackConfig} colorMode={colorMode}>
       {children}
     </GluestackUIProvider>
   );

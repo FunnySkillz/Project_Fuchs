@@ -82,7 +82,7 @@ export function Select({
                   style={({ pressed }) => (pressed ? { opacity: 0.75 } : null)}
                   className={`min-h-control rounded-ui-md border px-ui-md py-ui-sm justify-center ${
                     option.value === value
-                      ? "border-ui-primary bg-blue-50"
+                      ? "border-ui-primary bg-ui-card"
                       : "border-ui-borderSoft bg-ui-surface"
                   }`}>
                   <ThemedText>{option.label}</ThemedText>

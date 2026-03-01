@@ -202,6 +202,7 @@ describe("computeDeductibleImpactCents", () => {
     applyHalfYearRule: false,
     appLockEnabled: false,
     uploadToOneDriveAfterExport: false,
+    themeModePreference: "system",
     currency: "EUR",
   };
 

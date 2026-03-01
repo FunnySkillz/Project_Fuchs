@@ -4,12 +4,12 @@ import { useThemeMode } from "@/contexts/theme-mode-context";
 
 export function useColorScheme() {
   const systemColorScheme = useNativeColorScheme();
-  const { preference } = useThemeMode();
+  const { mode } = useThemeMode();
 
-  if (preference === "light") {
+  if (mode === "light") {
     return "light";
   }
-  if (preference === "dark") {
+  if (mode === "dark") {
     return "dark";
   }
   return systemColorScheme ?? "light";

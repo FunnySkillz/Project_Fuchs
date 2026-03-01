@@ -5,6 +5,7 @@ import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { ProfileSettingsForm, type ProfileSettingsFormValues } from "@/components/profile-settings-form";
 import { Spacing } from "@/constants/theme";
+import { useTheme } from "@/hooks/use-theme";
 import { createDefaultProfileSettings, type ProfileSettings } from "@/models/profile-settings";
 
 interface Props {
@@ -13,6 +14,7 @@ interface Props {
 }
 
 export function OnboardingFlow({ initialSettings, onComplete }: Props) {
+  const theme = useTheme();
   const [step, setStep] = useState<"welcome" | "profile">("welcome");
   const defaults = useMemo(
     () => initialSettings ?? createDefaultProfileSettings(),
@@ -51,7 +53,17 @@ export function OnboardingFlow({ initialSettings, onComplete }: Props) {
           </ThemedText>
         </ThemedView>
 
-        <Pressable style={({ pressed }) => [styles.button, pressed && styles.pressed]} onPress={() => setStep("profile")}>
+        <Pressable
+          style={({ pressed }) => [
+            styles.button,
+            {
+              borderColor: theme.border,
+              backgroundColor: theme.backgroundElement,
+            },
+            pressed && styles.pressed,
+          ]}
+          onPress={() => setStep("profile")}
+        >
           <ThemedText type="smallBold">Continue to Profile Setup</ThemedText>
         </Pressable>
       </View>
@@ -84,11 +96,9 @@ const styles = StyleSheet.create({
   },
   button: {
     borderWidth: 1,
-    borderColor: "#9BA1A6",
     borderRadius: 10,
     paddingVertical: 12,
     alignItems: "center",
-    backgroundColor: "#ECEDEE",
   },
   pressed: {
     opacity: 0.75,

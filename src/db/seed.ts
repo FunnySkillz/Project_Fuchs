@@ -35,6 +35,7 @@ export async function runSeedData(
       ApplyHalfYearRule,
       AppLockEnabled,
       UploadToOneDriveAfterExport,
+      ThemeModePreference,
       Currency,
       DeletedAt
     ) VALUES (
@@ -46,6 +47,7 @@ export async function runSeedData(
       0,
       0,
       0,
+      'system',
       'EUR',
       NULL
     );`,

@@ -1,4 +1,5 @@
 import { createDefaultProfileSettings, type ProfileSettings } from "@/models/profile-settings";
+import { isThemeMode } from "@/theme/theme-mode";
 
 const MIN_TAX_YEAR = 2000;
 const MAX_TAX_YEAR = 2100;
@@ -45,6 +46,11 @@ export function normalizeProfileSettings(
   partial: Partial<ProfileSettings>,
   fallback: ProfileSettings = createDefaultProfileSettings()
 ): ProfileSettings {
+  const themeModeCandidate = partial.themeModePreference ?? fallback.themeModePreference;
+  const themeModePreference = isThemeMode(themeModeCandidate)
+    ? themeModeCandidate
+    : fallback.themeModePreference;
+
   return {
     taxYearDefault: sanitizeInteger(
       partial.taxYearDefault ?? fallback.taxYearDefault,
@@ -69,6 +75,7 @@ export function normalizeProfileSettings(
     appLockEnabled: partial.appLockEnabled ?? fallback.appLockEnabled,
     uploadToOneDriveAfterExport:
       partial.uploadToOneDriveAfterExport ?? fallback.uploadToOneDriveAfterExport,
+    themeModePreference,
     currency: "EUR",
   };
 }

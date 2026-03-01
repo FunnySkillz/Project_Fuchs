@@ -12,25 +12,28 @@ interface BadgeProps {
   variant?: BadgeVariant;
 }
 
-function getBadgeColors(variant: BadgeVariant, backgroundElement: string): {
+function getBadgeColors(
+  variant: BadgeVariant,
+  theme: ReturnType<typeof useTheme>
+): {
   backgroundColor: string;
   borderColor: string;
 } {
   if (variant === "success") {
-    return { backgroundColor: "#E6F5EA", borderColor: "#0B7D47" };
+    return { backgroundColor: theme.backgroundElement, borderColor: theme.primary };
   }
   if (variant === "warning") {
-    return { backgroundColor: "#FFF4E0", borderColor: "#A66A00" };
+    return { backgroundColor: theme.backgroundSelected, borderColor: theme.textSecondary };
   }
   if (variant === "danger") {
-    return { backgroundColor: "#FFE8E8", borderColor: "#B00020" };
+    return { backgroundColor: theme.backgroundSelected, borderColor: theme.danger };
   }
-  return { backgroundColor: backgroundElement, borderColor: "#9BA1A6" };
+  return { backgroundColor: theme.backgroundElement, borderColor: theme.border };
 }
 
 export function Badge({ text, variant = "default" }: BadgeProps) {
   const theme = useTheme();
-  const palette = getBadgeColors(variant, theme.backgroundElement);
+  const palette = getBadgeColors(variant, theme);
   return (
     <View style={[styles.base, palette]}>
       <ThemedText type="smallBold">{text}</ThemedText>

@@ -2,6 +2,7 @@ import type { ProfileSettings } from "@/models/profile-settings";
 import { createDefaultProfileSettings } from "@/models/profile-settings";
 import { normalizeProfileSettings } from "@/domain/profile-settings";
 import { PROFILE_SETTINGS_SINGLETON_ID, type SQLiteExecutor } from "@/db/profile-settings-db";
+import { isThemeMode } from "@/theme/theme-mode";
 
 interface ProfileSettingsRow {
   taxYearDefault: number;
@@ -11,6 +12,7 @@ interface ProfileSettingsRow {
   applyHalfYearRule: number;
   appLockEnabled: number;
   uploadToOneDriveAfterExport: number;
+  themeModePreference: string;
   currency: string;
 }
 
@@ -52,6 +54,7 @@ export class SQLiteProfileSettingsRepository implements ProfileSettingsRepositor
         AND ApplyHalfYearRule IN (0, 1)
         AND AppLockEnabled IN (0, 1)
         AND UploadToOneDriveAfterExport IN (0, 1)
+        AND ThemeModePreference IN ('system', 'light', 'dark')
         AND Currency = 'EUR'
       LIMIT 1;`,
       { $id: PROFILE_SETTINGS_SINGLETON_ID }
@@ -70,6 +73,7 @@ export class SQLiteProfileSettingsRepository implements ProfileSettingsRepositor
         ApplyHalfYearRule AS applyHalfYearRule,
         AppLockEnabled AS appLockEnabled,
         UploadToOneDriveAfterExport AS uploadToOneDriveAfterExport,
+        ThemeModePreference AS themeModePreference,
         Currency AS currency
       FROM ProfileSettings
       WHERE Id = $id AND DeletedAt IS NULL
@@ -91,6 +95,9 @@ export class SQLiteProfileSettingsRepository implements ProfileSettingsRepositor
       applyHalfYearRule: row.applyHalfYearRule === 1,
       appLockEnabled: row.appLockEnabled === 1,
       uploadToOneDriveAfterExport: row.uploadToOneDriveAfterExport === 1,
+      themeModePreference: isThemeMode(row.themeModePreference)
+        ? row.themeModePreference
+        : undefined,
       currency: row.currency === "EUR" ? "EUR" : "EUR",
     });
   }
@@ -113,9 +120,10 @@ export class SQLiteProfileSettingsRepository implements ProfileSettingsRepositor
         ApplyHalfYearRule,
         AppLockEnabled,
         UploadToOneDriveAfterExport,
+        ThemeModePreference,
         Currency,
         DeletedAt
-      ) VALUES ($id, $taxYearDefault, $marginalRateBps, $defaultWorkPercent, $gwgThresholdCents, $applyHalfYearRule, $appLockEnabled, $uploadToOneDriveAfterExport, $currency, NULL)
+      ) VALUES ($id, $taxYearDefault, $marginalRateBps, $defaultWorkPercent, $gwgThresholdCents, $applyHalfYearRule, $appLockEnabled, $uploadToOneDriveAfterExport, $themeModePreference, $currency, NULL)
       ON CONFLICT(Id) DO UPDATE SET
         TaxYearDefault = excluded.TaxYearDefault,
         MarginalRateBps = excluded.MarginalRateBps,
@@ -124,6 +132,7 @@ export class SQLiteProfileSettingsRepository implements ProfileSettingsRepositor
         ApplyHalfYearRule = excluded.ApplyHalfYearRule,
         AppLockEnabled = excluded.AppLockEnabled,
         UploadToOneDriveAfterExport = excluded.UploadToOneDriveAfterExport,
+        ThemeModePreference = excluded.ThemeModePreference,
         Currency = excluded.Currency,
         DeletedAt = NULL;`,
       {
@@ -135,6 +144,7 @@ export class SQLiteProfileSettingsRepository implements ProfileSettingsRepositor
         $applyHalfYearRule: settings.applyHalfYearRule ? 1 : 0,
         $appLockEnabled: settings.appLockEnabled ? 1 : 0,
         $uploadToOneDriveAfterExport: settings.uploadToOneDriveAfterExport ? 1 : 0,
+        $themeModePreference: settings.themeModePreference,
         $currency: settings.currency,
       }
     );

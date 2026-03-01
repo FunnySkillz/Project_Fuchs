@@ -10,6 +10,7 @@ import {
   percentToBps,
 } from "@/models/profile-settings";
 import { Spacing } from "@/constants/theme";
+import { useTheme } from "@/hooks/use-theme";
 
 export interface ProfileSettingsFormValues {
   taxYearDefault: number;
@@ -52,6 +53,7 @@ export function ProfileSettingsForm({
   onValuesChange,
   onSubmit,
 }: Props) {
+  const theme = useTheme();
   const [taxYearDefault, setTaxYearDefault] = useState(String(initialValues.taxYearDefault));
   const [marginalRatePercent, setMarginalRatePercent] = useState(
     String(bpsToPercent(initialValues.marginalRateBps))
@@ -191,7 +193,7 @@ export function ProfileSettingsForm({
 
       {showAdvanced && (
         <>
-          <View style={styles.separator} />
+          <View style={[styles.separator, { backgroundColor: theme.border }]} />
           <ThemedText type="smallBold">Advanced</ThemedText>
           <FormField label="GWG Threshold (EUR)">
             <Input
@@ -227,8 +229,10 @@ export function ProfileSettingsForm({
         </>
       )}
 
-      {!validation.valid && <ThemedText style={styles.errorText}>{validation.message}</ThemedText>}
-      {saveError && <ThemedText style={styles.errorText}>{saveError}</ThemedText>}
+      {!validation.valid && (
+        <ThemedText style={[styles.errorText, { color: theme.danger }]}>{validation.message}</ThemedText>
+      )}
+      {saveError && <ThemedText style={[styles.errorText, { color: theme.danger }]}>{saveError}</ThemedText>}
 
       <Button
         style={styles.submitButton}
@@ -255,7 +259,6 @@ const styles = StyleSheet.create({
   },
   separator: {
     height: 1,
-    backgroundColor: "#D6D8DB",
     marginVertical: Spacing.one,
   },
   toggleRow: {
@@ -264,9 +267,7 @@ const styles = StyleSheet.create({
   submitButton: {
     marginTop: Spacing.one,
   },
-  errorText: {
-    color: "#B00020",
-  },
+  errorText: {},
   resetButton: {
     marginTop: 0,
   },

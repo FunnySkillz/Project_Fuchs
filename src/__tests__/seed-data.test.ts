@@ -2,6 +2,7 @@ import { withTempSqliteExecutor } from "@/__tests__/helpers/sqlite-test-utils";
 import { MIGRATION_0001_INITIAL_SCHEMA } from "@/db/migrations/0001-initial-schema";
 import { MIGRATION_0002_APP_LOCK_COLUMN } from "@/db/migrations/0002-app-lock";
 import { MIGRATION_0003_UPLOAD_TOGGLE_COLUMN } from "@/db/migrations/0003-upload-toggle";
+import { applyMigration0005ThemeModePreference } from "@/db/migrations/0005-theme-mode-preference";
 import { PROFILE_SETTINGS_SINGLETON_ID } from "@/db/profile-settings-db";
 import { runSeedData } from "@/db/seed";
 
@@ -17,6 +18,7 @@ describe("runSeedData integration", () => {
       await db.execAsync(MIGRATION_0001_INITIAL_SCHEMA);
       await db.execAsync(MIGRATION_0002_APP_LOCK_COLUMN);
       await db.execAsync(MIGRATION_0003_UPLOAD_TOGGLE_COLUMN);
+      await applyMigration0005ThemeModePreference(db);
 
       await runSeedData(db, new Date("2026-01-15T12:00:00.000Z"));
 

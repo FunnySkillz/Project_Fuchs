@@ -4,6 +4,7 @@ import { Pressable, StyleSheet, View } from "react-native";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { Spacing } from "@/constants/theme";
+import { useTheme } from "@/hooks/use-theme";
 
 interface Props {
   message: string;
@@ -12,6 +13,8 @@ interface Props {
 }
 
 export function InitErrorScreen({ message, onRetry, onResetData }: Props) {
+  const theme = useTheme();
+
   return (
     <View style={styles.container}>
       <ThemedView type="backgroundElement" style={styles.card}>
@@ -24,10 +27,30 @@ export function InitErrorScreen({ message, onRetry, onResetData }: Props) {
         <ThemedText style={styles.center} type="small" themeColor="textSecondary">
           Try retrying first. If this keeps failing, you can reset local data to reinitialize the database.
         </ThemedText>
-        <Pressable style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed]} onPress={onRetry}>
+        <Pressable
+          style={({ pressed }) => [
+            styles.primaryButton,
+            {
+              borderColor: theme.border,
+              backgroundColor: theme.backgroundElement,
+            },
+            pressed && styles.pressed,
+          ]}
+          onPress={onRetry}
+        >
           <ThemedText type="smallBold">Retry Initialization</ThemedText>
         </Pressable>
-        <Pressable style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed]} onPress={onResetData}>
+        <Pressable
+          style={({ pressed }) => [
+            styles.secondaryButton,
+            {
+              borderColor: theme.danger,
+              backgroundColor: theme.backgroundSelected,
+            },
+            pressed && styles.pressed,
+          ]}
+          onPress={onResetData}
+        >
           <ThemedText type="smallBold">Reset Local Data</ThemedText>
         </Pressable>
       </ThemedView>
@@ -54,19 +77,15 @@ const styles = StyleSheet.create({
   },
   primaryButton: {
     borderWidth: 1,
-    borderColor: "#9BA1A6",
     borderRadius: 10,
     alignItems: "center",
     paddingVertical: 12,
-    backgroundColor: "#ECEDEE",
   },
   secondaryButton: {
     borderWidth: 1,
-    borderColor: "#B00020",
     borderRadius: 10,
     alignItems: "center",
     paddingVertical: 12,
-    backgroundColor: "#FFF5F5",
   },
   pressed: {
     opacity: 0.75,

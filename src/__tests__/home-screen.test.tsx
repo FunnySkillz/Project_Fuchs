@@ -114,6 +114,7 @@ describe("HomeRoute", () => {
       applyHalfYearRule: false,
       appLockEnabled: false,
       uploadToOneDriveAfterExport: false,
+      themeModePreference: "system",
       currency: "EUR",
     });
     mockItemList.mockImplementation(async (filters?: { missingReceipt?: boolean; missingNotes?: boolean }) => {
@@ -159,6 +160,7 @@ describe("HomeRoute", () => {
       applyHalfYearRule: false,
       appLockEnabled: false,
       uploadToOneDriveAfterExport: false,
+      themeModePreference: "system",
       currency: "EUR",
     });
     mockItemList.mockResolvedValue([]);

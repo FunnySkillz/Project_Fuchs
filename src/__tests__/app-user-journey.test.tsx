@@ -11,6 +11,30 @@ import type { ProfileSettings } from "@/models/profile-settings";
 import type { StoredAttachmentFile } from "@/services/attachment-storage";
 
 jest.mock("@/constants/theme", () => ({
+  Colors: {
+    light: {
+      text: "#1B2330",
+      background: "#F7F9FC",
+      backgroundElement: "#EEF2F7",
+      backgroundSelected: "#DFE6F0",
+      textSecondary: "#66758A",
+      border: "#C8D1DE",
+      primary: "#4E7FCF",
+      danger: "#C54444",
+      textOnPrimary: "#F2F6FC",
+    },
+    dark: {
+      text: "#E9EEF6",
+      background: "#131922",
+      backgroundElement: "#1C2430",
+      backgroundSelected: "#2A3544",
+      textSecondary: "#A6B2C3",
+      border: "#38475D",
+      primary: "#6E97DF",
+      danger: "#E66B6B",
+      textOnPrimary: "#F1F5FB",
+    },
+  },
   Spacing: {
     one: 4,
     two: 8,
@@ -166,6 +190,7 @@ let mockProfileSettingsStore: ProfileSettings = {
   applyHalfYearRule: false,
   appLockEnabled: false,
   uploadToOneDriveAfterExport: false,
+  themeModePreference: "system",
   currency: "EUR",
 };
 
@@ -219,8 +244,10 @@ jest.mock("@/repositories/create-profile-settings-repository", () => ({
       applyHalfYearRule: boolean;
       appLockEnabled: boolean;
       uploadToOneDriveAfterExport: boolean;
+      themeModePreference?: "system" | "light" | "dark";
     }) => {
       mockProfileSettingsStore = {
+        ...mockProfileSettingsStore,
         ...values,
         currency: "EUR",
       };
@@ -458,6 +485,7 @@ describe("App first-user UI journey", () => {
       applyHalfYearRule: false,
       appLockEnabled: false,
       uploadToOneDriveAfterExport: false,
+      themeModePreference: "system",
       currency: "EUR",
     };
 

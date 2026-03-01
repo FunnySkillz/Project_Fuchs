@@ -1,3 +1,5 @@
+import type { ThemeMode } from "@/theme/theme-mode";
+
 export interface ProfileSettings {
   taxYearDefault: number;
   marginalRateBps: number;
@@ -6,6 +8,7 @@ export interface ProfileSettings {
   applyHalfYearRule: boolean;
   appLockEnabled: boolean;
   uploadToOneDriveAfterExport: boolean;
+  themeModePreference: ThemeMode;
   currency: "EUR";
 }
 
@@ -22,6 +25,7 @@ export function createDefaultProfileSettings(now: Date = new Date()): ProfileSet
     applyHalfYearRule: false,
     appLockEnabled: false,
     uploadToOneDriveAfterExport: false,
+    themeModePreference: "system",
     currency: "EUR",
   };
 }

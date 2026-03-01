@@ -6,16 +6,16 @@ module.exports = {
     extend: {
       colors: {
         ui: {
-          surface: "#FFFFFF",
-          card: "#F8FAFC",
-          border: "#9BA1A6",
-          borderSoft: "#D6D8DB",
-          primary: "#208AEF",
-          dangerBg: "#FFDCDC",
-          danger: "#B00020",
+          surface: "#F7F9FC",
+          card: "#EEF2F7",
+          border: "#9AA9BE",
+          borderSoft: "#C8D2E0",
+          primary: "#4E7FCF",
+          dangerBg: "#F7E6E8",
+          danger: "#C54444",
           overlay: "rgba(0,0,0,0.35)",
-          text: "#11181C",
-          muted: "#687076",
+          text: "#1B2330",
+          muted: "#66758A",
         },
       },
       spacing: {

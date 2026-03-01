@@ -8,10 +8,7 @@ import "../../global.css";
 import { AppLockGate } from "@/components/app-lock-gate";
 import { AnimatedSplashOverlay } from "@/components/animated-icon";
 import { AppGluestackUIProvider } from "@/components/gluestack-ui-provider";
-import {
-  ThemeModeContext,
-  type ThemeModePreference,
-} from "@/contexts/theme-mode-context";
+import { ThemeModeContext } from "@/contexts/theme-mode-context";
 import { InitErrorScreen } from "@/components/init-error-screen";
 import { getProfileSettingsRepository } from "@/repositories/create-profile-settings-repository";
 import {
@@ -25,6 +22,7 @@ import {
   loadThemePreference,
   saveThemePreference,
 } from "@/services/theme-preference";
+import { resolveThemeMode, type ThemeMode } from "@/theme/theme-mode";
 
 function friendlyInitErrorMessage(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
@@ -52,8 +50,7 @@ export default function RootLayout() {
   const [pinAvailable, setPinAvailable] = React.useState(false);
   const [showPinEntry, setShowPinEntry] = React.useState(false);
   const [pinInput, setPinInput] = React.useState("");
-  const [themePreference, setThemePreferenceState] =
-    React.useState<ThemeModePreference>("system");
+  const [themeMode, setThemeModeState] = React.useState<ThemeMode>("system");
   const authInFlightRef = useRef(false);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
 
@@ -177,6 +174,7 @@ export default function RootLayout() {
       setPinInput("");
       setShowPinEntry(false);
       setPinAvailable(false);
+      setThemeModeState("system");
     });
 
     const unsubscribeProfileSave = onProfileSettingsSaved(() => {
@@ -203,7 +201,7 @@ export default function RootLayout() {
     const restoreThemePreference = async () => {
       const persisted = await loadThemePreference();
       if (active) {
-        setThemePreferenceState(persisted);
+        setThemeModeState(persisted);
       }
     };
 
@@ -214,8 +212,8 @@ export default function RootLayout() {
     };
   }, []);
 
-  const setThemePreference = useCallback((next: ThemeModePreference) => {
-    setThemePreferenceState(next);
+  const setThemeMode = useCallback((next: ThemeMode) => {
+    setThemeModeState(next);
     void saveThemePreference(next);
   }, []);
 
@@ -318,15 +316,14 @@ export default function RootLayout() {
 
   const inOnboarding = segments[0] === "(onboarding)";
   const systemColorMode = colorScheme === "dark" ? "dark" : "light";
-  const resolvedColorMode =
-    themePreference === "system" ? systemColorMode : themePreference;
+  const resolvedColorMode = resolveThemeMode(themeMode, systemColorMode);
   const themeModeContextValue = React.useMemo(
     () => ({
-      preference: themePreference,
-      resolvedColorMode,
-      setPreference: setThemePreference,
+      mode: themeMode,
+      resolvedMode: resolvedColorMode,
+      setMode: setThemeMode,
     }),
-    [resolvedColorMode, setThemePreference, themePreference]
+    [resolvedColorMode, setThemeMode, themeMode]
   );
 
   return (
@@ -368,6 +365,7 @@ export default function RootLayout() {
                 setHasProfile(false);
                 setBootstrapState("ready");
                 setInitError(null);
+                setThemeModeState("system");
               });
             }}
           />

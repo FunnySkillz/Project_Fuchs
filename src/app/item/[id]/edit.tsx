@@ -7,6 +7,7 @@ import { Badge, Button, Card, DatePickerTrigger, FormField, Input, Select, TextA
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { Spacing } from "@/constants/theme";
+import { useTheme } from "@/hooks/use-theme";
 import type { Attachment } from "@/models/attachment";
 import type { Category } from "@/models/category";
 import type { Item, ItemUsageType } from "@/models/item";
@@ -64,6 +65,7 @@ const usageOptions: { value: ItemUsageType; label: string }[] = [
 
 export default function ItemEditRoute() {
   const router = useRouter();
+  const theme = useTheme();
   const params = useLocalSearchParams<{ id?: string | string[] }>();
   const itemId = toSingleParam(params.id);
 
@@ -87,6 +89,17 @@ export default function ItemEditRoute() {
   const [warrantyMonths, setWarrantyMonths] = useState("");
   const [notes, setNotes] = useState("");
   const [newCategoryName, setNewCategoryName] = useState("");
+  const dynamicStyles = useMemo(
+    () => ({
+      errorText: { color: theme.danger },
+      thumbnail: { backgroundColor: theme.backgroundElement },
+      pdfTile: {
+        borderColor: theme.border,
+        backgroundColor: theme.background,
+      },
+    }),
+    [theme.background, theme.backgroundElement, theme.border, theme.danger]
+  );
 
   const parsedTotalCents = useMemo(() => parseEuroInputToCents(totalPrice), [totalPrice]);
   const parsedWorkPercent = useMemo(() => {
@@ -348,7 +361,9 @@ export default function ItemEditRoute() {
     return (
       <ThemedView style={styles.centered}>
         <ThemedText type="title">Edit Item</ThemedText>
-        <ThemedText style={styles.errorText}>{loadError ?? "Item not found."}</ThemedText>
+        <ThemedText style={[styles.errorText, dynamicStyles.errorText]}>
+          {loadError ?? "Item not found."}
+        </ThemedText>
         <Button variant="secondary" label="Back to Items" onPress={() => router.replace("/(tabs)/items")} />
       </ThemedView>
     );
@@ -362,8 +377,10 @@ export default function ItemEditRoute() {
         <ThemedText themeColor="textSecondary">ID: {item.id}</ThemedText>
         <ThemedText themeColor="textSecondary">Updated at: {item.updatedAt}</ThemedText>
 
-        {loadError && <ThemedText style={styles.errorText}>{loadError}</ThemedText>}
-        {validationMessage && <ThemedText style={styles.errorText}>{validationMessage}</ThemedText>}
+        {loadError && <ThemedText style={[styles.errorText, dynamicStyles.errorText]}>{loadError}</ThemedText>}
+        {validationMessage && (
+          <ThemedText style={[styles.errorText, dynamicStyles.errorText]}>{validationMessage}</ThemedText>
+        )}
 
         <Card>
           <FormField label="Title *">
@@ -477,11 +494,11 @@ export default function ItemEditRoute() {
                   {isImageAttachment(attachment) ? (
                     <Image
                       source={{ uri: attachmentPreviewUris[attachment.id] ?? attachment.filePath }}
-                      style={styles.thumbnail}
+                      style={[styles.thumbnail, dynamicStyles.thumbnail]}
                       contentFit="cover"
                     />
                   ) : (
-                    <View style={styles.pdfTile}>
+                    <View style={[styles.pdfTile, dynamicStyles.pdfTile]}>
                       <ThemedText type="smallBold">PDF</ThemedText>
                     </View>
                   )}
@@ -575,19 +592,14 @@ const styles = StyleSheet.create({
     width: 170,
     height: 120,
     borderRadius: 10,
-    backgroundColor: "#ECEDEE",
   },
   pdfTile: {
     width: 170,
     height: 120,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: "#9BA1A6",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#FFFFFF",
   },
-  errorText: {
-    color: "#B00020",
-  },
+  errorText: {},
 });

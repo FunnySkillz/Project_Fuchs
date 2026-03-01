@@ -2,6 +2,7 @@ import React from "react";
 import { Pressable, type StyleProp, type ViewStyle } from "react-native";
 
 import { ThemedText } from "@/components/themed-text";
+import { useTheme } from "@/hooks/use-theme";
 
 type ButtonVariant = "primary" | "secondary" | "danger" | "ghost";
 
@@ -27,6 +28,8 @@ function resolveVariantClassName(variant: ButtonVariant): string {
 }
 
 export function Button({ label, onPress, disabled = false, variant = "primary", style }: ButtonProps) {
+  const theme = useTheme();
+
   return (
     <Pressable
       onPress={onPress}
@@ -41,8 +44,8 @@ export function Button({ label, onPress, disabled = false, variant = "primary", 
       <ThemedText
         type="smallBold"
         style={[
-          variant === "primary" ? { color: "#FFFFFF" } : null,
-          variant === "danger" ? { color: "#B00020" } : null,
+          variant === "primary" ? { color: theme.textOnPrimary } : null,
+          variant === "danger" ? { color: theme.danger } : null,
         ]}>
         {label}
       </ThemedText>

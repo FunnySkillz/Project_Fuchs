@@ -61,9 +61,9 @@ jest.mock("expo-document-picker", () => ({
 
 jest.mock("@/contexts/theme-mode-context", () => ({
   useThemeMode: () => ({
-    preference: mockThemePreference,
-    resolvedColorMode: mockThemePreference === "dark" ? "dark" : "light",
-    setPreference: mockSetPreference,
+    mode: mockThemePreference,
+    resolvedMode: mockThemePreference === "dark" ? "dark" : "light",
+    setMode: mockSetPreference,
   }),
 }));
 
@@ -136,6 +136,7 @@ describe("SettingsScreen", () => {
       applyHalfYearRule: false,
       appLockEnabled: false,
       uploadToOneDriveAfterExport: false,
+      themeModePreference: "system" as const,
       currency: "EUR" as const,
     };
 

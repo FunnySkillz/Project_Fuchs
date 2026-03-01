@@ -148,6 +148,7 @@ describe("ExportRoute", () => {
       applyHalfYearRule: false,
       appLockEnabled: false,
       uploadToOneDriveAfterExport: false,
+      themeModePreference: "system",
       currency: "EUR",
     });
 

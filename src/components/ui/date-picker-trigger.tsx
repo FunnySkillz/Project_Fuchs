@@ -3,6 +3,7 @@ import { Pressable, StyleSheet } from "react-native";
 
 import { ThemedText } from "@/components/themed-text";
 import { UiTokens } from "@/components/ui/tokens";
+import { useTheme } from "@/hooks/use-theme";
 
 interface DatePickerTriggerProps {
   value: string | null;
@@ -15,8 +16,20 @@ export function DatePickerTrigger({
   onPress,
   placeholder = "Select date",
 }: DatePickerTriggerProps) {
+  const theme = useTheme();
+
   return (
-    <Pressable style={({ pressed }) => [styles.base, pressed && styles.pressed]} onPress={onPress}>
+    <Pressable
+      style={({ pressed }) => [
+        styles.base,
+        {
+          borderColor: theme.border,
+          backgroundColor: theme.background,
+        },
+        pressed && styles.pressed,
+      ]}
+      onPress={onPress}
+    >
       <ThemedText>{value ?? placeholder}</ThemedText>
     </Pressable>
   );
@@ -26,12 +39,10 @@ const styles = StyleSheet.create({
   base: {
     minHeight: UiTokens.minHeight.control,
     borderWidth: UiTokens.borderWidth.thin,
-    borderColor: "#9BA1A6",
     borderRadius: UiTokens.radius.md,
     justifyContent: "center",
     paddingHorizontal: UiTokens.spacing.md,
     paddingVertical: UiTokens.spacing.sm,
-    backgroundColor: "#FFFFFF",
   },
   pressed: {
     opacity: 0.75,
