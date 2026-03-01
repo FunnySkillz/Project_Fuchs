@@ -1,11 +1,30 @@
 import { useFocusEffect } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, FlatList, StyleSheet, View } from "react-native";
+import { FlatList, ScrollView } from "react-native";
+import {
+  Actionsheet,
+  ActionsheetBackdrop,
+  ActionsheetContent,
+  ActionsheetDragIndicator,
+  ActionsheetDragIndicatorWrapper,
+  ActionsheetItem,
+  ActionsheetItemText,
+  Badge,
+  BadgeText,
+  Box,
+  Button,
+  ButtonText,
+  Card,
+  Heading,
+  HStack,
+  Input,
+  InputField,
+  Spinner,
+  Switch,
+  Text,
+  VStack,
+} from "@gluestack-ui/themed";
 
-import { Badge, Button, Card, FormField, Input, Select } from "@/components/ui";
-import { ThemedText } from "@/components/themed-text";
-import { ThemedView } from "@/components/themed-view";
-import { Spacing } from "@/constants/theme";
 import { computeDeductibleImpactCents } from "@/domain/deductible-impact";
 import type { Category } from "@/models/category";
 import type { ExportRun } from "@/models/export-run";
@@ -21,21 +40,23 @@ import {
   getExportSelectionSessionState,
   updateExportSelectionSessionState,
 } from "@/services/export-selection-session";
-import { formatCents } from "@/utils/money";
+import { friendlyFileErrorMessage } from "@/services/friendly-errors";
 import { generatePdfExport, shareExportPdf } from "@/services/pdf-export";
+import { formatCents } from "@/utils/money";
 import {
   generateZipExport,
   shareExportZip,
   type ZipExportProgress,
 } from "@/services/zip-export";
-import { friendlyFileErrorMessage } from "@/services/friendly-errors";
 
-const usageOptions: { value: string; label: string }[] = [
-  { value: "__all", label: "All usage types" },
-  { value: "WORK", label: "Work" },
-  { value: "PRIVATE", label: "Private" },
-  { value: "MIXED", label: "Mixed" },
-  { value: "OTHER", label: "Other" },
+type FilterSheetKind = "usageType" | "category" | null;
+
+const usageOptions: Array<{ label: string; value: ItemUsageType | null }> = [
+  { label: "All usage types", value: null },
+  { label: "WORK", value: "WORK" },
+  { label: "PRIVATE", value: "PRIVATE" },
+  { label: "MIXED", value: "MIXED" },
+  { label: "OTHER", value: "OTHER" },
 ];
 
 function parseYearInput(rawYear: string): number | undefined {
@@ -47,37 +68,75 @@ function parseYearInput(rawYear: string): number | undefined {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
+function missingNotesForItem(item: Item): boolean {
+  return (item.usageType === "WORK" || item.usageType === "MIXED") && !item.notes?.trim();
+}
+
 interface ExportItemRowProps {
   item: Item;
-  isSelected: boolean;
   categoryName: string;
-  onToggleSelection: (itemId: string) => void;
+  deductibleThisYearCents: number;
+  selected: boolean;
+  missingReceipt: boolean;
+  missingNotes: boolean;
+  onToggle: (itemId: string) => void;
 }
 
 const ExportItemRow = React.memo(function ExportItemRow({
   item,
-  isSelected,
   categoryName,
-  onToggleSelection,
+  deductibleThisYearCents,
+  selected,
+  missingReceipt,
+  missingNotes,
+  onToggle,
 }: ExportItemRowProps) {
   return (
-    <Card style={styles.itemCard}>
-      <View style={styles.rowBetween}>
-        <View style={styles.itemTextGroup}>
-          <ThemedText type="smallBold">{item.title}</ThemedText>
-          <ThemedText type="small" themeColor="textSecondary">
-            {item.purchaseDate} | {formatCents(item.totalCents)} | {item.usageType}
-          </ThemedText>
-          <ThemedText type="small" themeColor="textSecondary">
-            Vendor: {item.vendor?.trim() ? item.vendor : "-"} | Category: {categoryName}
-          </ThemedText>
-        </View>
-        <Button
-          variant={isSelected ? "primary" : "secondary"}
-          label={isSelected ? "Selected" : "Select"}
-          onPress={() => onToggleSelection(item.id)}
-        />
-      </View>
+    <Card borderWidth="$1" borderColor="$border200" mb="$3">
+      <VStack space="sm">
+        <HStack justifyContent="space-between" alignItems="flex-start" space="md">
+          <VStack space="xs" flex={1}>
+            <Text bold size="md">
+              {item.title}
+            </Text>
+            <Text size="sm">
+              {categoryName} | {item.purchaseDate}
+            </Text>
+            <Text size="sm">Deductible this year: {formatCents(deductibleThisYearCents)}</Text>
+          </VStack>
+          <Text bold size="md">
+            {formatCents(item.totalCents)}
+          </Text>
+        </HStack>
+
+        <HStack space="sm" flexWrap="wrap">
+          {missingReceipt && (
+            <Badge size="sm" action="warning" variant="outline">
+              <BadgeText>Missing receipt</BadgeText>
+            </Badge>
+          )}
+          {missingNotes && (
+            <Badge size="sm" action="warning" variant="outline">
+              <BadgeText>Missing notes</BadgeText>
+            </Badge>
+          )}
+          <Badge size="sm" action={selected ? "success" : "muted"} variant="outline">
+            <BadgeText>{selected ? "Selected" : "Not selected"}</BadgeText>
+          </Badge>
+        </HStack>
+
+        <HStack justifyContent="flex-end">
+          <Button
+            size="sm"
+            variant={selected ? "outline" : "solid"}
+            action={selected ? "secondary" : "primary"}
+            onPress={() => onToggle(item.id)}
+            testID={`export-row-toggle-${item.id}`}
+          >
+            <ButtonText>{selected ? "Unselect" : "Select"}</ButtonText>
+          </Button>
+        </HStack>
+      </VStack>
     </Card>
   );
 });
@@ -105,6 +164,7 @@ export default function ExportRoute() {
   const [isGeneratingZip, setIsGeneratingZip] = useState(false);
   const [isSharingZip, setIsSharingZip] = useState(false);
   const [zipProgress, setZipProgress] = useState<ZipExportProgress | null>(null);
+  const [activeSheet, setActiveSheet] = useState<FilterSheetKind>(null);
 
   const [yearItems, setYearItems] = useState<Item[]>([]);
   const [missingReceiptItemIds, setMissingReceiptItemIds] = useState<Set<string>>(new Set());
@@ -119,14 +179,11 @@ export default function ExportRoute() {
     () => new Map(categories.map((category) => [category.id, category])),
     [categories]
   );
-
-  const categoryOptions = useMemo(
-    () => [
-      { value: "__all", label: "All categories" },
-      ...categories.map((category) => ({ value: category.id, label: category.name })),
-    ],
-    [categories]
-  );
+  const yearChipLabel = parsedTaxYear ? `Year: ${parsedTaxYear}` : "Year: default";
+  const usageChipLabel = usageType ? `Usage: ${usageType}` : "Usage: all";
+  const categoryChipLabel = categoryId
+    ? `Category: ${categoryMap.get(categoryId)?.name ?? "Unknown"}`
+    : "Category: all";
 
   useEffect(() => {
     updateExportSelectionSessionState({
@@ -138,15 +195,7 @@ export default function ExportRoute() {
       missingNotes,
       selectedItemIds: Array.from(selectedItemIds),
     });
-  }, [
-    categoryId,
-    missingNotes,
-    missingReceipt,
-    search,
-    selectedItemIds,
-    taxYear,
-    usageType,
-  ]);
+  }, [categoryId, missingNotes, missingReceipt, search, selectedItemIds, taxYear, usageType]);
 
   const loadData = useCallback(async () => {
     setIsLoading(true);
@@ -154,22 +203,22 @@ export default function ExportRoute() {
     try {
       const [itemRepository, categoryRepository, profileSettingsRepository, exportRunRepository] =
         await Promise.all([
-        getItemRepository(),
-        getCategoryRepository(),
-        getProfileSettingsRepository(),
-        getExportRunRepository(),
-      ]);
+          getItemRepository(),
+          getCategoryRepository(),
+          getProfileSettingsRepository(),
+          getExportRunRepository(),
+        ]);
 
       const loadedSettings = await profileSettingsRepository.getSettings();
       const targetYear = parsedTaxYear ?? loadedSettings.taxYearDefault;
 
       const [loadedItems, loadedCategories, loadedMissingReceiptIds, loadedHistory] =
         await Promise.all([
-        itemRepository.list({ year: targetYear }),
-        categoryRepository.list(),
-        itemRepository.listMissingReceiptItemIds({ year: targetYear }),
-        exportRunRepository.listByYear(targetYear),
-      ]);
+          itemRepository.list({ year: targetYear }),
+          categoryRepository.list(),
+          itemRepository.listMissingReceiptItemIds({ year: targetYear }),
+          exportRunRepository.listByYear(targetYear),
+        ]);
 
       setYearItems(loadedItems);
       setMissingReceiptItemIds(new Set(loadedMissingReceiptIds));
@@ -216,10 +265,7 @@ export default function ExportRoute() {
       if (missingReceipt && !missingReceiptItemIds.has(item.id)) {
         return false;
       }
-      if (
-        missingNotes &&
-        !(item.notes === null || item.notes.trim().length === 0)
-      ) {
+      if (missingNotes && !missingNotesForItem(item)) {
         return false;
       }
       if (searchTerm.length === 0) {
@@ -234,6 +280,44 @@ export default function ExportRoute() {
   const allFilteredSelected =
     filteredItemIds.length > 0 && filteredItemIds.every((id) => selectedItemIds.has(id));
 
+  const selectedItems = useMemo(
+    () => yearItems.filter((item) => selectedItemIds.has(item.id)),
+    [selectedItemIds, yearItems]
+  );
+
+  const targetYearForCalc = parsedTaxYear ?? settings?.taxYearDefault ?? new Date().getFullYear();
+  const deductibleByItemId = useMemo(() => {
+    if (!settings) {
+      return new Map<string, number>();
+    }
+    return new Map(
+      yearItems.map((item) => [
+        item.id,
+        computeDeductibleImpactCents(item, settings, categoryMap, targetYearForCalc),
+      ])
+    );
+  }, [categoryMap, settings, targetYearForCalc, yearItems]);
+
+  const totals = useMemo(() => {
+    if (!settings) {
+      return {
+        deductibleThisYearCents: 0,
+        estimatedRefundCents: 0,
+      };
+    }
+    const deductibleThisYearCents = selectedItems.reduce((sum, item) => {
+      return sum + (deductibleByItemId.get(item.id) ?? 0);
+    }, 0);
+    const estimatedRefundCents = Math.round(
+      (deductibleThisYearCents * settings.marginalRateBps) / 10_000
+    );
+
+    return {
+      deductibleThisYearCents,
+      estimatedRefundCents,
+    };
+  }, [deductibleByItemId, selectedItems, settings]);
+
   const toggleItemSelection = (itemId: string) => {
     setSelectedItemIds((current) => {
       const next = new Set(current);
@@ -246,52 +330,17 @@ export default function ExportRoute() {
     });
   };
 
-  const handleToggleItemSelection = useCallback((itemId: string) => {
-    toggleItemSelection(itemId);
-  }, []);
-
   const toggleSelectAllFiltered = () => {
     setSelectedItemIds((current) => {
       const next = new Set(current);
       if (allFilteredSelected) {
-        filteredItemIds.forEach((id) => {
-          next.delete(id);
-        });
+        filteredItemIds.forEach((id) => next.delete(id));
       } else {
-        filteredItemIds.forEach((id) => {
-          next.add(id);
-        });
+        filteredItemIds.forEach((id) => next.add(id));
       }
       return next;
     });
   };
-
-  const selectedItems = useMemo(
-    () => yearItems.filter((item) => selectedItemIds.has(item.id)),
-    [selectedItemIds, yearItems]
-  );
-
-  const totals = useMemo(() => {
-    if (!settings) {
-      return {
-        deductibleThisYearCents: 0,
-        estimatedRefundCents: 0,
-      };
-    }
-
-    const targetYear = parsedTaxYear ?? settings.taxYearDefault;
-    const deductibleThisYearCents = selectedItems.reduce((sum, item) => {
-      return sum + computeDeductibleImpactCents(item, settings, categoryMap, targetYear);
-    }, 0);
-    const estimatedRefundCents = Math.round(
-      (deductibleThisYearCents * settings.marginalRateBps) / 10_000
-    );
-
-    return {
-      deductibleThisYearCents,
-      estimatedRefundCents,
-    };
-  }, [categoryMap, parsedTaxYear, selectedItems, settings]);
 
   const clearFiltersAndSelection = () => {
     setSearch("");
@@ -310,9 +359,8 @@ export default function ExportRoute() {
     setIsGeneratingPdf(true);
     setLoadError(null);
     try {
-      const targetYear = parsedTaxYear ?? settings.taxYearDefault;
       const result = await generatePdfExport({
-        taxYear: targetYear,
+        taxYear: targetYearForCalc,
         selectedItems,
         categories,
         settings,
@@ -323,7 +371,7 @@ export default function ExportRoute() {
 
       const exportRunRepository = await getExportRunRepository();
       const run = await exportRunRepository.create({
-        taxYear: targetYear,
+        taxYear: targetYearForCalc,
         itemCount: selectedItems.length,
         totalDeductibleCents: totals.deductibleThisYearCents,
         estimatedRefundCents: totals.estimatedRefundCents,
@@ -343,7 +391,6 @@ export default function ExportRoute() {
     if (!latestPdfUri || isSharingPdf) {
       return;
     }
-
     setIsSharingPdf(true);
     setLoadError(null);
     try {
@@ -365,9 +412,8 @@ export default function ExportRoute() {
     setZipProgress(null);
     setLoadError(null);
     try {
-      const targetYear = parsedTaxYear ?? settings.taxYearDefault;
       const result = await generateZipExport({
-        taxYear: targetYear,
+        taxYear: targetYearForCalc,
         selectedItems,
         categories,
         settings,
@@ -380,7 +426,7 @@ export default function ExportRoute() {
 
       const exportRunRepository = await getExportRunRepository();
       const run = await exportRunRepository.create({
-        taxYear: targetYear,
+        taxYear: targetYearForCalc,
         itemCount: selectedItems.length,
         totalDeductibleCents: totals.deductibleThisYearCents,
         estimatedRefundCents: totals.estimatedRefundCents,
@@ -400,7 +446,6 @@ export default function ExportRoute() {
     if (!latestZipUri || isSharingZip) {
       return;
     }
-
     setIsSharingZip(true);
     setLoadError(null);
     try {
@@ -418,287 +463,316 @@ export default function ExportRoute() {
       setLoadError("Selected export history entry has no output file path.");
       return;
     }
-
     try {
       if (run.outputType === "PDF") {
         await shareExportPdf(run.outputFilePath);
-        return;
+      } else {
+        await shareExportZip(run.outputFilePath);
       }
-      await shareExportZip(run.outputFilePath);
     } catch (error) {
       console.error("Failed to share export from history", error);
       setLoadError(friendlyFileErrorMessage(error, "Could not share export file from history."));
     }
   };
 
+  const renderHeader = () => (
+    <VStack space="lg" maxWidth={900} width="$full" alignSelf="center" pb="$4">
+      <VStack space="xs">
+        <Heading size="2xl">Export</Heading>
+        <Text size="sm">
+          Select items, review totals, then generate PDF or ZIP for your tax year export.
+        </Text>
+      </VStack>
+
+      <Card borderWidth="$1" borderColor="$border200">
+        <VStack space="md">
+          <VStack space="xs">
+            <Text bold size="sm">
+              Tax year
+            </Text>
+            <Input variant="outline" size="md">
+              <InputField
+                value={taxYear}
+                onChangeText={setTaxYear}
+                keyboardType="number-pad"
+                maxLength={4}
+                placeholder={settings ? String(settings.taxYearDefault) : "e.g. 2026"}
+                testID="export-tax-year-input"
+              />
+            </Input>
+          </VStack>
+
+          <VStack space="xs">
+            <Text bold size="sm">
+              Search
+            </Text>
+            <Input variant="outline" size="md">
+              <InputField
+                value={search}
+                onChangeText={setSearch}
+                placeholder="Search by title or vendor"
+              />
+            </Input>
+          </VStack>
+
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            <HStack space="sm" alignItems="center" pr="$2">
+              <Button size="sm" variant="outline" action="secondary" disabled>
+                <ButtonText>{yearChipLabel}</ButtonText>
+              </Button>
+              <Button
+                size="sm"
+                variant={usageType ? "solid" : "outline"}
+                action="secondary"
+                onPress={() => setActiveSheet("usageType")}
+              >
+                <ButtonText>{usageChipLabel}</ButtonText>
+              </Button>
+              <Button
+                size="sm"
+                variant={categoryId ? "solid" : "outline"}
+                action="secondary"
+                onPress={() => setActiveSheet("category")}
+              >
+                <ButtonText>{categoryChipLabel}</ButtonText>
+              </Button>
+              <Button
+                size="sm"
+                variant={missingReceipt ? "solid" : "outline"}
+                action={missingReceipt ? "primary" : "secondary"}
+                onPress={() => setMissingReceipt((current) => !current)}
+              >
+                <ButtonText>Missing receipt</ButtonText>
+              </Button>
+              <Button
+                size="sm"
+                variant={missingNotes ? "solid" : "outline"}
+                action={missingNotes ? "primary" : "secondary"}
+                onPress={() => setMissingNotes((current) => !current)}
+              >
+                <ButtonText>Missing notes</ButtonText>
+              </Button>
+            </HStack>
+          </ScrollView>
+
+          <HStack space="sm" flexWrap="wrap">
+            <Button
+              size="sm"
+              variant="outline"
+              action="secondary"
+              onPress={toggleSelectAllFiltered}
+              disabled={filteredItems.length === 0}
+            >
+              <ButtonText>{allFilteredSelected ? "Unselect filtered" : "Select all filtered"}</ButtonText>
+            </Button>
+            <Button size="sm" variant="outline" action="secondary" onPress={clearFiltersAndSelection}>
+              <ButtonText>Clear filters + selection</ButtonText>
+            </Button>
+          </HStack>
+        </VStack>
+      </Card>
+
+      <Card borderWidth="$1" borderColor="$border200">
+        <VStack space="sm">
+          <Heading size="md">Totals summary</Heading>
+          <Text size="sm">Selected items: {selectedItems.length}</Text>
+          <Text size="sm">Deductible this year: {formatCents(totals.deductibleThisYearCents)}</Text>
+          <Text size="sm">Estimated refund impact: {formatCents(totals.estimatedRefundCents)}</Text>
+
+          <HStack justifyContent="space-between" alignItems="center">
+            <Text size="sm">Include detail pages</Text>
+            <Switch value={includeDetailPages} onValueChange={setIncludeDetailPages} />
+          </HStack>
+
+          <HStack space="sm" flexWrap="wrap">
+            <Button
+              onPress={() => void handleGeneratePdf()}
+              disabled={selectedItems.length === 0 || isGeneratingPdf}
+              testID="export-generate-pdf"
+            >
+              <ButtonText>{isGeneratingPdf ? "Generating PDF..." : "Generate PDF"}</ButtonText>
+            </Button>
+            <Button
+              onPress={() => void handleGenerateZip()}
+              disabled={selectedItems.length === 0 || isGeneratingZip}
+              testID="export-generate-zip"
+            >
+              <ButtonText>{isGeneratingZip ? "Generating ZIP..." : "Generate ZIP"}</ButtonText>
+            </Button>
+            <Button
+              variant="outline"
+              action="secondary"
+              onPress={() => void handleSharePdf()}
+              disabled={!latestPdfUri || isSharingPdf}
+            >
+              <ButtonText>{isSharingPdf ? "Sharing PDF..." : "Share PDF"}</ButtonText>
+            </Button>
+            <Button
+              variant="outline"
+              action="secondary"
+              onPress={() => void handleShareZip()}
+              disabled={!latestZipUri || isSharingZip}
+            >
+              <ButtonText>{isSharingZip ? "Sharing ZIP..." : "Share ZIP"}</ButtonText>
+            </Button>
+          </HStack>
+
+          {latestPdfName && <Text size="sm">Last PDF: {latestPdfName}</Text>}
+          {latestZipName && (
+            <Text size="sm">
+              Last ZIP: {latestZipName}
+              {latestZipSizeBytes !== null ? ` (${(latestZipSizeBytes / 1024 / 1024).toFixed(2)} MB)` : ""}
+            </Text>
+          )}
+          {zipProgress && (
+            <Text size="sm">
+              ZIP progress: {zipProgress.percent}% - {zipProgress.message}
+            </Text>
+          )}
+        </VStack>
+      </Card>
+
+      <Card borderWidth="$1" borderColor="$border200">
+        <VStack space="sm">
+          <Heading size="md">Export history</Heading>
+          {exportHistory.length === 0 ? (
+            <Text size="sm">No exports recorded for this tax year yet.</Text>
+          ) : (
+            exportHistory.map((run) => (
+              <HStack key={run.id} justifyContent="space-between" alignItems="center" space="sm" flexWrap="wrap">
+                <VStack space="xs" flex={1}>
+                  <Text bold size="sm">
+                    {run.outputType}
+                  </Text>
+                  <Text size="sm">
+                    {run.createdAt} | Items: {run.itemCount}
+                  </Text>
+                  <Text size="sm">
+                    Deductible: {formatCents(run.totalDeductibleCents)} | Refund:{" "}
+                    {formatCents(run.estimatedRefundCents)}
+                  </Text>
+                </VStack>
+                <Button size="sm" variant="outline" action="secondary" onPress={() => void handleShareHistoryRun(run)}>
+                  <ButtonText>Share again</ButtonText>
+                </Button>
+              </HStack>
+            ))
+          )}
+        </VStack>
+      </Card>
+
+      {loadError && (
+        <Card borderWidth="$1" borderColor="$error300">
+          <HStack justifyContent="space-between" alignItems="center" space="md" flexWrap="wrap">
+            <Text size="sm">{loadError}</Text>
+            <Button size="sm" variant="outline" action="secondary" onPress={() => void loadData()}>
+              <ButtonText>Retry</ButtonText>
+            </Button>
+          </HStack>
+        </Card>
+      )}
+
+      <HStack justifyContent="space-between" alignItems="center">
+        <Badge size="sm" action="muted" variant="outline">
+          <BadgeText>{filteredItems.length} filtered item(s)</BadgeText>
+        </Badge>
+      </HStack>
+    </VStack>
+  );
+
   return (
-    <ThemedView style={styles.container}>
+    <Box flex={1} px="$5" py="$6">
       <FlatList
         data={filteredItems}
         keyExtractor={(item) => item.id}
-        initialNumToRender={14}
-        windowSize={10}
-        maxToRenderPerBatch={12}
-        updateCellsBatchingPeriod={40}
-        removeClippedSubviews
-        contentContainerStyle={styles.content}
-        ListHeaderComponent={
-          <View style={styles.headerSection}>
-            <ThemedText type="title">Export Selection</ThemedText>
-            <ThemedText themeColor="textSecondary">
-              Choose items for a tax year export and preview totals before generating files.
-            </ThemedText>
-
-            <Card>
-              <FormField label="Tax Year">
-                <Input
-                  value={taxYear}
-                  onChangeText={setTaxYear}
-                  keyboardType="number-pad"
-                  placeholder={settings ? String(settings.taxYearDefault) : "e.g. 2026"}
-                  maxLength={4}
-                />
-              </FormField>
-
-              <FormField label="Search (Title/Vendor)">
-                <Input
-                  value={search}
-                  onChangeText={setSearch}
-                  placeholder="Search by title or vendor"
-                />
-              </FormField>
-
-              <FormField label="Category">
-                <Select
-                  value={categoryId ?? "__all"}
-                  options={categoryOptions}
-                  onChange={(nextValue) =>
-                    setCategoryId(nextValue === "__all" ? null : nextValue)
-                  }
-                />
-              </FormField>
-
-              <FormField label="Usage Type">
-                <Select
-                  value={usageType ?? "__all"}
-                  options={usageOptions}
-                  onChange={(nextValue) =>
-                    setUsageType(nextValue === "__all" ? null : (nextValue as ItemUsageType))
-                  }
-                />
-              </FormField>
-
-              <View style={styles.row}>
-                <Button
-                  variant={missingReceipt ? "primary" : "secondary"}
-                  label={missingReceipt ? "Missing Receipt: ON" : "Missing Receipt: OFF"}
-                  onPress={() => setMissingReceipt((current) => !current)}
-                />
-                <Button
-                  variant={missingNotes ? "primary" : "secondary"}
-                  label={missingNotes ? "Missing Notes: ON" : "Missing Notes: OFF"}
-                  onPress={() => setMissingNotes((current) => !current)}
-                />
-              </View>
-
-              <View style={styles.row}>
-                <Button
-                  variant="secondary"
-                  label={allFilteredSelected ? "Unselect Filtered" : "Select All Filtered"}
-                  onPress={toggleSelectAllFiltered}
-                  disabled={filteredItems.length === 0}
-                />
-                <Button
-                  variant="ghost"
-                  label="Clear Filters + Selection"
-                  onPress={clearFiltersAndSelection}
-                />
-              </View>
-            </Card>
-
-            <Card>
-              <ThemedText type="smallBold">Export Preview Summary</ThemedText>
-              <ThemedText type="small">Selected items: {selectedItems.length}</ThemedText>
-              <ThemedText type="small">
-                Deductible this year: {formatCents(totals.deductibleThisYearCents)}
-              </ThemedText>
-              <ThemedText type="small">
-                Estimated refund impact: {formatCents(totals.estimatedRefundCents)}
-              </ThemedText>
-              <View style={styles.row}>
-                <Button
-                  variant={includeDetailPages ? "primary" : "secondary"}
-                  label={
-                    includeDetailPages
-                      ? "Detail Pages: ON"
-                      : "Detail Pages: OFF"
-                  }
-                  onPress={() => setIncludeDetailPages((current) => !current)}
-                />
-                <Button
-                  label={isGeneratingPdf ? "Generating PDF..." : "Generate PDF"}
-                  onPress={() => void handleGeneratePdf()}
-                  disabled={selectedItems.length === 0 || isGeneratingPdf}
-                />
-                <Button
-                  variant="secondary"
-                  label={isSharingPdf ? "Sharing..." : "Share PDF"}
-                  onPress={() => void handleSharePdf()}
-                  disabled={!latestPdfUri || isSharingPdf}
-                />
-                <Button
-                  label={isGeneratingZip ? "Generating ZIP..." : "Generate ZIP"}
-                  onPress={() => void handleGenerateZip()}
-                  disabled={selectedItems.length === 0 || isGeneratingZip}
-                />
-                <Button
-                  variant="secondary"
-                  label={isSharingZip ? "Sharing ZIP..." : "Share ZIP"}
-                  onPress={() => void handleShareZip()}
-                  disabled={!latestZipUri || isSharingZip}
-                />
-              </View>
-              {latestPdfName && (
-                <ThemedText type="small" themeColor="textSecondary">
-                  Last PDF: {latestPdfName}
-                </ThemedText>
-              )}
-              {latestZipName && (
-                <ThemedText type="small" themeColor="textSecondary">
-                  Last ZIP: {latestZipName}
-                  {latestZipSizeBytes !== null
-                    ? ` (${(latestZipSizeBytes / 1024 / 1024).toFixed(2)} MB)`
-                    : ""}
-                </ThemedText>
-              )}
-              {zipProgress && (
-                <ThemedText type="small" themeColor="textSecondary">
-                  ZIP progress: {zipProgress.percent}% - {zipProgress.message}
-                </ThemedText>
-              )}
-            </Card>
-
-            <Card>
-              <ThemedText type="smallBold">Export History</ThemedText>
-              {exportHistory.length === 0 ? (
-                <ThemedText type="small" themeColor="textSecondary">
-                  No exports recorded for this tax year yet.
-                </ThemedText>
-              ) : (
-                exportHistory.map((run) => (
-                  <View key={run.id} style={styles.historyRow}>
-                    <View style={styles.historyTextGroup}>
-                      <ThemedText type="smallBold">{run.outputType}</ThemedText>
-                      <ThemedText type="small" themeColor="textSecondary">
-                        {run.createdAt} | Items: {run.itemCount}
-                      </ThemedText>
-                      <ThemedText type="small" themeColor="textSecondary">
-                        Deductible: {formatCents(run.totalDeductibleCents)} | Refund:{" "}
-                        {formatCents(run.estimatedRefundCents)}
-                      </ThemedText>
-                    </View>
-                    <Button
-                      variant="secondary"
-                      label="Share Again"
-                      onPress={() => void handleShareHistoryRun(run)}
-                    />
-                  </View>
-                ))
-              )}
-            </Card>
-
-            <View style={styles.metaRow}>
-              <Badge text={`${filteredItems.length} filtered item(s)`} />
-              {loadError && <ThemedText style={styles.errorText}>{loadError}</ThemedText>}
-            </View>
-            {isLoading && <ActivityIndicator />}
-          </View>
+        contentContainerStyle={{ paddingBottom: 24 }}
+        ListHeaderComponent={renderHeader}
+        ListEmptyComponent={
+          <VStack maxWidth={900} width="$full" alignSelf="center">
+            {isLoading ? (
+              <Card borderWidth="$1" borderColor="$border200">
+                <HStack alignItems="center" space="sm">
+                  <Spinner size="small" />
+                  <Text>Loading export items...</Text>
+                </HStack>
+              </Card>
+            ) : loadError ? (
+              <Card borderWidth="$1" borderColor="$error300">
+                <Text>Could not load export items. Retry above.</Text>
+              </Card>
+            ) : (
+              <Card borderWidth="$1" borderColor="$border200" testID="export-empty-state">
+                <Text>No items found. Adjust filters or add a new item.</Text>
+              </Card>
+            )}
+          </VStack>
         }
         renderItem={({ item }) => {
-          const isSelected = selectedItemIds.has(item.id);
           const categoryName = item.categoryId
             ? categoryMap.get(item.categoryId)?.name ?? "Unknown"
-            : "None";
-
+            : "No category";
           return (
             <ExportItemRow
               item={item}
-              isSelected={isSelected}
               categoryName={categoryName}
-              onToggleSelection={handleToggleItemSelection}
+              deductibleThisYearCents={deductibleByItemId.get(item.id) ?? 0}
+              selected={selectedItemIds.has(item.id)}
+              missingReceipt={missingReceiptItemIds.has(item.id)}
+              missingNotes={missingNotesForItem(item)}
+              onToggle={toggleItemSelection}
             />
           );
         }}
-        ListEmptyComponent={
-          !isLoading && !loadError ? (
-            <Card>
-              <ThemedText type="smallBold">No items found</ThemedText>
-              <ThemedText themeColor="textSecondary">
-                No entries match the selected tax year/filters.
-              </ThemedText>
-            </Card>
-          ) : null
-        }
       />
-    </ThemedView>
+
+      <Actionsheet isOpen={activeSheet !== null} onClose={() => setActiveSheet(null)}>
+        <ActionsheetBackdrop />
+        <ActionsheetContent>
+          <ActionsheetDragIndicatorWrapper>
+            <ActionsheetDragIndicator />
+          </ActionsheetDragIndicatorWrapper>
+
+          {activeSheet === "usageType" && (
+            <>
+              {usageOptions.map((option) => (
+                <ActionsheetItem
+                  key={option.label}
+                  onPress={() => {
+                    setUsageType(option.value);
+                    setActiveSheet(null);
+                  }}
+                >
+                  <ActionsheetItemText>{option.label}</ActionsheetItemText>
+                </ActionsheetItem>
+              ))}
+            </>
+          )}
+
+          {activeSheet === "category" && (
+            <>
+              <ActionsheetItem
+                onPress={() => {
+                  setCategoryId(null);
+                  setActiveSheet(null);
+                }}
+              >
+                <ActionsheetItemText>All categories</ActionsheetItemText>
+              </ActionsheetItem>
+              {categories.map((category) => (
+                <ActionsheetItem
+                  key={category.id}
+                  onPress={() => {
+                    setCategoryId(category.id);
+                    setActiveSheet(null);
+                  }}
+                >
+                  <ActionsheetItemText>{category.name}</ActionsheetItemText>
+                </ActionsheetItem>
+              ))}
+            </>
+          )}
+        </ActionsheetContent>
+      </Actionsheet>
+    </Box>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  content: {
-    width: "100%",
-    maxWidth: 860,
-    alignSelf: "center",
-    padding: Spacing.four,
-    gap: Spacing.three,
-  },
-  headerSection: {
-    gap: Spacing.three,
-  },
-  row: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: Spacing.two,
-  },
-  rowBetween: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: Spacing.two,
-  },
-  itemTextGroup: {
-    flex: 1,
-    gap: Spacing.one,
-  },
-  itemCard: {
-    marginBottom: Spacing.two,
-  },
-  historyRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: Spacing.two,
-    flexWrap: "wrap",
-    borderWidth: 1,
-    borderColor: "#D6D8DB",
-    borderRadius: 10,
-    padding: Spacing.two,
-  },
-  historyTextGroup: {
-    flex: 1,
-    gap: Spacing.one,
-  },
-  metaRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: Spacing.two,
-  },
-  errorText: {
-    color: "#B00020",
-  },
-});
