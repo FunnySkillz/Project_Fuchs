@@ -2,7 +2,7 @@ import { DarkTheme, DefaultTheme, ThemeProvider } from "@react-navigation/native
 import * as LocalAuthentication from "expo-local-authentication";
 import { Redirect, Slot, useSegments } from "expo-router";
 import React, { useCallback, useEffect, useRef } from "react";
-import { AppState, type AppStateStatus, useColorScheme } from "react-native";
+import { AppState, type AppStateStatus, LogBox, useColorScheme } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import "../../global.css";
 
@@ -94,6 +94,12 @@ export default function RootLayout() {
   const [themeMode, setThemeModeState] = React.useState<ThemeMode>("system");
   const authInFlightRef = useRef(false);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
+
+  useEffect(() => {
+    LogBox.ignoreLogs([
+      "SafeAreaView has been deprecated and will be removed in a future release. Please use 'react-native-safe-area-context' instead.",
+    ]);
+  }, []);
 
   const refreshPinAvailability = useCallback(async () => {
     const hasPin = await hasPinAsync();
