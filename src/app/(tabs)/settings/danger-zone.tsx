@@ -1,3 +1,4 @@
+import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import {
@@ -22,8 +23,13 @@ import { emitLocalDataDeleted } from "@/services/app-events";
 import { deleteAllLocalData } from "@/services/local-data";
 
 export default function SettingsDangerZoneRoute() {
+  const router = useRouter();
   const insets = useSafeAreaInsets();
   const { setMode } = useThemeMode();
+  const canGoBack =
+    typeof (router as { canGoBack?: () => boolean }).canGoBack === "function"
+      ? (router as { canGoBack: () => boolean }).canGoBack()
+      : false;
 
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [isConfirmBusy, setIsConfirmBusy] = useState(false);
@@ -49,6 +55,18 @@ export default function SettingsDangerZoneRoute() {
     <SafeAreaView style={{ flex: 1 }} edges={["bottom"]}>
       <Box flex={1} px="$5" py="$6" style={{ paddingBottom: insets.bottom + 24 }}>
         <VStack space="lg" maxWidth={860} width="$full" alignSelf="center">
+          {!canGoBack && (
+            <Button
+              variant="outline"
+              action="secondary"
+              alignSelf="flex-start"
+              onPress={() => router.replace("/(tabs)/settings")}
+              testID="settings-back-to-main-fallback"
+            >
+              <ButtonText>Back to Settings</ButtonText>
+            </Button>
+          )}
+
           <VStack space="xs">
             <Heading size="xl">Danger Zone</Heading>
             <Text size="sm">Destructive actions for local device data.</Text>

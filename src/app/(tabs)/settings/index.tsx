@@ -15,25 +15,25 @@ const primaryEntries: SettingsEntry[] = [
   {
     title: "Appearance",
     description: "Theme mode and visual behavior.",
-    route: "/settings-appearance" as Href,
+    route: "/(tabs)/settings/appearance" as Href,
     testID: "settings-nav-appearance",
   },
   {
     title: "Tax & Calculation",
     description: "Tax defaults and deduction assumptions.",
-    route: "/settings-tax-calculation" as Href,
+    route: "/(tabs)/settings/tax-calculation" as Href,
     testID: "settings-nav-tax",
   },
   {
     title: "Security",
     description: "App lock and PIN fallback.",
-    route: "/settings-security" as Href,
+    route: "/(tabs)/settings/security" as Href,
     testID: "settings-nav-security",
   },
   {
     title: "Backup & Sync",
     description: "Backup restore, OneDrive, and export pipeline.",
-    route: "/settings-backup-sync" as Href,
+    route: "/(tabs)/settings/backup-sync" as Href,
     testID: "settings-nav-backup-sync",
   },
 ];
@@ -77,7 +77,7 @@ export default function TabSettingsRoute() {
             <VStack space="sm" pt="$2">
               <Heading size="sm">Danger Zone</Heading>
               <Pressable
-                onPress={() => router.push("/settings-danger-zone" as Href)}
+                onPress={() => router.push("/(tabs)/settings/danger-zone" as Href)}
                 testID="settings-nav-danger-zone"
               >
                 <Card borderWidth="$1" borderColor="$error300">

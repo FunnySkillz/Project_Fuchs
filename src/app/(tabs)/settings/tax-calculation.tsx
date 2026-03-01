@@ -1,3 +1,4 @@
+import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { ScrollView } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
@@ -71,7 +72,12 @@ function calculatePreview(values: ProfileSettingsUpsertValues) {
 }
 
 export default function SettingsTaxCalculationRoute() {
+  const router = useRouter();
   const insets = useSafeAreaInsets();
+  const canGoBack =
+    typeof (router as { canGoBack?: () => boolean }).canGoBack === "function"
+      ? (router as { canGoBack: () => boolean }).canGoBack()
+      : false;
   const [formState, setFormState] = useState<TaxDefaultsFormState | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -171,6 +177,18 @@ export default function SettingsTaxCalculationRoute() {
           }}
         >
           <VStack space="lg">
+            {!canGoBack && (
+              <Button
+                variant="outline"
+                action="secondary"
+                alignSelf="flex-start"
+                onPress={() => router.replace("/(tabs)/settings")}
+                testID="settings-back-to-main-fallback"
+              >
+                <ButtonText>Back to Settings</ButtonText>
+              </Button>
+            )}
+
             <VStack space="xs">
               <Heading size="xl">Tax & Calculation</Heading>
               <Text size="sm">Manage defaults used for deductible impact calculations.</Text>

@@ -2,8 +2,11 @@ import React from "react";
 import { fireEvent, render, screen } from "@testing-library/react-native";
 
 import SettingsRoute from "@/app/(tabs)/settings";
+import SettingsAppearanceRoute from "@/app/(tabs)/settings/appearance";
 
 const mockPush = jest.fn();
+const mockReplace = jest.fn();
+let mockCanGoBack = true;
 
 jest.mock("@gluestack-ui/themed", () => {
   const {
@@ -21,48 +24,52 @@ jest.mock("@gluestack-ui/themed", () => {
 
   return {
     Box: Block,
+    Button: ({ children, ...props }: any) => <MockTouchableOpacity {...props}>{children}</MockTouchableOpacity>,
+    ButtonText: ({ children, ...props }: any) => <MockText {...props}>{children}</MockText>,
     Card: Block,
     Heading: ({ children, ...props }: any) => <MockText {...props}>{children}</MockText>,
+    HStack: Block,
     Pressable: ({ children, ...props }: any) => <MockPressable {...props}>{children}</MockPressable>,
     Text: ({ children, ...props }: any) => <MockText {...props}>{children}</MockText>,
     VStack: Block,
-    Button: ({ children, ...props }: any) => <MockTouchableOpacity {...props}>{children}</MockTouchableOpacity>,
-    ButtonText: ({ children, ...props }: any) => <MockText {...props}>{children}</MockText>,
   };
 });
 
-jest.mock("expo-router", () => ({
-  useRouter: () => ({ push: mockPush }),
+jest.mock("@/contexts/theme-mode-context", () => ({
+  useThemeMode: () => ({
+    mode: "system",
+    resolvedMode: "light",
+    setMode: jest.fn(),
+  }),
 }));
 
-describe("SettingsRoute", () => {
+jest.mock("expo-router", () => ({
+  useRouter: () => ({
+    push: mockPush,
+    replace: mockReplace,
+    canGoBack: () => mockCanGoBack,
+  }),
+}));
+
+describe("Settings navigation workflow", () => {
   beforeEach(() => {
     mockPush.mockReset();
+    mockReplace.mockReset();
+    mockCanGoBack = true;
   });
 
-  it("renders section entries and navigates to dedicated settings sub-screens", async () => {
+  it("routes from Settings main to Appearance and provides no-history fallback back to Settings", async () => {
     render(<SettingsRoute />);
 
     expect(await screen.findByText("Settings")).toBeTruthy();
-    expect(screen.getByText("Appearance")).toBeTruthy();
-    expect(screen.getByText("Tax & Calculation")).toBeTruthy();
-    expect(screen.getByText("Security")).toBeTruthy();
-    expect(screen.getByText("Backup & Sync")).toBeTruthy();
-    expect(screen.getByText("Danger Zone")).toBeTruthy();
-
     fireEvent.press(screen.getByTestId("settings-nav-appearance"));
-    expect(mockPush).toHaveBeenCalledWith("/settings-appearance");
+    expect(mockPush).toHaveBeenCalledWith("/(tabs)/settings/appearance");
 
-    fireEvent.press(screen.getByTestId("settings-nav-tax"));
-    expect(mockPush).toHaveBeenCalledWith("/settings-tax-calculation");
+    mockCanGoBack = false;
+    render(<SettingsAppearanceRoute />);
+    expect(screen.getByTestId("settings-back-to-main-fallback")).toBeTruthy();
 
-    fireEvent.press(screen.getByTestId("settings-nav-security"));
-    expect(mockPush).toHaveBeenCalledWith("/settings-security");
-
-    fireEvent.press(screen.getByTestId("settings-nav-backup-sync"));
-    expect(mockPush).toHaveBeenCalledWith("/settings-backup-sync");
-
-    fireEvent.press(screen.getByTestId("settings-nav-danger-zone"));
-    expect(mockPush).toHaveBeenCalledWith("/settings-danger-zone");
+    fireEvent.press(screen.getByTestId("settings-back-to-main-fallback"));
+    expect(mockReplace).toHaveBeenCalledWith("/(tabs)/settings");
   });
 });

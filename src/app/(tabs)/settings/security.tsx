@@ -1,3 +1,4 @@
+import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import { ScrollView } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
@@ -21,7 +22,12 @@ import { emitProfileSettingsSaved } from "@/services/app-events";
 import { hasPinAsync, isValidPin, setPinAsync, verifyPinAsync } from "@/services/pin-auth";
 
 export default function SettingsSecurityRoute() {
+  const router = useRouter();
   const insets = useSafeAreaInsets();
+  const canGoBack =
+    typeof (router as { canGoBack?: () => boolean }).canGoBack === "function"
+      ? (router as { canGoBack: () => boolean }).canGoBack()
+      : false;
 
   const [isLoading, setIsLoading] = useState(true);
   const [isSavingAppLock, setIsSavingAppLock] = useState(false);
@@ -149,6 +155,18 @@ export default function SettingsSecurityRoute() {
           }}
         >
           <VStack space="lg">
+            {!canGoBack && (
+              <Button
+                variant="outline"
+                action="secondary"
+                alignSelf="flex-start"
+                onPress={() => router.replace("/(tabs)/settings")}
+                testID="settings-back-to-main-fallback"
+              >
+                <ButtonText>Back to Settings</ButtonText>
+              </Button>
+            )}
+
             <VStack space="xs">
               <Heading size="xl">Security</Heading>
               <Text size="sm">Control lock behavior and PIN fallback on this device.</Text>
