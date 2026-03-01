@@ -27,6 +27,7 @@ export function Select({
   const theme = useTheme();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
 
   const selectedLabel = useMemo(
     () => options.find((option) => option.value === value)?.label ?? placeholder,
@@ -64,8 +65,14 @@ export function Select({
                   onChangeText={setQuery}
                   placeholder="Search..."
                   placeholderTextColor={theme.textSecondary}
+                  selectionColor={theme.primary}
+                  onFocus={() => setIsSearchFocused(true)}
+                  onBlur={() => setIsSearchFocused(false)}
                   className="min-h-control rounded-ui-md border border-ui-border bg-ui-surface px-ui-md py-ui-sm text-base"
-                  style={{ color: theme.text }}
+                  style={{
+                    color: theme.text,
+                    borderColor: isSearchFocused ? theme.primary : theme.border,
+                  }}
                 />
               </View>
             ) : null}
@@ -80,12 +87,21 @@ export function Select({
                   }}
                   accessibilityRole="button"
                   style={({ pressed }) => (pressed ? { opacity: 0.75 } : null)}
-                  className={`min-h-control rounded-ui-md border px-ui-md py-ui-sm justify-center ${
-                    option.value === value
-                      ? "border-ui-primary bg-ui-card"
-                      : "border-ui-borderSoft bg-ui-surface"
-                  }`}>
+                  className="min-h-control justify-center"
+                >
+                  <View
+                    style={{
+                      borderRadius: 8,
+                      borderWidth: 1,
+                      borderColor: option.value === value ? theme.primary : theme.border,
+                      backgroundColor:
+                        option.value === value ? theme.backgroundSelected : theme.backgroundElement,
+                      paddingHorizontal: 10,
+                      paddingVertical: 8,
+                    }}
+                  >
                   <ThemedText>{option.label}</ThemedText>
+                  </View>
                 </Pressable>
               ))}
               {filteredOptions.length === 0 ? (

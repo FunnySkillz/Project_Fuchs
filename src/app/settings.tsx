@@ -906,7 +906,7 @@ export default function SettingsScreen() {
               {dangerError && <GText size="sm" color="$error600">{dangerError}</GText>}
               <GButton
                 action="negative"
-                variant="solid"
+                variant="outline"
                 onPress={() => setConfirmAction("deleteLocalData")}
                 testID="settings-delete-local-data"
               >

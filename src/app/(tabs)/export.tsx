@@ -523,7 +523,7 @@ export default function ExportRoute() {
               <Button
                 size="sm"
                 variant={usageType ? "solid" : "outline"}
-                action="secondary"
+                action={usageType ? "primary" : "secondary"}
                 onPress={() => setActiveSheet("usageType")}
               >
                 <ButtonText>{usageChipLabel}</ButtonText>
@@ -531,7 +531,7 @@ export default function ExportRoute() {
               <Button
                 size="sm"
                 variant={categoryId ? "solid" : "outline"}
-                action="secondary"
+                action={categoryId ? "primary" : "secondary"}
                 onPress={() => setActiveSheet("category")}
               >
                 <ButtonText>{categoryChipLabel}</ButtonText>

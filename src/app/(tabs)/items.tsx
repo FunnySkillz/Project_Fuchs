@@ -281,7 +281,7 @@ export default function ItemsRoute() {
                 <Button
                   size="sm"
                   variant={parsedYear ? "solid" : "outline"}
-                  action="secondary"
+                  action={parsedYear ? "primary" : "secondary"}
                   onPress={() => setActiveSheet("year")}
                   testID="items-filter-year"
                 >
@@ -290,7 +290,7 @@ export default function ItemsRoute() {
                 <Button
                   size="sm"
                   variant={usageType ? "solid" : "outline"}
-                  action="secondary"
+                  action={usageType ? "primary" : "secondary"}
                   onPress={() => setActiveSheet("usageType")}
                   testID="items-filter-usage"
                 >
@@ -317,7 +317,7 @@ export default function ItemsRoute() {
                 <Button
                   size="sm"
                   variant={categoryId ? "solid" : "outline"}
-                  action="secondary"
+                  action={categoryId ? "primary" : "secondary"}
                   onPress={() => setActiveSheet("category")}
                   testID="items-filter-category"
                 >
