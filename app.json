@@ -18,7 +18,8 @@
       "infoPlist": {
         "NSCameraUsageDescription": "SteuerFuchs uses the camera to capture receipt photos.",
         "NSPhotoLibraryUsageDescription": "SteuerFuchs lets you choose receipt images and files from your library.",
-        "NSPhotoLibraryAddUsageDescription": "SteuerFuchs may save processed receipt images for export preparation."
+        "NSPhotoLibraryAddUsageDescription": "SteuerFuchs may save processed receipt images for export preparation.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -31,9 +32,10 @@
       },
       "predictiveBackGestureEnabled": false,
       "permissions": [
-        "CAMERA",
-        "READ_MEDIA_IMAGES",
-        "READ_EXTERNAL_STORAGE"
+        "android.permission.CAMERA",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.RECORD_AUDIO"
       ],
       "blockedPermissions": [
         "android.permission.RECORD_AUDIO"
@@ -62,11 +64,18 @@
           "cameraPermission": "SteuerFuchs uses the camera to capture receipt photos.",
           "photosPermission": "SteuerFuchs needs access to your photos to attach receipt images."
         }
-      ]
+      ],
+      "expo-sqlite"
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "e1f908b7-f0ce-4eef-9c5a-a0fb6cd4e1b2"
+      }
     }
   }
 }
