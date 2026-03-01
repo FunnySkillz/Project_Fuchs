@@ -1,6 +1,8 @@
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { FlatList, ScrollView } from "react-native";
+import { Plus } from "lucide-react-native";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   Actionsheet,
   ActionsheetBackdrop,
@@ -26,6 +28,7 @@ import {
 } from "@gluestack-ui/themed";
 
 import { computeDeductibleImpactCents } from "@/domain/deductible-impact";
+import { useTheme } from "@/hooks/use-theme";
 import type { Category } from "@/models/category";
 import type { Item, ItemUsageType } from "@/models/item";
 import type { ProfileSettings } from "@/models/profile-settings";
@@ -67,6 +70,8 @@ function missingNotesForItem(item: Item): boolean {
 
 export default function ItemsRoute() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const theme = useTheme();
   const params = useLocalSearchParams<{
     year?: string | string[];
     missingReceipt?: string | string[];
@@ -253,13 +258,18 @@ export default function ItemsRoute() {
     const categoryName = item.categoryId ? categoryMap.get(item.categoryId)?.name ?? "Unknown" : "No category";
     return `${categoryName} • ${item.purchaseDate}`;
   };
+  const tabBarHeight = 56 + Math.max(insets.bottom, 8);
+  const fabSize = 56;
+  const fabBottom = tabBarHeight + 16;
+  const listBottomPadding = fabBottom + fabSize + 24;
 
   return (
-    <Box flex={1} px="$5" py="$6">
+    <SafeAreaView style={{ flex: 1 }} edges={["top"]}>
+      <Box flex={1} px="$5" py="$6">
       <FlatList
         data={displayedItems}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={{ paddingBottom: 24 }}
+        contentContainerStyle={{ paddingBottom: listBottomPadding }}
         ListHeaderComponent={
           <VStack space="lg" maxWidth={900} width="$full" alignSelf="center" pb="$4">
             <VStack space="xs">
@@ -402,6 +412,30 @@ export default function ItemsRoute() {
         }}
       />
 
+      <Button
+        onPress={() => router.push("/item/new")}
+        testID="items-add-fab"
+        accessibilityLabel="Add Item"
+        style={{
+          position: "absolute",
+          right: 20,
+          bottom: fabBottom,
+          width: fabSize,
+          height: fabSize,
+          borderRadius: fabSize / 2,
+          backgroundColor: theme.primary,
+          justifyContent: "center",
+          alignItems: "center",
+          shadowColor: theme.text,
+          shadowOpacity: 0.16,
+          shadowRadius: 10,
+          shadowOffset: { width: 0, height: 4 },
+          elevation: 4,
+        }}
+      >
+        <Plus size={22} color={theme.textOnPrimary} strokeWidth={2} />
+      </Button>
+
       <Actionsheet isOpen={activeSheet !== null} onClose={() => setActiveSheet(null)}>
         <ActionsheetBackdrop />
         <ActionsheetContent>
@@ -471,6 +505,7 @@ export default function ItemsRoute() {
           )}
         </ActionsheetContent>
       </Actionsheet>
-    </Box>
+      </Box>
+    </SafeAreaView>
   );
 }

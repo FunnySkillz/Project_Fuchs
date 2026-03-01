@@ -1,5 +1,6 @@
 import React from "react";
 import { Pressable, StyleSheet, View } from "react-native";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
@@ -15,6 +16,7 @@ interface Props {
 
 export function InitErrorScreen({ message, onRetry, onResetData, onExportDebugInfo }: Props) {
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
   const [showResetConfirm, setShowResetConfirm] = React.useState(false);
   const [isExportingDebug, setIsExportingDebug] = React.useState(false);
   const [isResettingData, setIsResettingData] = React.useState(false);
@@ -47,8 +49,9 @@ export function InitErrorScreen({ message, onRetry, onResetData, onExportDebugIn
   };
 
   return (
-    <View style={styles.container}>
-      <ThemedView type="backgroundElement" style={styles.card}>
+    <SafeAreaView style={{ flex: 1 }} edges={["top", "bottom"]}>
+      <View style={[styles.container, { paddingBottom: Math.max(insets.bottom, Spacing.four) }]}>
+        <ThemedView type="backgroundElement" style={styles.card}>
         <ThemedText type="subtitle" style={styles.center}>
           App Initialization Failed
         </ThemedText>
@@ -151,8 +154,9 @@ export function InitErrorScreen({ message, onRetry, onResetData, onExportDebugIn
             {feedbackMessage}
           </ThemedText>
         )}
-      </ThemedView>
-    </View>
+        </ThemedView>
+      </View>
+    </SafeAreaView>
   );
 }
 

@@ -1,5 +1,6 @@
 import React from "react";
 import { Pressable, StyleSheet, TextInput, View } from "react-native";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
@@ -34,10 +35,12 @@ export function AppLockGate({
   onCancel,
 }: Props) {
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
 
   return (
-    <View style={styles.container}>
-      <ThemedView type="backgroundElement" style={styles.card}>
+    <SafeAreaView style={{ flex: 1 }} edges={["top", "bottom"]}>
+      <View style={[styles.container, { paddingBottom: Math.max(insets.bottom, Spacing.four) }]}>
+        <ThemedView type="backgroundElement" style={styles.card}>
         <ThemedText type="subtitle" style={styles.center}>
           App Locked
         </ThemedText>
@@ -144,8 +147,9 @@ export function AppLockGate({
         >
           <ThemedText type="smallBold">Cancel</ThemedText>
         </Pressable>
-      </ThemedView>
-    </View>
+        </ThemedView>
+      </View>
+    </SafeAreaView>
   );
 }
 

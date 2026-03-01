@@ -1,6 +1,7 @@
 import { useRouter } from "expo-router";
 import React, { useMemo, useState } from "react";
 import { ScrollView } from "react-native";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   Box,
   Button,
@@ -20,6 +21,7 @@ import { emitProfileSettingsSaved } from "@/services/app-events";
 
 export default function OnboardingProfileSetupRoute() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const defaults = useMemo(() => createDefaultProfileSettings(), []);
 
   const [taxYearDefault, setTaxYearDefault] = useState(String(defaults.taxYearDefault));
@@ -68,19 +70,21 @@ export default function OnboardingProfileSetupRoute() {
   };
 
   return (
-    <Box flex={1}>
-      <ScrollView
-        contentContainerStyle={{
-          flexGrow: 1,
-          justifyContent: "center",
-          width: "100%",
-          maxWidth: 760,
-          alignSelf: "center",
-          paddingHorizontal: 20,
-          paddingVertical: 24,
-        }}
-      >
-        <VStack space="lg">
+    <SafeAreaView style={{ flex: 1 }} edges={["top"]}>
+      <Box flex={1}>
+        <ScrollView
+          contentContainerStyle={{
+            flexGrow: 1,
+            justifyContent: "center",
+            width: "100%",
+            maxWidth: 760,
+            alignSelf: "center",
+            paddingHorizontal: 20,
+            paddingTop: 24,
+            paddingBottom: insets.bottom + 24,
+          }}
+        >
+          <VStack space="lg">
           <VStack space="xs">
             <Heading size="2xl" textAlign="center">
               Profile Setup
@@ -199,8 +203,9 @@ export default function OnboardingProfileSetupRoute() {
           >
             <ButtonText>{isSaving ? "Saving..." : "Save and Continue"}</ButtonText>
           </Button>
-        </VStack>
-      </ScrollView>
-    </Box>
+          </VStack>
+        </ScrollView>
+      </Box>
+    </SafeAreaView>
   );
 }

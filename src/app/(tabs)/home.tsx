@@ -1,6 +1,6 @@
 import { useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { SafeAreaView } from "react-native-safe-area-context";
 import {
   Badge,
   BadgeText,
@@ -33,11 +33,9 @@ interface DashboardStats {
 
 export default function HomeRoute() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const topPadding = insets.top + 24;
 
   const loadDashboard = useCallback(async () => {
     setIsLoading(true);
@@ -96,129 +94,135 @@ export default function HomeRoute() {
 
   if (isLoading) {
     return (
-      <Box flex={1} px="$5" pb="$6" justifyContent="center" alignItems="center" style={{ paddingTop: topPadding }}>
-        <VStack space="md" alignItems="center">
-          <Spinner size="large" />
-          <Text size="sm">Loading home overview...</Text>
-        </VStack>
-      </Box>
+      <SafeAreaView style={{ flex: 1 }} edges={["top"]}>
+        <Box flex={1} px="$5" py="$6" justifyContent="center" alignItems="center">
+          <VStack space="md" alignItems="center">
+            <Spinner size="large" />
+            <Text size="sm">Loading home overview...</Text>
+          </VStack>
+        </Box>
+      </SafeAreaView>
     );
   }
 
   if (loadError || !stats) {
     return (
-      <Box flex={1} px="$5" pb="$6" style={{ paddingTop: topPadding }}>
-        <VStack space="lg" maxWidth={760} width="$full" alignSelf="center">
-          <Heading size="xl">Steuerausgleich</Heading>
-          <Card borderWidth="$1" borderColor="$error300">
-            <VStack space="sm">
-              <Text bold size="md">
-                Could not load dashboard
-              </Text>
-              <Text size="sm">{loadError ?? "Unknown error while loading dashboard."}</Text>
-            </VStack>
-          </Card>
-          <Button onPress={() => void loadDashboard()} alignSelf="flex-start">
-            <ButtonText>Retry</ButtonText>
-          </Button>
-        </VStack>
-      </Box>
+      <SafeAreaView style={{ flex: 1 }} edges={["top"]}>
+        <Box flex={1} px="$5" py="$6">
+          <VStack space="lg" maxWidth={760} width="$full" alignSelf="center">
+            <Heading size="xl">Steuerausgleich</Heading>
+            <Card borderWidth="$1" borderColor="$error300">
+              <VStack space="sm">
+                <Text bold size="md">
+                  Could not load dashboard
+                </Text>
+                <Text size="sm">{loadError ?? "Unknown error while loading dashboard."}</Text>
+              </VStack>
+            </Card>
+            <Button onPress={() => void loadDashboard()} alignSelf="flex-start">
+              <ButtonText>Retry</ButtonText>
+            </Button>
+          </VStack>
+        </Box>
+      </SafeAreaView>
     );
   }
 
   const hasItems = stats.itemCount > 0;
 
   return (
-    <Box flex={1} px="$5" pb="$6" style={{ paddingTop: topPadding }}>
-      <VStack maxWidth={760} width="$full" alignSelf="center" space="lg">
-        <VStack space="xs">
-          <Heading size="2xl">Steuerausgleich {stats.year}</Heading>
-          <Text size="sm">Estimated deductible this year</Text>
-        </VStack>
-
-        <Card borderWidth="$1" borderColor="$border200">
-          <VStack space="sm">
-            <Text size="sm">Deductible this year</Text>
-            <Heading size="3xl">{formatCents(stats.deductibleThisYearCents)}</Heading>
-            <Text size="sm">Estimated refund impact: {formatCents(stats.estimatedRefundImpactCents)}</Text>
+    <SafeAreaView style={{ flex: 1 }} edges={["top"]}>
+      <Box flex={1} px="$5" py="$6">
+        <VStack maxWidth={760} width="$full" alignSelf="center" space="lg">
+          <VStack space="xs">
+            <Heading size="2xl">Steuerausgleich {stats.year}</Heading>
+            <Text size="sm">Estimated deductible this year</Text>
           </VStack>
-        </Card>
 
-        {hasItems ? (
-          <>
-            <Button onPress={() => router.push("/item/new")} testID="home-add-item-cta">
-              <ButtonText>Add Item</ButtonText>
-            </Button>
-            <HStack space="md" flexWrap="wrap">
-              <Pressable
-                flex={1}
-                minWidth={240}
-                onPress={() =>
-                  router.push({
-                    pathname: "/(tabs)/items",
-                    params: { year: String(stats.year), missingReceipt: "1" },
-                  })
-                }
-                testID="home-missing-receipts-card"
-              >
-                <Card borderWidth="$1" borderColor="$border200">
-                  <VStack space="sm">
-                    <Text bold size="md">
-                      Missing receipts
-                    </Text>
-                    <Heading size="2xl">{stats.missingReceiptCount}</Heading>
-                    <Badge size="sm" action="warning" variant="solid">
-                      <BadgeText>Open filtered items</BadgeText>
-                    </Badge>
-                  </VStack>
-                </Card>
-              </Pressable>
-
-              <Pressable
-                flex={1}
-                minWidth={240}
-                onPress={() =>
-                  router.push({
-                    pathname: "/(tabs)/items",
-                    params: { year: String(stats.year), missingNotes: "1" },
-                  })
-                }
-                testID="home-missing-notes-card"
-              >
-                <Card borderWidth="$1" borderColor="$border200">
-                  <VStack space="sm">
-                    <Text bold size="md">
-                      Missing notes
-                    </Text>
-                    <Heading size="2xl">{stats.missingNotesCount}</Heading>
-                    <Badge size="sm" action="warning" variant="solid">
-                      <BadgeText>Open filtered items</BadgeText>
-                    </Badge>
-                  </VStack>
-                </Card>
-              </Pressable>
-            </HStack>
-          </>
-        ) : (
           <Card borderWidth="$1" borderColor="$border200">
             <VStack space="sm">
-              <Text bold size="md">
-                No items yet
-              </Text>
-              <Text size="sm">
-                Start with your first purchase record to see deductible impact and export options.
-              </Text>
-              <Button
-                onPress={() => router.push("/item/new")}
-                alignSelf="flex-start"
-                testID="home-add-item-empty-cta"
-              >
-                <ButtonText>Add Item</ButtonText>
-              </Button>
+              <Text size="sm">Deductible this year</Text>
+              <Heading size="3xl">{formatCents(stats.deductibleThisYearCents)}</Heading>
+              <Text size="sm">Estimated refund impact: {formatCents(stats.estimatedRefundImpactCents)}</Text>
             </VStack>
           </Card>
-        )}
-      </VStack>
-    </Box>
+
+          {hasItems ? (
+            <>
+              <Button onPress={() => router.push("/item/new")} testID="home-add-item-cta">
+                <ButtonText>Add Item</ButtonText>
+              </Button>
+              <HStack space="md" flexWrap="wrap">
+                <Pressable
+                  flex={1}
+                  minWidth={240}
+                  onPress={() =>
+                    router.push({
+                      pathname: "/(tabs)/items",
+                      params: { year: String(stats.year), missingReceipt: "1" },
+                    })
+                  }
+                  testID="home-missing-receipts-card"
+                >
+                  <Card borderWidth="$1" borderColor="$border200">
+                    <VStack space="sm">
+                      <Text bold size="md">
+                        Missing receipts
+                      </Text>
+                      <Heading size="2xl">{stats.missingReceiptCount}</Heading>
+                      <Badge size="sm" action="warning" variant="solid">
+                        <BadgeText>Open filtered items</BadgeText>
+                      </Badge>
+                    </VStack>
+                  </Card>
+                </Pressable>
+
+                <Pressable
+                  flex={1}
+                  minWidth={240}
+                  onPress={() =>
+                    router.push({
+                      pathname: "/(tabs)/items",
+                      params: { year: String(stats.year), missingNotes: "1" },
+                    })
+                  }
+                  testID="home-missing-notes-card"
+                >
+                  <Card borderWidth="$1" borderColor="$border200">
+                    <VStack space="sm">
+                      <Text bold size="md">
+                        Missing notes
+                      </Text>
+                      <Heading size="2xl">{stats.missingNotesCount}</Heading>
+                      <Badge size="sm" action="warning" variant="solid">
+                        <BadgeText>Open filtered items</BadgeText>
+                      </Badge>
+                    </VStack>
+                  </Card>
+                </Pressable>
+              </HStack>
+            </>
+          ) : (
+            <Card borderWidth="$1" borderColor="$border200">
+              <VStack space="sm">
+                <Text bold size="md">
+                  No items yet
+                </Text>
+                <Text size="sm">
+                  Start with your first purchase record to see deductible impact and export options.
+                </Text>
+                <Button
+                  onPress={() => router.push("/item/new")}
+                  alignSelf="flex-start"
+                  testID="home-add-item-empty-cta"
+                >
+                  <ButtonText>Add Item</ButtonText>
+                </Button>
+              </VStack>
+            </Card>
+          )}
+        </VStack>
+      </Box>
+    </SafeAreaView>
   );
 }

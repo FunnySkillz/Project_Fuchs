@@ -2,6 +2,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { Image } from "expo-image";
 import React, { useCallback, useMemo, useState } from "react";
 import { ScrollView } from "react-native";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   AlertDialog as GAlertDialog,
   AlertDialogBackdrop as GAlertDialogBackdrop,
@@ -106,6 +107,7 @@ function InfoRow({ label, value }: InfoRowProps) {
 
 export default function ItemDetailRoute() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ id?: string | string[] }>();
   const itemId = toSingleParam(params.id);
   const canGoBack =
@@ -259,47 +261,52 @@ export default function ItemDetailRoute() {
 
   if (isLoading) {
     return (
-      <GBox flex={1} px="$5" py="$6" alignItems="center" justifyContent="center">
-        <GVStack space="md" alignItems="center">
-          <GSpinner size="large" />
-          <GText size="sm">Loading item details...</GText>
-        </GVStack>
-      </GBox>
+      <SafeAreaView style={{ flex: 1 }} edges={["top"]}>
+        <GBox flex={1} px="$5" py="$6" alignItems="center" justifyContent="center">
+          <GVStack space="md" alignItems="center">
+            <GSpinner size="large" />
+            <GText size="sm">Loading item details...</GText>
+          </GVStack>
+        </GBox>
+      </SafeAreaView>
     );
   }
 
   if (!item) {
     return (
-      <GBox flex={1} px="$5" py="$6">
-        <GVStack maxWidth={860} width="$full" alignSelf="center" space="lg">
-          <GHeading size="xl">Item Detail</GHeading>
-          <GCard borderWidth="$1" borderColor="$error300">
-            <GVStack space="sm">
-              <GText bold size="md">
-                Could not load item
-              </GText>
-              <GText size="sm">{loadError ?? "Item not found."}</GText>
-            </GVStack>
-          </GCard>
-          <GButton variant="outline" action="secondary" onPress={() => router.replace("/(tabs)/items")}>
-            <GButtonText>Back to Items</GButtonText>
-          </GButton>
-        </GVStack>
-      </GBox>
+      <SafeAreaView style={{ flex: 1 }} edges={["top"]}>
+        <GBox flex={1} px="$5" py="$6">
+          <GVStack maxWidth={860} width="$full" alignSelf="center" space="lg">
+            <GHeading size="xl">Item Detail</GHeading>
+            <GCard borderWidth="$1" borderColor="$error300">
+              <GVStack space="sm">
+                <GText bold size="md">
+                  Could not load item
+                </GText>
+                <GText size="sm">{loadError ?? "Item not found."}</GText>
+              </GVStack>
+            </GCard>
+            <GButton variant="outline" action="secondary" onPress={() => router.replace("/(tabs)/items")}>
+              <GButtonText>Back to Items</GButtonText>
+            </GButton>
+          </GVStack>
+        </GBox>
+      </SafeAreaView>
     );
   }
 
   return (
-    <GBox flex={1} px="$5" py="$6">
-      <ScrollView
-        contentContainerStyle={{
-          width: "100%",
-          maxWidth: 860,
-          alignSelf: "center",
-          paddingBottom: 24,
-        }}
-      >
-        <GVStack space="lg">
+    <SafeAreaView style={{ flex: 1 }} edges={["top"]}>
+      <GBox flex={1} px="$5" py="$6">
+        <ScrollView
+          contentContainerStyle={{
+            width: "100%",
+            maxWidth: 860,
+            alignSelf: "center",
+            paddingBottom: insets.bottom + 24,
+          }}
+        >
+          <GVStack space="lg">
           <GHStack justifyContent="space-between" alignItems="center">
             <GButton
               variant="link"
@@ -467,84 +474,85 @@ export default function ItemDetailRoute() {
           >
             <GButtonText>{isDeleting ? "Deleting..." : "Delete"}</GButtonText>
           </GButton>
-        </GVStack>
-      </ScrollView>
+          </GVStack>
+        </ScrollView>
 
-      <GAlertDialog isOpen={isDeleteDialogOpen} onClose={() => setIsDeleteDialogOpen(false)}>
-        <GAlertDialogBackdrop />
-        <GAlertDialogContent>
-          <GAlertDialogHeader>
-            <GHeading size="md">Delete item?</GHeading>
-          </GAlertDialogHeader>
-          <GAlertDialogBody>
-            <GText size="sm">
-              This will delete the item and all linked attachment files from this device.
-            </GText>
-          </GAlertDialogBody>
-          <GAlertDialogFooter>
-            <GHStack space="sm">
-              <GButton
-                variant="outline"
-                action="secondary"
-                onPress={() => setIsDeleteDialogOpen(false)}
-                testID="item-detail-delete-cancel"
-              >
-                <GButtonText>Cancel</GButtonText>
-              </GButton>
-              <GButton
-                action="negative"
-                testID="item-detail-delete-confirm"
-                onPress={() => {
-                  setIsDeleteDialogOpen(false);
-                  void handleDelete();
-                }}
-              >
-                <GButtonText>Delete</GButtonText>
-              </GButton>
-            </GHStack>
-          </GAlertDialogFooter>
-        </GAlertDialogContent>
-      </GAlertDialog>
-
-      <GModal isOpen={selectedAttachment !== null} onClose={() => setSelectedAttachment(null)}>
-        <GModalBackdrop />
-        <GModalContent>
-          <GModalBody>
-            <GVStack space="md">
-              {selectedAttachment ? (
-                selectedAttachmentMissing ? (
-                  <GCard borderWidth="$1" borderColor="$warning300">
-                    <GText size="sm">
-                      File unavailable. Open Edit Item and re-attach this document/photo.
-                    </GText>
-                  </GCard>
-                ) : isImageAttachment(selectedAttachment) ? (
-                  <Image
-                    source={{
-                      uri:
-                        attachmentPreviewUris[selectedAttachment.id] ?? selectedAttachment.filePath,
-                    }}
-                    style={{ width: "100%", height: 320, borderRadius: 8 }}
-                    contentFit="contain"
-                  />
-                ) : (
-                  <GCard borderWidth="$1" borderColor="$border200">
-                    <GText size="sm">
-                      PDF preview is not available in-app yet.
-                    </GText>
-                  </GCard>
-                )
-              ) : null}
-              <GText size="sm" numberOfLines={1}>
-                {selectedAttachment?.originalFileName ?? selectedAttachment?.type}
+        <GAlertDialog isOpen={isDeleteDialogOpen} onClose={() => setIsDeleteDialogOpen(false)}>
+          <GAlertDialogBackdrop />
+          <GAlertDialogContent>
+            <GAlertDialogHeader>
+              <GHeading size="md">Delete item?</GHeading>
+            </GAlertDialogHeader>
+            <GAlertDialogBody>
+              <GText size="sm">
+                This will delete the item and all linked attachment files from this device.
               </GText>
-              <GButton variant="outline" action="secondary" onPress={() => setSelectedAttachment(null)}>
-                <GButtonText>Close</GButtonText>
-              </GButton>
-            </GVStack>
-          </GModalBody>
-        </GModalContent>
-      </GModal>
-    </GBox>
+            </GAlertDialogBody>
+            <GAlertDialogFooter>
+              <GHStack space="sm">
+                <GButton
+                  variant="outline"
+                  action="secondary"
+                  onPress={() => setIsDeleteDialogOpen(false)}
+                  testID="item-detail-delete-cancel"
+                >
+                  <GButtonText>Cancel</GButtonText>
+                </GButton>
+                <GButton
+                  action="negative"
+                  testID="item-detail-delete-confirm"
+                  onPress={() => {
+                    setIsDeleteDialogOpen(false);
+                    void handleDelete();
+                  }}
+                >
+                  <GButtonText>Delete</GButtonText>
+                </GButton>
+              </GHStack>
+            </GAlertDialogFooter>
+          </GAlertDialogContent>
+        </GAlertDialog>
+
+        <GModal isOpen={selectedAttachment !== null} onClose={() => setSelectedAttachment(null)}>
+          <GModalBackdrop />
+          <GModalContent>
+            <GModalBody>
+              <GVStack space="md">
+                {selectedAttachment ? (
+                  selectedAttachmentMissing ? (
+                    <GCard borderWidth="$1" borderColor="$warning300">
+                      <GText size="sm">
+                        File unavailable. Open Edit Item and re-attach this document/photo.
+                      </GText>
+                    </GCard>
+                  ) : isImageAttachment(selectedAttachment) ? (
+                    <Image
+                      source={{
+                        uri:
+                          attachmentPreviewUris[selectedAttachment.id] ?? selectedAttachment.filePath,
+                      }}
+                      style={{ width: "100%", height: 320, borderRadius: 8 }}
+                      contentFit="contain"
+                    />
+                  ) : (
+                    <GCard borderWidth="$1" borderColor="$border200">
+                      <GText size="sm">
+                        PDF preview is not available in-app yet.
+                      </GText>
+                    </GCard>
+                  )
+                ) : null}
+                <GText size="sm" numberOfLines={1}>
+                  {selectedAttachment?.originalFileName ?? selectedAttachment?.type}
+                </GText>
+                <GButton variant="outline" action="secondary" onPress={() => setSelectedAttachment(null)}>
+                  <GButtonText>Close</GButtonText>
+                </GButton>
+              </GVStack>
+            </GModalBody>
+          </GModalContent>
+        </GModal>
+      </GBox>
+    </SafeAreaView>
   );
 }

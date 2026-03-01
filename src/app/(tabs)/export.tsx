@@ -1,6 +1,7 @@
 import { useFocusEffect } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { FlatList, ScrollView } from "react-native";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   Actionsheet,
   ActionsheetBackdrop,
@@ -142,6 +143,7 @@ const ExportItemRow = React.memo(function ExportItemRow({
 });
 
 export default function ExportRoute() {
+  const insets = useSafeAreaInsets();
   const sessionDefaults = useMemo(() => getExportSelectionSessionState(), []);
 
   const [taxYear, setTaxYear] = useState(sessionDefaults.taxYear);
@@ -681,98 +683,100 @@ export default function ExportRoute() {
   );
 
   return (
-    <Box flex={1} px="$5" py="$6">
-      <FlatList
-        data={filteredItems}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={{ paddingBottom: 24 }}
-        ListHeaderComponent={renderHeader}
-        ListEmptyComponent={
-          <VStack maxWidth={900} width="$full" alignSelf="center">
-            {isLoading ? (
-              <Card borderWidth="$1" borderColor="$border200">
-                <HStack alignItems="center" space="sm">
-                  <Spinner size="small" />
-                  <Text>Loading export items...</Text>
-                </HStack>
-              </Card>
-            ) : loadError ? (
-              <Card borderWidth="$1" borderColor="$error300">
-                <Text>Could not load export items. Retry above.</Text>
-              </Card>
-            ) : (
-              <Card borderWidth="$1" borderColor="$border200" testID="export-empty-state">
-                <Text>No items found. Adjust filters or add a new item.</Text>
-              </Card>
+    <SafeAreaView style={{ flex: 1 }} edges={["top"]}>
+      <Box flex={1} px="$5" py="$6">
+        <FlatList
+          data={filteredItems}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
+          ListHeaderComponent={renderHeader}
+          ListEmptyComponent={
+            <VStack maxWidth={900} width="$full" alignSelf="center">
+              {isLoading ? (
+                <Card borderWidth="$1" borderColor="$border200">
+                  <HStack alignItems="center" space="sm">
+                    <Spinner size="small" />
+                    <Text>Loading export items...</Text>
+                  </HStack>
+                </Card>
+              ) : loadError ? (
+                <Card borderWidth="$1" borderColor="$error300">
+                  <Text>Could not load export items. Retry above.</Text>
+                </Card>
+              ) : (
+                <Card borderWidth="$1" borderColor="$border200" testID="export-empty-state">
+                  <Text>No items found. Adjust filters or add a new item.</Text>
+                </Card>
+              )}
+            </VStack>
+          }
+          renderItem={({ item }) => {
+            const categoryName = item.categoryId
+              ? categoryMap.get(item.categoryId)?.name ?? "Unknown"
+              : "No category";
+            return (
+              <ExportItemRow
+                item={item}
+                categoryName={categoryName}
+                deductibleThisYearCents={deductibleByItemId.get(item.id) ?? 0}
+                selected={selectedItemIds.has(item.id)}
+                missingReceipt={missingReceiptItemIds.has(item.id)}
+                missingNotes={missingNotesForItem(item)}
+                onToggle={toggleItemSelection}
+              />
+            );
+          }}
+        />
+
+        <Actionsheet isOpen={activeSheet !== null} onClose={() => setActiveSheet(null)}>
+          <ActionsheetBackdrop />
+          <ActionsheetContent>
+            <ActionsheetDragIndicatorWrapper>
+              <ActionsheetDragIndicator />
+            </ActionsheetDragIndicatorWrapper>
+
+            {activeSheet === "usageType" && (
+              <>
+                {usageOptions.map((option) => (
+                  <ActionsheetItem
+                    key={option.label}
+                    onPress={() => {
+                      setUsageType(option.value);
+                      setActiveSheet(null);
+                    }}
+                  >
+                    <ActionsheetItemText>{option.label}</ActionsheetItemText>
+                  </ActionsheetItem>
+                ))}
+              </>
             )}
-          </VStack>
-        }
-        renderItem={({ item }) => {
-          const categoryName = item.categoryId
-            ? categoryMap.get(item.categoryId)?.name ?? "Unknown"
-            : "No category";
-          return (
-            <ExportItemRow
-              item={item}
-              categoryName={categoryName}
-              deductibleThisYearCents={deductibleByItemId.get(item.id) ?? 0}
-              selected={selectedItemIds.has(item.id)}
-              missingReceipt={missingReceiptItemIds.has(item.id)}
-              missingNotes={missingNotesForItem(item)}
-              onToggle={toggleItemSelection}
-            />
-          );
-        }}
-      />
 
-      <Actionsheet isOpen={activeSheet !== null} onClose={() => setActiveSheet(null)}>
-        <ActionsheetBackdrop />
-        <ActionsheetContent>
-          <ActionsheetDragIndicatorWrapper>
-            <ActionsheetDragIndicator />
-          </ActionsheetDragIndicatorWrapper>
-
-          {activeSheet === "usageType" && (
-            <>
-              {usageOptions.map((option) => (
+            {activeSheet === "category" && (
+              <>
                 <ActionsheetItem
-                  key={option.label}
                   onPress={() => {
-                    setUsageType(option.value);
+                    setCategoryId(null);
                     setActiveSheet(null);
                   }}
                 >
-                  <ActionsheetItemText>{option.label}</ActionsheetItemText>
+                  <ActionsheetItemText>All categories</ActionsheetItemText>
                 </ActionsheetItem>
-              ))}
-            </>
-          )}
-
-          {activeSheet === "category" && (
-            <>
-              <ActionsheetItem
-                onPress={() => {
-                  setCategoryId(null);
-                  setActiveSheet(null);
-                }}
-              >
-                <ActionsheetItemText>All categories</ActionsheetItemText>
-              </ActionsheetItem>
-              {categories.map((category) => (
-                <ActionsheetItem
-                  key={category.id}
-                  onPress={() => {
-                    setCategoryId(category.id);
-                    setActiveSheet(null);
-                  }}
-                >
-                  <ActionsheetItemText>{category.name}</ActionsheetItemText>
-                </ActionsheetItem>
-              ))}
-            </>
-          )}
-        </ActionsheetContent>
-      </Actionsheet>
-    </Box>
+                {categories.map((category) => (
+                  <ActionsheetItem
+                    key={category.id}
+                    onPress={() => {
+                      setCategoryId(category.id);
+                      setActiveSheet(null);
+                    }}
+                  >
+                    <ActionsheetItemText>{category.name}</ActionsheetItemText>
+                  </ActionsheetItem>
+                ))}
+              </>
+            )}
+          </ActionsheetContent>
+        </Actionsheet>
+      </Box>
+    </SafeAreaView>
   );
 }

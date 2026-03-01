@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { ScrollView } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
 import * as WebBrowser from "expo-web-browser";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   AlertDialog as GAlertDialog,
   AlertDialogBackdrop as GAlertDialogBackdrop,
@@ -121,6 +122,7 @@ type ConfirmAction = "deleteLocalData" | "importBackup";
 
 export default function SettingsScreen() {
   const { mode, resolvedMode, setMode } = useThemeMode();
+  const insets = useSafeAreaInsets();
 
   const [settings, setSettings] = useState<ProfileSettings | null>(null);
   const [formState, setFormState] = useState<TaxDefaultsFormState | null>(null);
@@ -490,26 +492,29 @@ export default function SettingsScreen() {
 
   if (isLoading || !formState) {
     return (
-      <GBox flex={1} px="$5" py="$6" alignItems="center" justifyContent="center">
-        <GVStack space="md" alignItems="center">
-          <GSpinner size="large" />
-          <GText size="sm">Loading settings...</GText>
-        </GVStack>
-      </GBox>
+      <SafeAreaView style={{ flex: 1 }} edges={["top"]}>
+        <GBox flex={1} px="$5" py="$6" alignItems="center" justifyContent="center">
+          <GVStack space="md" alignItems="center">
+            <GSpinner size="large" />
+            <GText size="sm">Loading settings...</GText>
+          </GVStack>
+        </GBox>
+      </SafeAreaView>
     );
   }
 
   return (
-    <GBox flex={1} px="$5" py="$6">
-      <ScrollView
-        contentContainerStyle={{
-          width: "100%",
-          maxWidth: 860,
-          alignSelf: "center",
-          paddingBottom: 24,
-        }}
-      >
-        <GVStack space="lg">
+    <SafeAreaView style={{ flex: 1 }} edges={["top"]}>
+      <GBox flex={1} px="$5" py="$6">
+        <ScrollView
+          contentContainerStyle={{
+            width: "100%",
+            maxWidth: 860,
+            alignSelf: "center",
+            paddingBottom: insets.bottom + 24,
+          }}
+        >
+          <GVStack space="lg">
           <GVStack space="xs">
             <GHeading size="2xl">Settings</GHeading>
             <GText size="sm">Configure theme, tax defaults, and local device controls.</GText>
@@ -859,49 +864,50 @@ export default function SettingsScreen() {
               </GButton>
             </GVStack>
           </GCard>
-        </GVStack>
-      </ScrollView>
+          </GVStack>
+        </ScrollView>
 
-      <GAlertDialog isOpen={confirmAction !== null} onClose={() => setConfirmAction(null)}>
-        <GAlertDialogBackdrop />
-        <GAlertDialogContent>
-          <GAlertDialogHeader>
-            <GHeading size="md">
-              {confirmAction === "deleteLocalData"
-                ? "Delete all local data?"
-                : "Import backup snapshot?"}
-            </GHeading>
-          </GAlertDialogHeader>
-          <GAlertDialogBody>
-            <GText size="sm">
-              {confirmAction === "deleteLocalData"
-                ? "This action is irreversible and removes all local app data from this device."
-                : "Importing backup will overwrite your current local data, including DB and attachment files. This action cannot be undone."}
-            </GText>
-          </GAlertDialogBody>
-          <GAlertDialogFooter>
-            <GHStack space="sm">
-              <GButton
-                variant="outline"
-                action="secondary"
-                onPress={() => setConfirmAction(null)}
-                disabled={isConfirmBusy}
-                testID="settings-confirm-cancel"
-              >
-                <GButtonText>Cancel</GButtonText>
-              </GButton>
-              <GButton
-                action="negative"
-                onPress={() => void handleConfirmAction()}
-                disabled={isConfirmBusy}
-                testID="settings-confirm-accept"
-              >
-                <GButtonText>{isConfirmBusy ? "Working..." : "Confirm"}</GButtonText>
-              </GButton>
-            </GHStack>
-          </GAlertDialogFooter>
-        </GAlertDialogContent>
-      </GAlertDialog>
-    </GBox>
+        <GAlertDialog isOpen={confirmAction !== null} onClose={() => setConfirmAction(null)}>
+          <GAlertDialogBackdrop />
+          <GAlertDialogContent>
+            <GAlertDialogHeader>
+              <GHeading size="md">
+                {confirmAction === "deleteLocalData"
+                  ? "Delete all local data?"
+                  : "Import backup snapshot?"}
+              </GHeading>
+            </GAlertDialogHeader>
+            <GAlertDialogBody>
+              <GText size="sm">
+                {confirmAction === "deleteLocalData"
+                  ? "This action is irreversible and removes all local app data from this device."
+                  : "Importing backup will overwrite your current local data, including DB and attachment files. This action cannot be undone."}
+              </GText>
+            </GAlertDialogBody>
+            <GAlertDialogFooter>
+              <GHStack space="sm">
+                <GButton
+                  variant="outline"
+                  action="secondary"
+                  onPress={() => setConfirmAction(null)}
+                  disabled={isConfirmBusy}
+                  testID="settings-confirm-cancel"
+                >
+                  <GButtonText>Cancel</GButtonText>
+                </GButton>
+                <GButton
+                  action="negative"
+                  onPress={() => void handleConfirmAction()}
+                  disabled={isConfirmBusy}
+                  testID="settings-confirm-accept"
+                >
+                  <GButtonText>{isConfirmBusy ? "Working..." : "Confirm"}</GButtonText>
+                </GButton>
+              </GHStack>
+            </GAlertDialogFooter>
+          </GAlertDialogContent>
+        </GAlertDialog>
+      </GBox>
+    </SafeAreaView>
   );
 }

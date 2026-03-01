@@ -1,6 +1,7 @@
 ﻿import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Linking, ScrollView } from "react-native";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   Actionsheet as GActionsheet,
   ActionsheetBackdrop as GActionsheetBackdrop,
@@ -86,6 +87,7 @@ const usageOptions: { value: ItemUsageType; label: string }[] = [
 
 export default function NewItemRoute() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ draftId?: string | string[] }>();
   const draftId = toSingleParam(params.draftId);
   const shouldCleanupDraftOnExitRef = useRef(true);
@@ -451,12 +453,14 @@ export default function NewItemRoute() {
 
   if (isInitializing) {
     return (
-      <GBox flex={1} alignItems="center" justifyContent="center" px="$5" py="$6">
-        <GVStack space="md" alignItems="center">
-          <GSpinner size="large" />
-          <GText size="sm">Preparing item draft...</GText>
-        </GVStack>
-      </GBox>
+      <SafeAreaView style={{ flex: 1 }} edges={["top"]}>
+        <GBox flex={1} alignItems="center" justifyContent="center" px="$5" py="$6">
+          <GVStack space="md" alignItems="center">
+            <GSpinner size="large" />
+            <GText size="sm">Preparing item draft...</GText>
+          </GVStack>
+        </GBox>
+      </SafeAreaView>
     );
   }
 
@@ -464,9 +468,12 @@ export default function NewItemRoute() {
     parsedWorkPercent !== null && parsedWorkPercent >= 0 && parsedWorkPercent <= 100
       ? parsedWorkPercent
       : 0;
+  const actionBarBottomInset = Math.max(insets.bottom, 12);
+  const actionBarEstimatedHeight = 76 + actionBarBottomInset;
 
   return (
-    <GBox flex={1}>
+    <SafeAreaView style={{ flex: 1 }} edges={["top"]}>
+      <GBox flex={1}>
       <ScrollView
         contentContainerStyle={{
           width: "100%",
@@ -474,7 +481,7 @@ export default function NewItemRoute() {
           alignSelf: "center",
           paddingHorizontal: 20,
           paddingTop: 24,
-          paddingBottom: 128,
+          paddingBottom: actionBarEstimatedHeight + 40,
         }}
       >
         <GVStack space="lg">
@@ -850,7 +857,14 @@ export default function NewItemRoute() {
         </GVStack>
       </ScrollView>
 
-      <GBox borderTopWidth="$1" borderColor="$border200" bg="$background0" px="$5" py="$3">
+      <GBox
+        borderTopWidth="$1"
+        borderColor="$border200"
+        bg="$background0"
+        px="$5"
+        pt="$3"
+        style={{ paddingBottom: actionBarBottomInset }}
+      >
         <GHStack justifyContent="space-between" alignItems="center" space="sm">
           <GButton
             variant="outline"
@@ -899,6 +913,7 @@ export default function NewItemRoute() {
           ))}
         </GActionsheetContent>
       </GActionsheet>
-    </GBox>
+      </GBox>
+    </SafeAreaView>
   );
 }

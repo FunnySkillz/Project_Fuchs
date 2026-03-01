@@ -13,6 +13,20 @@ const mockGetSettings = jest.fn();
 const mockComputeDeductibleImpactCents = jest.fn();
 const mockUpdateItemListSessionState = jest.fn();
 
+jest.mock("@/hooks/use-theme", () => ({
+  useTheme: () => ({
+    text: "#1B2330",
+    background: "#F7F9FC",
+    backgroundElement: "#EEF2F7",
+    backgroundSelected: "#DFE6F0",
+    textSecondary: "#66758A",
+    border: "#C8D1DE",
+    primary: "#4E7FCF",
+    danger: "#C54444",
+    textOnPrimary: "#F2F6FC",
+  }),
+}));
+
 jest.mock("@gluestack-ui/themed", () => {
   const ReactModule = require("react");
   const {
@@ -193,6 +207,30 @@ describe("ItemsRoute", () => {
     render(<ItemsRoute />);
 
     expect(await screen.findByText("No items found. Adjust filters or add a new item.")).toBeTruthy();
+  });
+
+  it("keeps a floating add-item FAB visible and routes to add-item flow", async () => {
+    mockGetSettings.mockResolvedValue({
+      taxYearDefault: 2026,
+      marginalRateBps: 4_000,
+      defaultWorkPercent: 100,
+      gwgThresholdCents: 100_000,
+      applyHalfYearRule: false,
+      appLockEnabled: false,
+      uploadToOneDriveAfterExport: false,
+      themeModePreference: "system",
+      currency: "EUR",
+    });
+    mockListItems.mockResolvedValue([]);
+    mockListMissingReceiptItemIds.mockResolvedValue([]);
+    mockListCategories.mockResolvedValue([]);
+    mockComputeDeductibleImpactCents.mockReturnValue(0);
+
+    render(<ItemsRoute />);
+
+    expect(await screen.findByTestId("items-add-fab")).toBeTruthy();
+    fireEvent.press(screen.getByTestId("items-add-fab"));
+    expect(mockPush).toHaveBeenCalledWith("/item/new");
   });
 
   it("applies incoming year and missing receipt params from navigation", async () => {

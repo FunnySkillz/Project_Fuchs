@@ -2,6 +2,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { Image } from "expo-image";
 import React, { useCallback, useMemo, useState } from "react";
 import { Linking, ScrollView } from "react-native";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   Actionsheet,
   ActionsheetBackdrop,
@@ -90,6 +91,7 @@ const usageOptions: { value: ItemUsageType; label: string }[] = [
 
 export default function ItemEditRoute() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ id?: string | string[] }>();
   const itemId = toSingleParam(params.id);
 
@@ -378,61 +380,66 @@ export default function ItemEditRoute() {
 
   if (isLoading) {
     return (
-      <Box flex={1} alignItems="center" justifyContent="center" px="$5" py="$6">
-        <VStack space="md" alignItems="center">
-          <Spinner size="large" />
-          <Text size="sm">Loading item for edit...</Text>
-        </VStack>
-      </Box>
+      <SafeAreaView style={{ flex: 1 }} edges={["top"]}>
+        <Box flex={1} alignItems="center" justifyContent="center" px="$5" py="$6">
+          <VStack space="md" alignItems="center">
+            <Spinner size="large" />
+            <Text size="sm">Loading item for edit...</Text>
+          </VStack>
+        </Box>
+      </SafeAreaView>
     );
   }
 
   if (!item) {
     return (
-      <Box flex={1} px="$5" py="$6">
-        <VStack space="lg" maxWidth={760} width="$full" alignSelf="center">
-          <Heading size="xl">Edit Item</Heading>
-          <Card borderWidth="$1" borderColor="$error300">
-            <VStack space="sm">
-              <Text bold size="md">
-                Could not load item
-              </Text>
-              <Text size="sm">{loadError ?? "Item not found."}</Text>
-              <HStack space="sm" flexWrap="wrap">
-                <Button variant="outline" action="secondary" onPress={() => void loadEditData()}>
-                  <ButtonText>Retry</ButtonText>
-                </Button>
-                {showOpenSettingsAction ? (
-                  <Button
-                    variant="outline"
-                    action="secondary"
-                    onPress={() => void openDeviceSettings()}
-                  >
-                    <ButtonText>Open Settings</ButtonText>
+      <SafeAreaView style={{ flex: 1 }} edges={["top"]}>
+        <Box flex={1} px="$5" py="$6">
+          <VStack space="lg" maxWidth={760} width="$full" alignSelf="center">
+            <Heading size="xl">Edit Item</Heading>
+            <Card borderWidth="$1" borderColor="$error300">
+              <VStack space="sm">
+                <Text bold size="md">
+                  Could not load item
+                </Text>
+                <Text size="sm">{loadError ?? "Item not found."}</Text>
+                <HStack space="sm" flexWrap="wrap">
+                  <Button variant="outline" action="secondary" onPress={() => void loadEditData()}>
+                    <ButtonText>Retry</ButtonText>
                   </Button>
-                ) : null}
-              </HStack>
-            </VStack>
-          </Card>
-          <Button variant="outline" action="secondary" onPress={() => router.replace("/(tabs)/items")}>
-            <ButtonText>Back to Items</ButtonText>
-          </Button>
-        </VStack>
-      </Box>
+                  {showOpenSettingsAction ? (
+                    <Button
+                      variant="outline"
+                      action="secondary"
+                      onPress={() => void openDeviceSettings()}
+                    >
+                      <ButtonText>Open Settings</ButtonText>
+                    </Button>
+                  ) : null}
+                </HStack>
+              </VStack>
+            </Card>
+            <Button variant="outline" action="secondary" onPress={() => router.replace("/(tabs)/items")}>
+              <ButtonText>Back to Items</ButtonText>
+            </Button>
+          </VStack>
+        </Box>
+      </SafeAreaView>
     );
   }
 
   return (
-    <Box flex={1} px="$5" py="$6">
-      <ScrollView
-        contentContainerStyle={{
-          width: "100%",
-          maxWidth: 860,
-          alignSelf: "center",
-          paddingBottom: 24,
-        }}
-      >
-        <VStack space="lg">
+    <SafeAreaView style={{ flex: 1 }} edges={["top"]}>
+      <Box flex={1} px="$5" py="$6">
+        <ScrollView
+          contentContainerStyle={{
+            width: "100%",
+            maxWidth: 860,
+            alignSelf: "center",
+            paddingBottom: insets.bottom + 24,
+          }}
+        >
+          <VStack space="lg">
           <VStack space="xs">
             <Heading size="2xl">Edit Item</Heading>
             <Text size="sm">
@@ -738,36 +745,37 @@ export default function ItemEditRoute() {
               <ButtonText>{isSaving ? "Saving..." : "Save Changes"}</ButtonText>
             </Button>
           </HStack>
-        </VStack>
-      </ScrollView>
+          </VStack>
+        </ScrollView>
 
-      <Actionsheet isOpen={isCategorySheetOpen} onClose={() => setIsCategorySheetOpen(false)}>
-        <ActionsheetBackdrop />
-        <ActionsheetContent>
-          <ActionsheetDragIndicatorWrapper>
-            <ActionsheetDragIndicator />
-          </ActionsheetDragIndicatorWrapper>
-          <ActionsheetItem
-            onPress={() => {
-              setCategoryId(null);
-              setIsCategorySheetOpen(false);
-            }}
-          >
-            <ActionsheetItemText>No category selected</ActionsheetItemText>
-          </ActionsheetItem>
-          {categories.map((category) => (
+        <Actionsheet isOpen={isCategorySheetOpen} onClose={() => setIsCategorySheetOpen(false)}>
+          <ActionsheetBackdrop />
+          <ActionsheetContent>
+            <ActionsheetDragIndicatorWrapper>
+              <ActionsheetDragIndicator />
+            </ActionsheetDragIndicatorWrapper>
             <ActionsheetItem
-              key={category.id}
               onPress={() => {
-                setCategoryId(category.id);
+                setCategoryId(null);
                 setIsCategorySheetOpen(false);
               }}
             >
-              <ActionsheetItemText>{category.name}</ActionsheetItemText>
+              <ActionsheetItemText>No category selected</ActionsheetItemText>
             </ActionsheetItem>
-          ))}
-        </ActionsheetContent>
-      </Actionsheet>
-    </Box>
+            {categories.map((category) => (
+              <ActionsheetItem
+                key={category.id}
+                onPress={() => {
+                  setCategoryId(category.id);
+                  setIsCategorySheetOpen(false);
+                }}
+              >
+                <ActionsheetItemText>{category.name}</ActionsheetItemText>
+              </ActionsheetItem>
+            ))}
+          </ActionsheetContent>
+        </Actionsheet>
+      </Box>
+    </SafeAreaView>
   );
 }
