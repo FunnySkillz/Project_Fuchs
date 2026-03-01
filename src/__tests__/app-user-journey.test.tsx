@@ -5,6 +5,7 @@ import HomeRoute from "@/app/(tabs)/home";
 import ItemsRoute from "@/app/(tabs)/items";
 import OnboardingProfileSetupRoute from "@/app/(onboarding)/profile-setup";
 import OnboardingWelcomeRoute from "@/app/(onboarding)/welcome";
+import ItemDetailRoute from "@/app/item/[id]";
 import NewItemRoute from "@/app/item/new";
 import type { Item, ItemUsageType } from "@/models/item";
 import type { ProfileSettings } from "@/models/profile-settings";
@@ -46,6 +47,7 @@ jest.mock("@/constants/theme", () => ({
 let mockLocalSearchParams: Record<string, string | string[] | undefined> = {};
 const mockPush = jest.fn();
 const mockReplace = jest.fn();
+const mockDeleteItemWithAttachments = jest.fn();
 
 function mockApplyRouteTarget(target: unknown) {
   if (
@@ -147,6 +149,12 @@ jest.mock("@gluestack-ui/themed", () => {
       <MockTouchableOpacity {...props}>{children}</MockTouchableOpacity>
     ),
     ActionsheetItemText: ({ children, ...props }: any) => <MockText {...props}>{children}</MockText>,
+    AlertDialog: ({ isOpen, children }: any) => (isOpen ? <MockView>{children}</MockView> : null),
+    AlertDialogBackdrop: Block,
+    AlertDialogBody: Block,
+    AlertDialogContent: Block,
+    AlertDialogFooter: Block,
+    AlertDialogHeader: Block,
     Badge: Block,
     BadgeText: ({ children, ...props }: any) => <MockText {...props}>{children}</MockText>,
     Box: Block,
@@ -157,6 +165,10 @@ jest.mock("@gluestack-ui/themed", () => {
     HStack: Block,
     Input: Block,
     InputField: (props: any) => <MockTextInput {...props} />,
+    Modal: ({ isOpen, children }: any) => (isOpen ? <MockView>{children}</MockView> : null),
+    ModalBackdrop: Block,
+    ModalBody: Block,
+    ModalContent: Block,
     Pressable: ({ children, ...props }: any) => <MockPressable {...props}>{children}</MockPressable>,
     Slider: Block,
     SliderFilledTrack: Block,
@@ -171,6 +183,13 @@ jest.mock("@gluestack-ui/themed", () => {
   };
 });
 
+jest.mock("expo-image", () => {
+  const { View: MockView } = require("react-native");
+  return {
+    Image: (props: any) => <MockView {...props} />,
+  };
+});
+
 const mockComputeDeductibleImpactCents = jest.fn();
 
 jest.mock("@/domain/deductible-impact", () => ({
@@ -180,6 +199,11 @@ jest.mock("@/domain/deductible-impact", () => ({
     categoryMap: unknown,
     year: unknown
   ) => mockComputeDeductibleImpactCents(item, settings, categoryMap, year),
+}));
+
+const mockEstimateTaxImpact = jest.fn();
+jest.mock("@/domain/calculation-engine", () => ({
+  estimateTaxImpact: (...args: unknown[]) => mockEstimateTaxImpact(...args),
 }));
 
 let mockProfileSettingsStore: ProfileSettings = {
@@ -317,6 +341,9 @@ jest.mock("@/repositories/create-core-repositories", () => ({
       missingNotes?: boolean;
     }) => {
       return mockItemStore.filter((item) => {
+        if (item.deletedAt !== null) {
+          return false;
+        }
         if (filters?.year !== undefined) {
           const itemYear = Number.parseInt(item.purchaseDate.slice(0, 4), 10);
           if (itemYear !== filters.year) {
@@ -346,6 +373,9 @@ jest.mock("@/repositories/create-core-repositories", () => ({
     }) => {
       return mockItemStore
         .filter((item) => {
+          if (item.deletedAt !== null) {
+            return false;
+          }
           if (filters?.year !== undefined) {
             const itemYear = Number.parseInt(item.purchaseDate.slice(0, 4), 10);
             if (itemYear !== filters.year) {
@@ -365,12 +395,45 @@ jest.mock("@/repositories/create-core-repositories", () => ({
         })
         .map((item) => item.id);
     },
+    getById: async (id: string) => mockItemStore.find((item) => item.id === id && item.deletedAt === null) ?? null,
+    softDelete: async (id: string) => {
+      const index = mockItemStore.findIndex((item) => item.id === id);
+      if (index >= 0) {
+        mockItemStore[index] = {
+          ...mockItemStore[index],
+          deletedAt: "2026-01-15T10:30:00.000Z",
+        };
+      }
+    },
+  }),
+  getAttachmentRepository: async () => ({
+    listByItem: async (itemId: string) => {
+      const attachments = mockItemReceiptsById.get(itemId) ?? [];
+      return attachments.map((attachment, index) => ({
+        id: `${itemId}-attachment-${index + 1}`,
+        itemId,
+        type: attachment.type,
+        mimeType: attachment.mimeType,
+        filePath: attachment.filePath,
+        originalFileName: attachment.originalFileName,
+        fileSizeBytes: attachment.fileSizeBytes,
+        createdAt: "2026-01-15T10:30:00.000Z",
+        updatedAt: "2026-01-15T10:30:00.000Z",
+        deletedAt: null,
+      }));
+    },
   }),
 }));
 
 jest.mock("@/services/attachment-storage", () => ({
   saveFromCamera: async () => mockCameraAttachmentQueue.shift() ?? null,
   saveFromPicker: async () => null,
+  attachmentFileExists: async () => true,
+  resolveAttachmentPreviewUri: async (filePath: string) => filePath,
+}));
+
+jest.mock("@/services/item-service", () => ({
+  deleteItemWithAttachments: (itemId: string) => mockDeleteItemWithAttachments(itemId),
 }));
 
 jest.mock("@/services/item-draft-store", () => ({
@@ -466,7 +529,9 @@ describe("App first-user UI journey", () => {
     mockLocalSearchParams = {};
     mockPush.mockReset();
     mockReplace.mockReset();
+    mockDeleteItemWithAttachments.mockReset();
     mockComputeDeductibleImpactCents.mockReset();
+    mockEstimateTaxImpact.mockReset();
     mockComputeDeductibleImpactCents.mockImplementation((item: Item) => {
       if (item.usageType === "WORK") {
         return item.totalCents;
@@ -475,6 +540,19 @@ describe("App first-user UI journey", () => {
         return Math.round((item.totalCents * (item.workPercent ?? 0)) / 100);
       }
       return 0;
+    });
+    mockEstimateTaxImpact.mockReturnValue({
+      deductibleThisYearCents: 1_000,
+      estimatedRefundThisYearCents: 400,
+      scheduleByYear: [{ year: 2026, deductibleCents: 1_000 }],
+      explanations: [],
+    });
+    mockDeleteItemWithAttachments.mockImplementation(async (itemId: string) => {
+      const index = mockItemStore.findIndex((item) => item.id === itemId);
+      if (index >= 0) {
+        mockItemStore.splice(index, 1);
+      }
+      mockItemReceiptsById.delete(itemId);
     });
 
     mockProfileSettingsStore = {
@@ -584,5 +662,48 @@ describe("App first-user UI journey", () => {
     expect(await screen.findByText("Steuerausgleich 2026")).toBeTruthy();
     expect(screen.queryByText("No items yet")).toBeNull();
     homeAfterItems.unmount();
+  });
+
+  it("deletes an item from detail view and it no longer appears in items list", async () => {
+    mockCameraAttachmentQueue.push({
+      filePath: "file:///tmp/receipts/printer-rechnung.jpg",
+      mimeType: "image/jpeg",
+      originalFileName: "printer-rechnung.jpg",
+      fileSizeBytes: 99_000,
+      type: "PHOTO",
+    });
+
+    await createPurchaseViaUiFlow({
+      title: "Office Printer",
+      purchaseDate: "2026-06-10",
+      price: "399.00",
+      vendor: "Saturn Vienna",
+      notes: "Shared office printer",
+      usage: "WORK",
+      receiptFileName: "printer-rechnung.jpg",
+    });
+
+    expect(mockItemStore).toHaveLength(1);
+    expect(mockItemStore[0].title).toBe("Office Printer");
+
+    mockLocalSearchParams = { id: mockItemStore[0].id };
+    const detailView = render(<ItemDetailRoute />);
+    expect((await screen.findAllByText("Office Printer")).length).toBeGreaterThan(0);
+
+    fireEvent.press(screen.getByTestId("item-detail-delete"));
+    fireEvent.press(screen.getByTestId("item-detail-delete-confirm"));
+
+    await waitFor(() => {
+      expect(mockDeleteItemWithAttachments).toHaveBeenCalledWith("item-1");
+      expect(mockReplace).toHaveBeenCalledWith("/(tabs)/items");
+      expect(mockItemStore).toHaveLength(0);
+    });
+    detailView.unmount();
+
+    mockLocalSearchParams = {};
+    const itemsView = render(<ItemsRoute />);
+    expect(await screen.findByText("No items found. Adjust filters or add a new item.")).toBeTruthy();
+    expect(screen.queryByText("Office Printer")).toBeNull();
+    itemsView.unmount();
   });
 });

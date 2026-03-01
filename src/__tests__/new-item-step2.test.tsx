@@ -222,4 +222,22 @@ describe("NewItemRoute step 2", () => {
       expect(mockLinkDraftAttachmentsToItem).not.toHaveBeenCalled();
     });
   });
+
+  it("blocks save for MIXED usage when work percent is missing", async () => {
+    render(<NewItemRoute />);
+
+    expect(await screen.findByText("Add Item: Fields")).toBeTruthy();
+
+    fireEvent.changeText(screen.getByTestId("new-item-step2-title-input"), "Mixed use tablet");
+    fireEvent.changeText(screen.getByTestId("new-item-step2-total-price-input"), "899.00");
+    fireEvent.press(screen.getByTestId("new-item-step2-usage-mixed"));
+
+    fireEvent.press(screen.getByTestId("new-item-step2-save"));
+
+    await waitFor(() => {
+      expect(screen.getByText("Work percent is required for mixed usage.")).toBeTruthy();
+      expect(mockCreateItem).not.toHaveBeenCalled();
+      expect(mockLinkDraftAttachmentsToItem).not.toHaveBeenCalled();
+    });
+  });
 });
