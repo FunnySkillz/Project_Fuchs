@@ -5,6 +5,8 @@ import ItemDetailRoute from "@/app/item/[id]";
 
 const mockPush = jest.fn();
 const mockReplace = jest.fn();
+const mockBack = jest.fn();
+let mockCanGoBack = true;
 const mockGetById = jest.fn();
 const mockSoftDelete = jest.fn();
 const mockListAttachments = jest.fn();
@@ -64,7 +66,12 @@ jest.mock("expo-image", () => {
 });
 
 jest.mock("expo-router", () => ({
-  useRouter: () => ({ push: mockPush, replace: mockReplace }),
+  useRouter: () => ({
+    push: mockPush,
+    replace: mockReplace,
+    back: mockBack,
+    canGoBack: () => mockCanGoBack,
+  }),
   useLocalSearchParams: () => ({ id: "item-1" }),
 }));
 
@@ -105,6 +112,8 @@ describe("ItemDetailRoute", () => {
   beforeEach(() => {
     mockPush.mockReset();
     mockReplace.mockReset();
+    mockBack.mockReset();
+    mockCanGoBack = true;
     mockGetById.mockReset();
     mockSoftDelete.mockReset();
     mockListAttachments.mockReset();
@@ -228,6 +237,21 @@ describe("ItemDetailRoute", () => {
       expect(mockDeleteAttachment).toHaveBeenCalledTimes(2);
       expect(mockSoftDelete).toHaveBeenCalledWith("item-1");
       expect(mockReplace).toHaveBeenCalledWith("/(tabs)/items");
+    });
+  });
+
+  it("shows back-to-items fallback when no history exists", async () => {
+    mockCanGoBack = false;
+    render(<ItemDetailRoute />);
+
+    expect((await screen.findAllByText("Work laptop")).length).toBeGreaterThan(0);
+    expect(screen.getByTestId("item-detail-back-to-items")).toBeTruthy();
+
+    fireEvent.press(screen.getByTestId("item-detail-back-to-items"));
+
+    await waitFor(() => {
+      expect(mockReplace).toHaveBeenCalledWith("/(tabs)/items");
+      expect(mockBack).not.toHaveBeenCalled();
     });
   });
 });

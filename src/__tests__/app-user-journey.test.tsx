@@ -62,7 +62,6 @@ function mockApplyRouteTarget(target: unknown) {
         : {};
     mockLocalSearchParams = {
       draftId: params.draftId,
-      step: params.step,
     };
   }
 }
@@ -480,45 +479,36 @@ async function createPurchaseViaUiFlow(input: PurchaseFlowInput): Promise<void> 
   const view = render(<NewItemRoute />);
 
   await waitFor(() => {
-    expect(mockLocalSearchParams.step).toBe("1");
     expect(typeof mockLocalSearchParams.draftId).toBe("string");
   });
 
   view.rerender(<NewItemRoute />);
-  expect(await screen.findByText("Add Item: Attachments")).toBeTruthy();
+  expect(await screen.findByText("Add Item")).toBeTruthy();
 
-  fireEvent.press(screen.getByTestId("new-item-step1-take-photo"));
+  fireEvent.press(screen.getByTestId("new-item-attachment-take-photo"));
   expect(await screen.findByText(input.receiptFileName)).toBeTruthy();
 
-  fireEvent.press(screen.getByTestId("new-item-step1-continue"));
-  await waitFor(() => {
-    expect(mockLocalSearchParams.step).toBe("2");
-  });
-
-  view.rerender(<NewItemRoute />);
-  expect(await screen.findByText("Add Item: Fields")).toBeTruthy();
-
-  fireEvent.changeText(screen.getByTestId("new-item-step2-title-input"), input.title);
-  fireEvent.changeText(screen.getByTestId("new-item-step2-purchase-date-input"), input.purchaseDate);
-  fireEvent.changeText(screen.getByTestId("new-item-step2-total-price-input"), input.price);
-  fireEvent.changeText(screen.getByTestId("new-item-step2-vendor-input"), input.vendor);
-  fireEvent.changeText(screen.getByTestId("new-item-step2-notes-input"), input.notes);
+  fireEvent.changeText(screen.getByTestId("new-item-title-input"), input.title);
+  fireEvent.changeText(screen.getByTestId("new-item-purchase-date-input"), input.purchaseDate);
+  fireEvent.changeText(screen.getByTestId("new-item-total-price-input"), input.price);
+  fireEvent.changeText(screen.getByTestId("new-item-vendor-input"), input.vendor);
+  fireEvent.changeText(screen.getByTestId("new-item-notes-input"), input.notes);
 
   if (input.usage !== "WORK") {
-    fireEvent.press(screen.getByTestId(`new-item-step2-usage-${input.usage.toLowerCase()}`));
+    fireEvent.press(screen.getByTestId(`new-item-usage-${input.usage.toLowerCase()}`));
   }
   if (input.usage === "MIXED" && input.workPercent) {
-    fireEvent.changeText(screen.getByTestId("new-item-step2-work-percent-input"), input.workPercent);
+    fireEvent.changeText(screen.getByTestId("new-item-work-percent-input"), input.workPercent);
   }
 
-  fireEvent.press(screen.getByTestId("new-item-step2-category-open"));
+  fireEvent.press(screen.getByTestId("new-item-category-open"));
   fireEvent.press(screen.getByText("Electronics"));
 
   const countBeforeSave = mockItemStore.length;
-  fireEvent.press(screen.getByTestId("new-item-step2-save"));
+  fireEvent.press(screen.getByTestId("new-item-save"));
   await waitFor(() => {
     expect(mockItemStore).toHaveLength(countBeforeSave + 1);
-    expect(mockReplace).toHaveBeenCalledWith(`/item/${mockItemStore[mockItemStore.length - 1].id}`);
+    expect(mockReplace).toHaveBeenCalledWith("/(tabs)/items");
   });
 
   view.unmount();

@@ -23,41 +23,31 @@ const mockDraftAttachments: Array<{
   type: "RECEIPT" | "PHOTO";
 }> = [];
 
-jest.mock("@/constants/theme", () => ({
-  Spacing: {
-    one: 4,
-    two: 8,
-    three: 16,
-    four: 24,
-  },
-}));
-
-jest.mock("@/components/themed-text", () => {
-  const { Text } = require("react-native");
-  return {
-    ThemedText: ({ children, ...props }: any) => <Text {...props}>{children}</Text>,
-  };
-});
-
-jest.mock("@/components/themed-view", () => {
-  const { View } = require("react-native");
-  return {
-    ThemedView: ({ children, ...props }: any) => <View {...props}>{children}</View>,
-  };
-});
-
 jest.mock("@gluestack-ui/themed", () => {
   const {
     ActivityIndicator: MockActivityIndicator,
-    Pressable: MockPressable,
     Text: MockText,
+    TextInput: MockTextInput,
     TouchableOpacity: MockTouchableOpacity,
     View: MockView,
   } = require("react-native");
 
-  const Block = ({ children, ...props }: any) => <MockView {...props}>{children}</MockView>;
+  const Block = ({ children, testID, ...props }: any) => (
+    <MockView testID={testID} {...props}>
+      {children}
+    </MockView>
+  );
 
   return {
+    Actionsheet: ({ isOpen, children }: any) => (isOpen ? <MockView>{children}</MockView> : null),
+    ActionsheetBackdrop: Block,
+    ActionsheetContent: Block,
+    ActionsheetDragIndicator: Block,
+    ActionsheetDragIndicatorWrapper: Block,
+    ActionsheetItem: ({ children, ...props }: any) => (
+      <MockTouchableOpacity {...props}>{children}</MockTouchableOpacity>
+    ),
+    ActionsheetItemText: ({ children, ...props }: any) => <MockText {...props}>{children}</MockText>,
     Badge: Block,
     BadgeText: ({ children, ...props }: any) => <MockText {...props}>{children}</MockText>,
     Box: Block,
@@ -66,10 +56,17 @@ jest.mock("@gluestack-ui/themed", () => {
     Card: Block,
     Heading: ({ children, ...props }: any) => <MockText {...props}>{children}</MockText>,
     HStack: Block,
+    Input: Block,
+    InputField: (props: any) => <MockTextInput {...props} />,
+    Slider: Block,
+    SliderFilledTrack: Block,
+    SliderThumb: Block,
+    SliderTrack: Block,
     Spinner: (props: any) => <MockActivityIndicator {...props} />,
     Text: ({ children, ...props }: any) => <MockText {...props}>{children}</MockText>,
+    Textarea: Block,
+    TextareaInput: (props: any) => <MockTextInput {...props} />,
     VStack: Block,
-    Pressable: ({ children, ...props }: any) => <MockPressable {...props}>{children}</MockPressable>,
   };
 });
 
@@ -77,33 +74,8 @@ jest.mock("expo-router", () => ({
   useRouter: () => mockRouter,
   useLocalSearchParams: () => ({
     draftId: "draft-1",
-    step: "1",
   }),
 }));
-
-jest.mock("@/components/ui", () => {
-  const { Text: MockText, TextInput: MockTextInput, TouchableOpacity, View } = require("react-native");
-
-  return {
-    Badge: ({ text }: { text: string }) => <MockText>{text}</MockText>,
-    Button: ({ label, onPress }: { label: string; onPress: () => void }) => (
-      <TouchableOpacity onPress={onPress}>
-        <MockText>{label}</MockText>
-      </TouchableOpacity>
-    ),
-    Card: ({ children }: any) => <View>{children}</View>,
-    DatePickerTrigger: ({ value }: { value: string }) => <MockText>{value}</MockText>,
-    FormField: ({ label, children }: any) => (
-      <View>
-        <MockText>{label}</MockText>
-        {children}
-      </View>
-    ),
-    Input: (props: any) => <MockTextInput {...props} />,
-    Select: ({ value }: { value: string | null }) => <MockText>{value ?? "none"}</MockText>,
-    TextArea: (props: any) => <MockTextInput {...props} />,
-  };
-});
 
 jest.mock("@/repositories/create-core-repositories", () => ({
   getCategoryRepository: () => mockGetCategoryRepository(),
@@ -127,7 +99,7 @@ jest.mock("@/services/item-draft-store", () => ({
   removeAttachmentFromDraft: jest.fn(),
 }));
 
-describe("NewItemRoute step 1", () => {
+describe("NewItemRoute attachments and cancel behavior", () => {
   beforeEach(() => {
     mockRouterReplace.mockReset();
     mockGetCategoryRepository.mockReset();
@@ -155,7 +127,7 @@ describe("NewItemRoute step 1", () => {
       }
       mockDraftAttachments.splice(0, mockDraftAttachments.length);
     });
-    mockAddAttachmentToDraft.mockImplementation((draftId: string, attachment: any) => {
+    mockAddAttachmentToDraft.mockImplementation((_draftId: string, attachment: any) => {
       mockDraftAttachments.push(attachment);
     });
     mockGetItemDraftAttachments.mockImplementation(() => [...mockDraftAttachments]);
@@ -176,16 +148,16 @@ describe("NewItemRoute step 1", () => {
 
     render(<NewItemRoute />);
 
-    expect(await screen.findByText("Add Item: Attachments")).toBeTruthy();
+    expect(await screen.findByText("1) Attachments")).toBeTruthy();
 
-    fireEvent.press(screen.getByTestId("new-item-step1-take-photo"));
+    fireEvent.press(screen.getByTestId("new-item-attachment-take-photo"));
 
     await waitFor(() => {
       expect(mockAddAttachmentToDraft).toHaveBeenCalled();
       expect(screen.getByText("receipt-a.jpg")).toBeTruthy();
     });
 
-    fireEvent.press(screen.getByTestId("new-item-step1-cancel"));
+    fireEvent.press(screen.getByTestId("new-item-cancel"));
 
     await waitFor(() => {
       expect(mockClearItemDraft).toHaveBeenCalledWith("draft-1");
@@ -205,9 +177,9 @@ describe("NewItemRoute step 1", () => {
     });
 
     const view = render(<NewItemRoute />);
-    expect(await screen.findByText("Add Item: Attachments")).toBeTruthy();
+    expect(await screen.findByText("1) Attachments")).toBeTruthy();
 
-    fireEvent.press(screen.getByTestId("new-item-step1-upload"));
+    fireEvent.press(screen.getByTestId("new-item-attachment-upload"));
     await waitFor(() => {
       expect(mockAddAttachmentToDraft).toHaveBeenCalled();
       expect(screen.getByText("receipt-exit.pdf")).toBeTruthy();
@@ -229,9 +201,9 @@ describe("NewItemRoute step 1", () => {
     );
 
     render(<NewItemRoute />);
-    expect(await screen.findByText("Add Item: Attachments")).toBeTruthy();
+    expect(await screen.findByText("1) Attachments")).toBeTruthy();
 
-    fireEvent.press(screen.getByTestId("new-item-step1-take-photo"));
+    fireEvent.press(screen.getByTestId("new-item-attachment-take-photo"));
 
     await waitFor(() => {
       expect(screen.getByText(/Camera access is denied/i)).toBeTruthy();
@@ -248,9 +220,9 @@ describe("NewItemRoute step 1", () => {
     mockSaveFromPicker.mockRejectedValue(new Error("User canceled document picker"));
 
     render(<NewItemRoute />);
-    expect(await screen.findByText("Add Item: Attachments")).toBeTruthy();
+    expect(await screen.findByText("1) Attachments")).toBeTruthy();
 
-    fireEvent.press(screen.getByTestId("new-item-step1-upload"));
+    fireEvent.press(screen.getByTestId("new-item-attachment-upload"));
 
     await waitFor(() => {
       expect(mockAddAttachmentToDraft).not.toHaveBeenCalled();

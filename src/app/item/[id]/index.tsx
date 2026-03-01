@@ -108,6 +108,10 @@ export default function ItemDetailRoute() {
   const router = useRouter();
   const params = useLocalSearchParams<{ id?: string | string[] }>();
   const itemId = toSingleParam(params.id);
+  const canGoBack =
+    typeof (router as { canGoBack?: () => boolean }).canGoBack === "function"
+      ? (router as { canGoBack: () => boolean }).canGoBack()
+      : false;
 
   const [item, setItem] = useState<Item | null>(null);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -242,6 +246,17 @@ export default function ItemDetailRoute() {
     }
   };
 
+  const handleBackNavigation = () => {
+    if (
+      canGoBack &&
+      typeof (router as { back?: () => void }).back === "function"
+    ) {
+      (router as { back: () => void }).back();
+      return;
+    }
+    router.replace("/(tabs)/items");
+  };
+
   if (isLoading) {
     return (
       <GBox flex={1} px="$5" py="$6" alignItems="center" justifyContent="center">
@@ -285,6 +300,37 @@ export default function ItemDetailRoute() {
         }}
       >
         <GVStack space="lg">
+          <GHStack justifyContent="space-between" alignItems="center">
+            <GButton
+              variant="link"
+              action="secondary"
+              onPress={handleBackNavigation}
+              testID="item-detail-back"
+            >
+              <GButtonText>{"\u2039 Back"}</GButtonText>
+            </GButton>
+            <GButton
+              variant="outline"
+              action="secondary"
+              onPress={() => router.push(`/item/${item.id}/edit`)}
+              testID="item-detail-edit"
+            >
+              <GButtonText>Edit</GButtonText>
+            </GButton>
+          </GHStack>
+
+          {!canGoBack && (
+            <GButton
+              variant="outline"
+              action="secondary"
+              onPress={() => router.replace("/(tabs)/items")}
+              alignSelf="flex-start"
+              testID="item-detail-back-to-items"
+            >
+              <GButtonText>Back to Items</GButtonText>
+            </GButton>
+          )}
+
           <GHStack justifyContent="space-between" alignItems="flex-start" space="md">
             <GVStack space="xs" flex={1}>
               <GHeading size="2xl">{item.title}</GHeading>
@@ -411,25 +457,16 @@ export default function ItemDetailRoute() {
             </GVStack>
           </GCard>
 
-          <GHStack space="sm" flexWrap="wrap">
-            <GButton
-              variant="outline"
-              action="secondary"
-              onPress={() => router.push(`/item/${item.id}/edit`)}
-              testID="item-detail-edit"
-            >
-              <GButtonText>Edit</GButtonText>
-            </GButton>
-            <GButton
-              variant="outline"
-              action="negative"
-              onPress={() => setIsDeleteDialogOpen(true)}
-              disabled={isDeleting}
-              testID="item-detail-delete"
-            >
-              <GButtonText>{isDeleting ? "Deleting..." : "Delete"}</GButtonText>
-            </GButton>
-          </GHStack>
+          <GButton
+            variant="outline"
+            action="negative"
+            onPress={() => setIsDeleteDialogOpen(true)}
+            disabled={isDeleting}
+            alignSelf="flex-start"
+            testID="item-detail-delete"
+          >
+            <GButtonText>{isDeleting ? "Deleting..." : "Delete"}</GButtonText>
+          </GButton>
         </GVStack>
       </ScrollView>
 

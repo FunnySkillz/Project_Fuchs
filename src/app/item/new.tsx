@@ -1,4 +1,4 @@
-import { useLocalSearchParams, useRouter } from "expo-router";
+﻿import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Linking, ScrollView } from "react-native";
 import {
@@ -30,6 +30,7 @@ import {
   VStack as GVStack,
 } from "@gluestack-ui/themed";
 
+import { validateItemInput } from "@/domain/item-validation";
 import type { AttachmentType } from "@/models/attachment";
 import type { Category } from "@/models/category";
 import type { ItemUsageType } from "@/models/item";
@@ -37,21 +38,20 @@ import { getCategoryRepository, getItemRepository } from "@/repositories/create-
 import type { StoredAttachmentFile } from "@/services/attachment-storage";
 import { saveFromCamera, saveFromPicker } from "@/services/attachment-storage";
 import {
-  addAttachmentToDraft,
   clearItemDraft,
   createItemDraft,
   getItemDraftAttachments,
   linkDraftAttachmentsToItem,
+  addAttachmentToDraft,
   removeAttachmentFromDraft,
 } from "@/services/item-draft-store";
-import { parseEuroInputToCents } from "@/utils/money";
-import { addMonthsToYmd, formatYmdFromDateLocal } from "@/utils/date";
 import {
   friendlyFileErrorMessage,
   isUserCancellationError,
   shouldOfferOpenSettingsForError,
 } from "@/services/friendly-errors";
-import { validateItemInput } from "@/domain/item-validation";
+import { addMonthsToYmd, formatYmdFromDateLocal } from "@/utils/date";
+import { parseEuroInputToCents } from "@/utils/money";
 
 function toSingleParam(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
@@ -78,17 +78,16 @@ function withType(attachment: StoredAttachmentFile, type: AttachmentType): Store
 }
 
 const usageOptions: { value: ItemUsageType; label: string }[] = [
-  { value: "WORK", label: "Work" },
-  { value: "PRIVATE", label: "Private" },
-  { value: "MIXED", label: "Mixed" },
-  { value: "OTHER", label: "Other" },
+  { value: "WORK", label: "WORK" },
+  { value: "PRIVATE", label: "PRIVATE" },
+  { value: "MIXED", label: "MIXED" },
+  { value: "OTHER", label: "OTHER" },
 ];
 
 export default function NewItemRoute() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ draftId?: string | string[]; step?: string | string[] }>();
+  const params = useLocalSearchParams<{ draftId?: string | string[] }>();
   const draftId = toSingleParam(params.draftId);
-  const step = toSingleParam(params.step) ?? "1";
   const shouldCleanupDraftOnExitRef = useRef(true);
 
   const [isInitializing, setIsInitializing] = useState(true);
@@ -159,6 +158,7 @@ export default function NewItemRoute() {
     }
     return parsed;
   }, [usefulLifeMonthsOverride]);
+
   const usefulLifeMonthsOverrideError = useMemo(() => {
     const trimmed = usefulLifeMonthsOverride.trim();
     if (trimmed.length === 0) {
@@ -180,6 +180,7 @@ export default function NewItemRoute() {
       warrantyMonths: parsedWarrantyMonths,
     });
   }, [title, purchaseDate, parsedTotalCents, usageType, parsedWorkPercent, parsedWarrantyMonths]);
+
   const fieldErrors = useMemo(() => {
     const grouped: Record<string, string> = {};
     for (const issue of validation.errors) {
@@ -189,13 +190,16 @@ export default function NewItemRoute() {
     }
     return grouped;
   }, [validation.errors]);
+
   const canSave = validation.valid && usefulLifeMonthsOverrideError === null && !isSavingItem;
+
   const selectedCategoryName = useMemo(() => {
     if (!categoryId) {
       return "No category selected";
     }
     return categories.find((entry) => entry.id === categoryId)?.name ?? "Unknown category";
   }, [categories, categoryId]);
+
   const warrantyUntilDate = useMemo(() => {
     if (!parsedWarrantyMonths || parsedWarrantyMonths <= 0) {
       return null;
@@ -238,7 +242,7 @@ export default function NewItemRoute() {
     const createdDraftId = createItemDraft();
     router.replace({
       pathname: "/item/new",
-      params: { draftId: createdDraftId, step: "1" },
+      params: { draftId: createdDraftId },
     });
   }, [draftId, loadCategories, reloadDraftAttachments, router]);
 
@@ -259,13 +263,10 @@ export default function NewItemRoute() {
     setShowOpenSettingsAction(false);
   }, []);
 
-  const setActionableError = useCallback(
-    (error: unknown, fallback: string) => {
-      setErrorMessage(friendlyFileErrorMessage(error, fallback));
-      setShowOpenSettingsAction(shouldOfferOpenSettingsForError(error));
-    },
-    []
-  );
+  const setActionableError = useCallback((error: unknown, fallback: string) => {
+    setErrorMessage(friendlyFileErrorMessage(error, fallback));
+    setShowOpenSettingsAction(shouldOfferOpenSettingsForError(error));
+  }, []);
 
   const openDeviceSettings = useCallback(async () => {
     try {
@@ -280,6 +281,7 @@ export default function NewItemRoute() {
     if (!draftId) {
       return;
     }
+
     setIsBusy(true);
     clearError();
     try {
@@ -287,6 +289,7 @@ export default function NewItemRoute() {
       if (!captured) {
         return;
       }
+
       addAttachmentToDraft(draftId, withType(captured, "RECEIPT"));
       reloadDraftAttachments(draftId);
     } catch (error) {
@@ -304,6 +307,7 @@ export default function NewItemRoute() {
     if (!draftId) {
       return;
     }
+
     setIsBusy(true);
     clearError();
     try {
@@ -311,6 +315,7 @@ export default function NewItemRoute() {
       if (!picked) {
         return;
       }
+
       addAttachmentToDraft(draftId, withType(picked, "RECEIPT"));
       reloadDraftAttachments(draftId);
     } catch (error) {
@@ -328,6 +333,7 @@ export default function NewItemRoute() {
     if (!draftId) {
       return;
     }
+
     setIsBusy(true);
     clearError();
     try {
@@ -335,6 +341,7 @@ export default function NewItemRoute() {
       if (!captured) {
         return;
       }
+
       addAttachmentToDraft(draftId, withType(captured, "PHOTO"));
       reloadDraftAttachments(draftId);
     } catch (error) {
@@ -352,6 +359,7 @@ export default function NewItemRoute() {
     if (!draftId) {
       return;
     }
+
     try {
       await removeAttachmentFromDraft(draftId, filePath);
       reloadDraftAttachments(draftId);
@@ -406,12 +414,7 @@ export default function NewItemRoute() {
   };
 
   const saveItem = async () => {
-    if (
-      !draftId ||
-      !validation.valid ||
-      parsedTotalCents === null ||
-      usefulLifeMonthsOverrideError !== null
-    ) {
+    if (!draftId || !validation.valid || parsedTotalCents === null || usefulLifeMonthsOverrideError !== null) {
       return;
     }
 
@@ -437,7 +440,7 @@ export default function NewItemRoute() {
 
       await linkDraftAttachmentsToItem(draftId, created.id);
       shouldCleanupDraftOnExitRef.current = false;
-      router.replace(`/item/${created.id}`);
+      router.replace("/(tabs)/items");
     } catch (error) {
       console.error("Failed to save item", error);
       setActionableError(error, "Could not save item. Please retry.");
@@ -457,425 +460,28 @@ export default function NewItemRoute() {
     );
   }
 
-  if (step === "2") {
-    const workPercentSliderValue =
-      parsedWorkPercent !== null && parsedWorkPercent >= 0 && parsedWorkPercent <= 100
-        ? parsedWorkPercent
-        : 0;
-
-    return (
-      <GBox flex={1}>
-        <ScrollView
-          contentContainerStyle={{
-            width: "100%",
-            maxWidth: 860,
-            alignSelf: "center",
-            paddingHorizontal: 20,
-            paddingTop: 24,
-            paddingBottom: 120,
-          }}
-        >
-          <GVStack space="lg">
-            <GBadge size="sm" variant="outline" action="muted" alignSelf="flex-start">
-              <GBadgeText>Step 2 of 2</GBadgeText>
-            </GBadge>
-
-            <GVStack space="xs">
-              <GHeading size="xl">Add Item: Fields</GHeading>
-              <GText size="sm">
-                Complete required fields, then save the item with the draft attachments.
-              </GText>
-            </GVStack>
-
-            {errorMessage && (
-              <GCard borderWidth="$1" borderColor="$error300">
-                <GVStack space="sm">
-                  <GText size="sm">{errorMessage}</GText>
-                  {showOpenSettingsAction && (
-                    <GButton
-                      variant="outline"
-                      action="secondary"
-                      alignSelf="flex-start"
-                      onPress={() => void openDeviceSettings()}
-                      testID="new-item-open-settings"
-                    >
-                      <GButtonText>Open Settings</GButtonText>
-                    </GButton>
-                  )}
-                </GVStack>
-              </GCard>
-            )}
-
-            <GCard borderWidth="$1" borderColor="$border200">
-              <GVStack space="md">
-                <GHeading size="md">Required fields</GHeading>
-
-                <GVStack space="xs">
-                  <GText bold size="sm">
-                    1) Title *
-                  </GText>
-                  <GInput variant="outline">
-                    <GInputField
-                      value={title}
-                      onChangeText={setTitle}
-                      placeholder="e.g. Laptop for work"
-                      testID="new-item-step2-title-input"
-                    />
-                  </GInput>
-                  {fieldErrors.title && (
-                    <GText size="xs" color="$error600">
-                      {fieldErrors.title}
-                    </GText>
-                  )}
-                </GVStack>
-
-                <GVStack space="xs">
-                  <GText bold size="sm">
-                    2) Purchase date *
-                  </GText>
-                  <GHStack space="sm" flexWrap="wrap" alignItems="center">
-                    <GInput variant="outline" flex={1} minWidth={180}>
-                      <GInputField
-                        value={purchaseDate}
-                        onChangeText={setPurchaseDate}
-                        placeholder="YYYY-MM-DD"
-                        autoCapitalize="none"
-                        testID="new-item-step2-purchase-date-input"
-                      />
-                    </GInput>
-                    <GButton
-                      variant="outline"
-                      action="secondary"
-                      onPress={() => setPurchaseDate(formatYmdFromDateLocal(new Date()))}
-                    >
-                      <GButtonText>Set today</GButtonText>
-                    </GButton>
-                  </GHStack>
-                  {fieldErrors.purchaseDate && (
-                    <GText size="xs" color="$error600">
-                      {fieldErrors.purchaseDate}
-                    </GText>
-                  )}
-                </GVStack>
-
-                <GVStack space="xs">
-                  <GText bold size="sm">
-                    3) Price (EUR) *
-                  </GText>
-                  <GInput variant="outline">
-                    <GInputField
-                      value={totalPrice}
-                      onChangeText={setTotalPrice}
-                      keyboardType="decimal-pad"
-                      placeholder="e.g. 1299.90"
-                      testID="new-item-step2-total-price-input"
-                    />
-                  </GInput>
-                  {fieldErrors.totalCents && (
-                    <GText size="xs" color="$error600">
-                      {fieldErrors.totalCents}
-                    </GText>
-                  )}
-                </GVStack>
-
-                <GVStack space="xs">
-                  <GText bold size="sm">
-                    4) Category
-                  </GText>
-                  <GButton
-                    variant="outline"
-                    action="secondary"
-                    onPress={() => setIsCategorySheetOpen(true)}
-                    justifyContent="space-between"
-                    testID="new-item-step2-category-open"
-                  >
-                    <GButtonText>{selectedCategoryName}</GButtonText>
-                  </GButton>
-                  {isLoadingCategories && (
-                    <GHStack space="sm" alignItems="center">
-                      <GSpinner size="small" />
-                      <GText size="xs">Loading categories...</GText>
-                    </GHStack>
-                  )}
-                  <GHStack space="sm" flexWrap="wrap" alignItems="center">
-                    <GInput variant="outline" flex={1} minWidth={200}>
-                      <GInputField
-                        value={newCategoryName}
-                        onChangeText={setNewCategoryName}
-                        placeholder="Create new category"
-                        testID="new-item-step2-category-create-input"
-                      />
-                    </GInput>
-                    <GButton
-                      variant="outline"
-                      action="secondary"
-                      onPress={() => void createCategory()}
-                      disabled={isCreatingCategory}
-                      testID="new-item-step2-category-create-button"
-                    >
-                      <GButtonText>{isCreatingCategory ? "Adding..." : "Add"}</GButtonText>
-                    </GButton>
-                  </GHStack>
-                </GVStack>
-
-                <GVStack space="xs">
-                  <GText bold size="sm">
-                    5) Usage type *
-                  </GText>
-                  <GHStack space="sm" flexWrap="wrap">
-                    {usageOptions.map((option) => (
-                      <GButton
-                        key={option.value}
-                        size="sm"
-                        variant={usageType === option.value ? "solid" : "outline"}
-                        action={usageType === option.value ? "primary" : "secondary"}
-                        onPress={() => setUsageType(option.value)}
-                        testID={`new-item-step2-usage-${option.value.toLowerCase()}`}
-                      >
-                        <GButtonText>{option.label.toUpperCase()}</GButtonText>
-                      </GButton>
-                    ))}
-                  </GHStack>
-                </GVStack>
-
-                {usageType === "MIXED" && (
-                  <GVStack space="xs">
-                    <GText bold size="sm">
-                      6) Work percent *
-                    </GText>
-                    <GInput variant="outline">
-                      <GInputField
-                        value={workPercent}
-                        onChangeText={setWorkPercent}
-                        keyboardType="number-pad"
-                        placeholder="0-100"
-                        testID="new-item-step2-work-percent-input"
-                      />
-                    </GInput>
-                    <GSlider
-                      value={workPercentSliderValue}
-                      minValue={0}
-                      maxValue={100}
-                      step={1}
-                      onChange={(value) => {
-                        const nextValue = Array.isArray(value) ? value[0] : value;
-                        if (typeof nextValue === "number" && Number.isFinite(nextValue)) {
-                          setWorkPercent(String(Math.round(nextValue)));
-                        }
-                      }}
-                    >
-                      <GSliderTrack>
-                        <GSliderFilledTrack />
-                      </GSliderTrack>
-                      <GSliderThumb />
-                    </GSlider>
-                    {fieldErrors.workPercent && (
-                      <GText size="xs" color="$error600">
-                        {fieldErrors.workPercent}
-                      </GText>
-                    )}
-                  </GVStack>
-                )}
-              </GVStack>
-            </GCard>
-
-            <GCard borderWidth="$1" borderColor="$border200">
-              <GVStack space="md">
-                <GHeading size="md">Optional</GHeading>
-
-                <GVStack space="xs">
-                  <GText bold size="sm">
-                    Notes
-                  </GText>
-                  <GTextarea>
-                    <GTextareaInput
-                      value={notes}
-                      onChangeText={setNotes}
-                      placeholder="Optional notes for invoice or audit context"
-                      testID="new-item-step2-notes-input"
-                    />
-                  </GTextarea>
-                  {(usageType === "WORK" || usageType === "MIXED") && notes.trim().length === 0 && (
-                    <GBadge size="sm" action="warning" variant="outline" alignSelf="flex-start">
-                      <GBadgeText>Missing notes will be flagged</GBadgeText>
-                    </GBadge>
-                  )}
-                </GVStack>
-
-                <GVStack space="xs">
-                  <GText bold size="sm">
-                    Warranty months
-                  </GText>
-                  <GInput variant="outline">
-                    <GInputField
-                      value={warrantyMonths}
-                      onChangeText={setWarrantyMonths}
-                      keyboardType="number-pad"
-                      placeholder="Optional"
-                      testID="new-item-step2-warranty-months-input"
-                    />
-                  </GInput>
-                  {fieldErrors.warrantyMonths && (
-                    <GText size="xs" color="$error600">
-                      {fieldErrors.warrantyMonths}
-                    </GText>
-                  )}
-                  <GText size="xs">Warranty until: {warrantyUntilDate ?? "n/a"}</GText>
-                </GVStack>
-
-                <GVStack space="xs">
-                  <GText bold size="sm">
-                    Vendor
-                  </GText>
-                  <GInput variant="outline">
-                    <GInputField
-                      value={vendor}
-                      onChangeText={setVendor}
-                      placeholder="Optional vendor/store"
-                      testID="new-item-step2-vendor-input"
-                    />
-                  </GInput>
-                </GVStack>
-              </GVStack>
-            </GCard>
-
-            <GCard borderWidth="$1" borderColor="$border200">
-              <GVStack space="md">
-                <GHStack alignItems="center" justifyContent="space-between">
-                  <GHeading size="md">Advanced</GHeading>
-                  <GButton
-                    size="sm"
-                    variant="outline"
-                    action="secondary"
-                    onPress={() => setIsAdvancedOpen((current) => !current)}
-                    testID="new-item-step2-advanced-toggle"
-                  >
-                    <GButtonText>{isAdvancedOpen ? "Hide" : "Show"}</GButtonText>
-                  </GButton>
-                </GHStack>
-                {isAdvancedOpen && (
-                  <GVStack space="xs">
-                    <GText bold size="sm">
-                      Useful life override (months)
-                    </GText>
-                    <GInput variant="outline">
-                      <GInputField
-                        value={usefulLifeMonthsOverride}
-                        onChangeText={setUsefulLifeMonthsOverride}
-                        keyboardType="number-pad"
-                        placeholder="Optional, e.g. 36"
-                        testID="new-item-step2-useful-life-input"
-                      />
-                    </GInput>
-                    {usefulLifeMonthsOverrideError && (
-                      <GText size="xs" color="$error600">
-                        {usefulLifeMonthsOverrideError}
-                      </GText>
-                    )}
-                  </GVStack>
-                )}
-              </GVStack>
-            </GCard>
-
-            <GCard borderWidth="$1" borderColor="$border200">
-              <GVStack space="sm">
-                <GHeading size="sm">Draft attachment summary</GHeading>
-                <GText size="sm">Receipts: {receiptAttachments.length}</GText>
-                <GText size="sm">Extra photos: {extraPhotos.length}</GText>
-                {receiptAttachments.length === 0 && (
-                  <GBadge size="sm" action="warning" variant="outline" alignSelf="flex-start">
-                    <GBadgeText>No receipt attached (allowed, flagged later)</GBadgeText>
-                  </GBadge>
-                )}
-              </GVStack>
-            </GCard>
-          </GVStack>
-        </ScrollView>
-
-        <GBox borderTopWidth="$1" borderColor="$border200" bg="$background0" px="$5" py="$3">
-          <GHStack space="sm" flexWrap="wrap" justifyContent="flex-end">
-            <GButton
-              variant="outline"
-              action="secondary"
-              onPress={() =>
-                router.replace({
-                  pathname: "/item/new",
-                  params: { draftId: draftId ?? "", step: "1" },
-                })
-              }
-              testID="new-item-step2-back"
-            >
-              <GButtonText>Back to Step 1</GButtonText>
-            </GButton>
-            <GButton
-              variant="outline"
-              action="secondary"
-              onPress={() => void cancelDraft()}
-              disabled={isBusy}
-              testID="new-item-step2-cancel"
-            >
-              <GButtonText>Cancel</GButtonText>
-            </GButton>
-            <GButton
-              onPress={() => void saveItem()}
-              disabled={!canSave || isBusy}
-              testID="new-item-step2-save"
-            >
-              <GButtonText>{isSavingItem ? "Saving..." : "Save Item"}</GButtonText>
-            </GButton>
-          </GHStack>
-        </GBox>
-
-        <GActionsheet isOpen={isCategorySheetOpen} onClose={() => setIsCategorySheetOpen(false)}>
-          <GActionsheetBackdrop />
-          <GActionsheetContent>
-            <GActionsheetDragIndicatorWrapper>
-              <GActionsheetDragIndicator />
-            </GActionsheetDragIndicatorWrapper>
-            <GActionsheetItem
-              onPress={() => {
-                setCategoryId(null);
-                setIsCategorySheetOpen(false);
-              }}
-            >
-              <GActionsheetItemText>No category selected</GActionsheetItemText>
-            </GActionsheetItem>
-            {categories.map((category) => (
-              <GActionsheetItem
-                key={category.id}
-                onPress={() => {
-                  setCategoryId(category.id);
-                  setIsCategorySheetOpen(false);
-                }}
-              >
-                <GActionsheetItemText>{category.name}</GActionsheetItemText>
-              </GActionsheetItem>
-            ))}
-          </GActionsheetContent>
-        </GActionsheet>
-      </GBox>
-    );
-  }
+  const workPercentSliderValue =
+    parsedWorkPercent !== null && parsedWorkPercent >= 0 && parsedWorkPercent <= 100
+      ? parsedWorkPercent
+      : 0;
 
   return (
-    <GBox flex={1} px="$5" py="$6">
+    <GBox flex={1}>
       <ScrollView
         contentContainerStyle={{
           width: "100%",
-          maxWidth: 760,
+          maxWidth: 860,
           alignSelf: "center",
-          paddingBottom: 24,
+          paddingHorizontal: 20,
+          paddingTop: 24,
+          paddingBottom: 128,
         }}
       >
         <GVStack space="lg">
-          <GBadge size="sm" variant="outline" action="muted" alignSelf="flex-start">
-            <GBadgeText>Step 1 of 2</GBadgeText>
-          </GBadge>
-
           <GVStack space="xs">
-            <GHeading size="xl">Add Item: Attachments</GHeading>
+            <GHeading size="xl">Add Item</GHeading>
             <GText size="sm">
-              Add receipt files first. Additional photos are optional.
+              Add receipt files and item details in one flow. Cancel safely discards draft files.
             </GText>
           </GVStack>
 
@@ -900,14 +506,14 @@ export default function NewItemRoute() {
 
           <GCard borderWidth="$1" borderColor="$border200">
             <GVStack space="md">
-              <GHeading size="md">Add receipt</GHeading>
+              <GHeading size="md">1) Attachments</GHeading>
               <GHStack space="sm" flexWrap="wrap">
                 <GButton
                   variant="outline"
                   action="secondary"
                   onPress={() => void addReceiptFromCamera()}
                   disabled={isBusy}
-                  testID="new-item-step1-take-photo"
+                  testID="new-item-attachment-take-photo"
                 >
                   <GButtonText>{isBusy ? "Working..." : "Take photo"}</GButtonText>
                 </GButton>
@@ -916,94 +522,383 @@ export default function NewItemRoute() {
                   action="secondary"
                   onPress={() => void uploadReceipt()}
                   disabled={isBusy}
-                  testID="new-item-step1-upload"
+                  testID="new-item-attachment-upload"
                 >
                   <GButtonText>{isBusy ? "Working..." : "Upload PDF/Image"}</GButtonText>
                 </GButton>
+                <GButton
+                  variant="outline"
+                  action="secondary"
+                  onPress={() => void addExtraPhoto()}
+                  disabled={isBusy}
+                  testID="new-item-attachment-extra-photo"
+                >
+                  <GButtonText>{isBusy ? "Working..." : "Add extra photo"}</GButtonText>
+                </GButton>
               </GHStack>
-              <GText size="sm">Receipts attached: {receiptAttachments.length}</GText>
+              <GText size="sm">Receipts: {receiptAttachments.length}</GText>
+              <GText size="sm">Extra photos: {extraPhotos.length}</GText>
+
+              {attachments.length === 0 ? (
+                <GCard borderWidth="$1" borderColor="$border200">
+                  <GVStack space="sm">
+                    <GText bold size="md">
+                      No files attached yet
+                    </GText>
+                    <GText size="sm">
+                      You can still save without attachments. Missing receipts are flagged in list/detail views.
+                    </GText>
+                  </GVStack>
+                </GCard>
+              ) : (
+                <GVStack space="sm">
+                  <GHeading size="sm">Preview</GHeading>
+                  {attachments.map((attachment) => (
+                    <GHStack key={attachment.filePath} justifyContent="space-between" alignItems="center" space="sm">
+                      <GVStack flex={1} space="xs">
+                        <GText bold size="sm">
+                          {attachment.type === "RECEIPT" ? "Receipt" : "Photo"}
+                        </GText>
+                        <GText size="sm">{attachment.originalFileName ?? "Unnamed file"}</GText>
+                        <GText size="sm">{formatFileSize(attachment.fileSizeBytes)}</GText>
+                      </GVStack>
+                      <GButton
+                        variant="link"
+                        action="secondary"
+                        onPress={() => void removeAttachment(attachment.filePath)}
+                      >
+                        <GButtonText>Remove</GButtonText>
+                      </GButton>
+                    </GHStack>
+                  ))}
+                </GVStack>
+              )}
             </GVStack>
           </GCard>
 
           <GCard borderWidth="$1" borderColor="$border200">
             <GVStack space="md">
-              <GHeading size="md">Additional photos (optional)</GHeading>
-              <GButton
-                variant="outline"
-                action="secondary"
-                onPress={() => void addExtraPhoto()}
-                disabled={isBusy}
-                alignSelf="flex-start"
-                testID="new-item-step1-add-extra-photo"
-              >
-                <GButtonText>{isBusy ? "Working..." : "Add extra photo"}</GButtonText>
-              </GButton>
-              <GText size="sm">Extra photos attached: {extraPhotos.length}</GText>
+              <GHeading size="md">2) Required fields</GHeading>
+
+              <GVStack space="xs">
+                <GText bold size="sm">
+                  Title *
+                </GText>
+                <GInput variant="outline">
+                  <GInputField
+                    value={title}
+                    onChangeText={setTitle}
+                    placeholder="e.g. Laptop for work"
+                    testID="new-item-title-input"
+                  />
+                </GInput>
+                {fieldErrors.title && (
+                  <GText size="xs" color="$error600">
+                    {fieldErrors.title}
+                  </GText>
+                )}
+              </GVStack>
+
+              <GVStack space="xs">
+                <GText bold size="sm">
+                  Purchase date *
+                </GText>
+                <GHStack space="sm" flexWrap="wrap" alignItems="center">
+                  <GInput variant="outline" flex={1} minWidth={180}>
+                    <GInputField
+                      value={purchaseDate}
+                      onChangeText={setPurchaseDate}
+                      placeholder="YYYY-MM-DD"
+                      autoCapitalize="none"
+                      testID="new-item-purchase-date-input"
+                    />
+                  </GInput>
+                  <GButton
+                    variant="outline"
+                    action="secondary"
+                    onPress={() => setPurchaseDate(formatYmdFromDateLocal(new Date()))}
+                  >
+                    <GButtonText>Set today</GButtonText>
+                  </GButton>
+                </GHStack>
+                {fieldErrors.purchaseDate && (
+                  <GText size="xs" color="$error600">
+                    {fieldErrors.purchaseDate}
+                  </GText>
+                )}
+              </GVStack>
+
+              <GVStack space="xs">
+                <GText bold size="sm">
+                  Price (EUR) *
+                </GText>
+                <GInput variant="outline">
+                  <GInputField
+                    value={totalPrice}
+                    onChangeText={setTotalPrice}
+                    keyboardType="decimal-pad"
+                    placeholder="e.g. 1299.90"
+                    testID="new-item-total-price-input"
+                  />
+                </GInput>
+                {fieldErrors.totalCents && (
+                  <GText size="xs" color="$error600">
+                    {fieldErrors.totalCents}
+                  </GText>
+                )}
+              </GVStack>
+
+              <GVStack space="xs">
+                <GText bold size="sm">
+                  Category
+                </GText>
+                <GButton
+                  variant="outline"
+                  action="secondary"
+                  onPress={() => setIsCategorySheetOpen(true)}
+                  justifyContent="space-between"
+                  testID="new-item-category-open"
+                >
+                  <GButtonText>{selectedCategoryName}</GButtonText>
+                </GButton>
+                {isLoadingCategories && (
+                  <GHStack space="sm" alignItems="center">
+                    <GSpinner size="small" />
+                    <GText size="xs">Loading categories...</GText>
+                  </GHStack>
+                )}
+                <GHStack space="sm" flexWrap="wrap" alignItems="center">
+                  <GInput variant="outline" flex={1} minWidth={200}>
+                    <GInputField
+                      value={newCategoryName}
+                      onChangeText={setNewCategoryName}
+                      placeholder="Create new category"
+                      testID="new-item-category-create-input"
+                    />
+                  </GInput>
+                  <GButton
+                    variant="outline"
+                    action="secondary"
+                    onPress={() => void createCategory()}
+                    disabled={isCreatingCategory}
+                    testID="new-item-category-create-button"
+                  >
+                    <GButtonText>{isCreatingCategory ? "Adding..." : "Add"}</GButtonText>
+                  </GButton>
+                </GHStack>
+              </GVStack>
+
+              <GVStack space="xs">
+                <GText bold size="sm">
+                  Usage type *
+                </GText>
+                <GHStack space="sm" flexWrap="wrap">
+                  {usageOptions.map((option) => (
+                    <GButton
+                      key={option.value}
+                      size="sm"
+                      variant={usageType === option.value ? "solid" : "outline"}
+                      action={usageType === option.value ? "primary" : "secondary"}
+                      onPress={() => setUsageType(option.value)}
+                      testID={`new-item-usage-${option.value.toLowerCase()}`}
+                    >
+                      <GButtonText>{option.label}</GButtonText>
+                    </GButton>
+                  ))}
+                </GHStack>
+              </GVStack>
+
+              {usageType === "MIXED" && (
+                <GVStack space="xs">
+                  <GText bold size="sm">
+                    Work percent *
+                  </GText>
+                  <GInput variant="outline">
+                    <GInputField
+                      value={workPercent}
+                      onChangeText={setWorkPercent}
+                      keyboardType="number-pad"
+                      placeholder="0-100"
+                      testID="new-item-work-percent-input"
+                    />
+                  </GInput>
+                  <GSlider
+                    value={workPercentSliderValue}
+                    minValue={0}
+                    maxValue={100}
+                    step={1}
+                    onChange={(value) => {
+                      const nextValue = Array.isArray(value) ? value[0] : value;
+                      if (typeof nextValue === "number" && Number.isFinite(nextValue)) {
+                        setWorkPercent(String(Math.round(nextValue)));
+                      }
+                    }}
+                  >
+                    <GSliderTrack>
+                      <GSliderFilledTrack />
+                    </GSliderTrack>
+                    <GSliderThumb />
+                  </GSlider>
+                  {fieldErrors.workPercent && (
+                    <GText size="xs" color="$error600">
+                      {fieldErrors.workPercent}
+                    </GText>
+                  )}
+                </GVStack>
+              )}
             </GVStack>
           </GCard>
 
-          {attachments.length === 0 ? (
-            <GCard borderWidth="$1" borderColor="$border200">
-              <GVStack space="sm">
-                <GText bold size="md">
-                  No files attached yet
-                </GText>
-                <GText size="sm">
-                  You can continue to Step 2 without attachments. Missing receipts are flagged later.
-                </GText>
-              </GVStack>
-            </GCard>
-          ) : (
-            <GCard borderWidth="$1" borderColor="$border200">
-              <GVStack space="sm">
-                <GHeading size="md">Preview</GHeading>
-                {attachments.map((attachment) => (
-                  <GHStack key={attachment.filePath} justifyContent="space-between" alignItems="center" space="sm">
-                    <GVStack flex={1} space="xs">
-                      <GText bold size="sm">
-                        {attachment.type === "RECEIPT" ? "Receipt" : "Photo"}
-                      </GText>
-                      <GText size="sm">{attachment.originalFileName ?? "Unnamed file"}</GText>
-                      <GText size="sm">{formatFileSize(attachment.fileSizeBytes)}</GText>
-                    </GVStack>
-                    <GButton
-                      variant="link"
-                      action="secondary"
-                      onPress={() => void removeAttachment(attachment.filePath)}
-                    >
-                      <GButtonText>Remove</GButtonText>
-                    </GButton>
-                  </GHStack>
-                ))}
-              </GVStack>
-            </GCard>
-          )}
+          <GCard borderWidth="$1" borderColor="$border200">
+            <GVStack space="md">
+              <GHeading size="md">3) Optional</GHeading>
 
-          <GHStack space="sm" flexWrap="wrap">
-            <GButton
-              variant="outline"
-              action="secondary"
-              onPress={() => void cancelDraft()}
-              disabled={isBusy}
-              testID="new-item-step1-cancel"
-            >
-              <GButtonText>Cancel</GButtonText>
-            </GButton>
-            <GButton
-              onPress={() =>
-                router.replace({
-                  pathname: "/item/new",
-                  params: { draftId: draftId ?? "", step: "2" },
-                })
-              }
-              disabled={isBusy}
-              testID="new-item-step1-continue"
-            >
-              <GButtonText>Continue</GButtonText>
-            </GButton>
-          </GHStack>
+              <GVStack space="xs">
+                <GText bold size="sm">
+                  Notes
+                </GText>
+                <GTextarea>
+                  <GTextareaInput
+                    value={notes}
+                    onChangeText={setNotes}
+                    placeholder="Optional notes for invoice or audit context"
+                    testID="new-item-notes-input"
+                  />
+                </GTextarea>
+                {(usageType === "WORK" || usageType === "MIXED") && notes.trim().length === 0 && (
+                  <GBadge size="sm" action="warning" variant="outline" alignSelf="flex-start">
+                    <GBadgeText>Missing notes will be flagged</GBadgeText>
+                  </GBadge>
+                )}
+              </GVStack>
+
+              <GVStack space="xs">
+                <GText bold size="sm">
+                  Warranty months
+                </GText>
+                <GInput variant="outline">
+                  <GInputField
+                    value={warrantyMonths}
+                    onChangeText={setWarrantyMonths}
+                    keyboardType="number-pad"
+                    placeholder="Optional"
+                    testID="new-item-warranty-months-input"
+                  />
+                </GInput>
+                {fieldErrors.warrantyMonths && (
+                  <GText size="xs" color="$error600">
+                    {fieldErrors.warrantyMonths}
+                  </GText>
+                )}
+                <GText size="xs">Warranty until: {warrantyUntilDate ?? "n/a"}</GText>
+              </GVStack>
+
+              <GVStack space="xs">
+                <GText bold size="sm">
+                  Vendor
+                </GText>
+                <GInput variant="outline">
+                  <GInputField
+                    value={vendor}
+                    onChangeText={setVendor}
+                    placeholder="Optional vendor/store"
+                    testID="new-item-vendor-input"
+                  />
+                </GInput>
+              </GVStack>
+            </GVStack>
+          </GCard>
+
+          <GCard borderWidth="$1" borderColor="$border200">
+            <GVStack space="md">
+              <GHStack alignItems="center" justifyContent="space-between">
+                <GHeading size="md">4) Advanced</GHeading>
+                <GButton
+                  size="sm"
+                  variant="outline"
+                  action="secondary"
+                  onPress={() => setIsAdvancedOpen((current) => !current)}
+                  testID="new-item-advanced-toggle"
+                >
+                  <GButtonText>{isAdvancedOpen ? "Hide" : "Show"}</GButtonText>
+                </GButton>
+              </GHStack>
+
+              {isAdvancedOpen && (
+                <GVStack space="xs">
+                  <GText bold size="sm">
+                    Useful life override (months)
+                  </GText>
+                  <GInput variant="outline">
+                    <GInputField
+                      value={usefulLifeMonthsOverride}
+                      onChangeText={setUsefulLifeMonthsOverride}
+                      keyboardType="number-pad"
+                      placeholder="Optional, e.g. 36"
+                      testID="new-item-useful-life-input"
+                    />
+                  </GInput>
+                  {usefulLifeMonthsOverrideError && (
+                    <GText size="xs" color="$error600">
+                      {usefulLifeMonthsOverrideError}
+                    </GText>
+                  )}
+                </GVStack>
+              )}
+            </GVStack>
+          </GCard>
         </GVStack>
       </ScrollView>
+
+      <GBox borderTopWidth="$1" borderColor="$border200" bg="$background0" px="$5" py="$3">
+        <GHStack justifyContent="space-between" alignItems="center" space="sm">
+          <GButton
+            variant="outline"
+            action="secondary"
+            onPress={() => void cancelDraft()}
+            disabled={isBusy || isSavingItem}
+            testID="new-item-cancel"
+          >
+            <GButtonText>Cancel</GButtonText>
+          </GButton>
+
+          <GButton
+            onPress={() => void saveItem()}
+            disabled={!canSave || isBusy}
+            testID="new-item-save"
+          >
+            <GButtonText>{isSavingItem ? "Saving..." : "Save Item"}</GButtonText>
+          </GButton>
+        </GHStack>
+      </GBox>
+
+      <GActionsheet isOpen={isCategorySheetOpen} onClose={() => setIsCategorySheetOpen(false)}>
+        <GActionsheetBackdrop />
+        <GActionsheetContent>
+          <GActionsheetDragIndicatorWrapper>
+            <GActionsheetDragIndicator />
+          </GActionsheetDragIndicatorWrapper>
+          <GActionsheetItem
+            onPress={() => {
+              setCategoryId(null);
+              setIsCategorySheetOpen(false);
+            }}
+          >
+            <GActionsheetItemText>No category selected</GActionsheetItemText>
+          </GActionsheetItem>
+          {categories.map((category) => (
+            <GActionsheetItem
+              key={category.id}
+              onPress={() => {
+                setCategoryId(category.id);
+                setIsCategorySheetOpen(false);
+              }}
+            >
+              <GActionsheetItemText>{category.name}</GActionsheetItemText>
+            </GActionsheetItem>
+          ))}
+        </GActionsheetContent>
+      </GActionsheet>
     </GBox>
   );
 }

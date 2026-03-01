@@ -5,9 +5,8 @@ import NewItemRoute from "@/app/item/new";
 
 const mockRouterReplace = jest.fn();
 const mockRouter = { replace: mockRouterReplace };
-let mockRouteParams: { draftId?: string; step?: string } = {
+const mockRouteParams: { draftId?: string } = {
   draftId: "draft-1",
-  step: "2",
 };
 
 const mockListCategories = jest.fn();
@@ -102,10 +101,9 @@ jest.mock("@/services/item-draft-store", () => ({
   removeAttachmentFromDraft: jest.fn(),
 }));
 
-describe("NewItemRoute step 2", () => {
+describe("NewItemRoute save and validation", () => {
   beforeEach(() => {
     mockRouterReplace.mockReset();
-    mockRouteParams = { draftId: "draft-1", step: "2" };
 
     mockListCategories.mockReset();
     mockCreateCustomCategory.mockReset();
@@ -147,8 +145,7 @@ describe("NewItemRoute step 2", () => {
     mockCreateItem.mockResolvedValue({ id: "item-123" });
   });
 
-  it("supports add-item happy path from attachment to successful save", async () => {
-    mockRouteParams = { draftId: "draft-1", step: "1" };
+  it("supports add-item happy path from attachment to successful save and routes to items tab", async () => {
     mockSaveFromCamera.mockResolvedValue({
       filePath: "/tmp/receipt-a.jpg",
       mimeType: "image/jpeg",
@@ -157,10 +154,10 @@ describe("NewItemRoute step 2", () => {
       type: "PHOTO",
     });
 
-    const view = render(<NewItemRoute />);
-    expect(await screen.findByText("Add Item: Attachments")).toBeTruthy();
+    render(<NewItemRoute />);
+    expect(await screen.findByText("Add Item")).toBeTruthy();
 
-    fireEvent.press(screen.getByTestId("new-item-step1-take-photo"));
+    fireEvent.press(screen.getByTestId("new-item-attachment-take-photo"));
 
     await waitFor(() => {
       expect(mockSaveFromCamera).toHaveBeenCalledTimes(1);
@@ -171,23 +168,13 @@ describe("NewItemRoute step 2", () => {
       expect(screen.getByText("receipt-a.jpg")).toBeTruthy();
     });
 
-    fireEvent.press(screen.getByTestId("new-item-step1-continue"));
-    expect(mockRouterReplace).toHaveBeenCalledWith({
-      pathname: "/item/new",
-      params: { draftId: "draft-1", step: "2" },
-    });
+    fireEvent.changeText(screen.getByTestId("new-item-title-input"), "  Work monitor  ");
+    fireEvent.changeText(screen.getByTestId("new-item-purchase-date-input"), "2026-01-15");
+    fireEvent.changeText(screen.getByTestId("new-item-total-price-input"), "499.99");
+    fireEvent.changeText(screen.getByTestId("new-item-vendor-input"), "  Saturn  ");
+    fireEvent.changeText(screen.getByTestId("new-item-notes-input"), "  invoice attached  ");
 
-    mockRouteParams = { draftId: "draft-1", step: "2" };
-    view.rerender(<NewItemRoute />);
-
-    expect(await screen.findByText("Add Item: Fields")).toBeTruthy();
-
-    fireEvent.changeText(screen.getByTestId("new-item-step2-title-input"), "  Work monitor  ");
-    fireEvent.changeText(screen.getByTestId("new-item-step2-total-price-input"), "499.99");
-    fireEvent.changeText(screen.getByTestId("new-item-step2-vendor-input"), "  Saturn  ");
-    fireEvent.changeText(screen.getByTestId("new-item-step2-notes-input"), "  invoice attached  ");
-
-    fireEvent.press(screen.getByTestId("new-item-step2-save"));
+    fireEvent.press(screen.getByTestId("new-item-save"));
 
     await waitFor(() => {
       expect(mockCreateItem).toHaveBeenCalledWith(
@@ -204,18 +191,18 @@ describe("NewItemRoute step 2", () => {
     });
     await waitFor(() => {
       expect(mockLinkDraftAttachmentsToItem).toHaveBeenCalledWith("draft-1", "item-123");
-      expect(mockRouterReplace).toHaveBeenCalledWith("/item/item-123");
+      expect(mockRouterReplace).toHaveBeenCalledWith("/(tabs)/items");
     });
   });
 
   it("blocks save when required fields are invalid", async () => {
     render(<NewItemRoute />);
 
-    expect(await screen.findByText("Add Item: Fields")).toBeTruthy();
+    expect(await screen.findByText("Add Item")).toBeTruthy();
     expect(screen.getByText("Title is required.")).toBeTruthy();
     expect(screen.getByText("Total price is required and must be greater than 0.")).toBeTruthy();
 
-    fireEvent.press(screen.getByTestId("new-item-step2-save"));
+    fireEvent.press(screen.getByTestId("new-item-save"));
 
     await waitFor(() => {
       expect(mockCreateItem).not.toHaveBeenCalled();
@@ -226,13 +213,13 @@ describe("NewItemRoute step 2", () => {
   it("blocks save for MIXED usage when work percent is missing", async () => {
     render(<NewItemRoute />);
 
-    expect(await screen.findByText("Add Item: Fields")).toBeTruthy();
+    expect(await screen.findByText("Add Item")).toBeTruthy();
 
-    fireEvent.changeText(screen.getByTestId("new-item-step2-title-input"), "Mixed use tablet");
-    fireEvent.changeText(screen.getByTestId("new-item-step2-total-price-input"), "899.00");
-    fireEvent.press(screen.getByTestId("new-item-step2-usage-mixed"));
+    fireEvent.changeText(screen.getByTestId("new-item-title-input"), "Mixed use tablet");
+    fireEvent.changeText(screen.getByTestId("new-item-total-price-input"), "899.00");
+    fireEvent.press(screen.getByTestId("new-item-usage-mixed"));
 
-    fireEvent.press(screen.getByTestId("new-item-step2-save"));
+    fireEvent.press(screen.getByTestId("new-item-save"));
 
     await waitFor(() => {
       expect(screen.getByText("Work percent is required for mixed usage.")).toBeTruthy();
