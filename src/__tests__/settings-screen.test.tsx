@@ -12,6 +12,13 @@ const mockHasPin = jest.fn();
 const mockDeleteAllLocalData = jest.fn();
 const mockIsConnected = jest.fn();
 const mockGetSelectedOneDriveFolder = jest.fn();
+const mockGetDocumentAsync = jest.fn();
+const mockCreateLocalBackupZip = jest.fn();
+const mockRestoreFromBackupZip = jest.fn();
+const mockShareBackupZip = jest.fn();
+const mockEmitDatabaseRestored = jest.fn();
+const mockEmitLocalDataDeleted = jest.fn();
+const mockEmitProfileSettingsSaved = jest.fn();
 
 jest.mock("@gluestack-ui/themed", () => {
   const {
@@ -56,7 +63,7 @@ jest.mock("expo-web-browser", () => ({
 }));
 
 jest.mock("expo-document-picker", () => ({
-  getDocumentAsync: jest.fn(),
+  getDocumentAsync: (...args: unknown[]) => mockGetDocumentAsync(...args),
 }));
 
 jest.mock("@/contexts/theme-mode-context", () => ({
@@ -91,9 +98,9 @@ jest.mock("@/services/onedrive-auth", () => ({
 }));
 
 jest.mock("@/services/backup-restore", () => ({
-  createLocalBackupZip: jest.fn(),
-  restoreFromBackupZip: jest.fn(),
-  shareBackupZip: jest.fn(),
+  createLocalBackupZip: (...args: unknown[]) => mockCreateLocalBackupZip(...args),
+  restoreFromBackupZip: (...args: unknown[]) => mockRestoreFromBackupZip(...args),
+  shareBackupZip: (...args: unknown[]) => mockShareBackupZip(...args),
 }));
 
 jest.mock("@/services/export-pipeline", () => ({
@@ -112,9 +119,9 @@ jest.mock("@/services/local-data", () => ({
 }));
 
 jest.mock("@/services/app-events", () => ({
-  emitDatabaseRestored: jest.fn(),
-  emitLocalDataDeleted: jest.fn(),
-  emitProfileSettingsSaved: jest.fn(),
+  emitDatabaseRestored: (...args: unknown[]) => mockEmitDatabaseRestored(...args),
+  emitLocalDataDeleted: (...args: unknown[]) => mockEmitLocalDataDeleted(...args),
+  emitProfileSettingsSaved: (...args: unknown[]) => mockEmitProfileSettingsSaved(...args),
 }));
 
 describe("SettingsScreen", () => {
@@ -126,16 +133,23 @@ describe("SettingsScreen", () => {
     mockDeleteAllLocalData.mockReset();
     mockIsConnected.mockReset();
     mockGetSelectedOneDriveFolder.mockReset();
+    mockGetDocumentAsync.mockReset();
+    mockCreateLocalBackupZip.mockReset();
+    mockRestoreFromBackupZip.mockReset();
+    mockShareBackupZip.mockReset();
+    mockEmitDatabaseRestored.mockReset();
+    mockEmitLocalDataDeleted.mockReset();
+    mockEmitProfileSettingsSaved.mockReset();
     mockThemePreference = "system";
 
     const settings = {
-      taxYearDefault: 2026,
-      marginalRateBps: 4000,
-      defaultWorkPercent: 100,
-      gwgThresholdCents: 100000,
-      applyHalfYearRule: false,
+      taxYearDefault: 2030,
+      marginalRateBps: 3500,
+      defaultWorkPercent: 64,
+      gwgThresholdCents: 85000,
+      applyHalfYearRule: true,
       appLockEnabled: false,
-      uploadToOneDriveAfterExport: false,
+      uploadToOneDriveAfterExport: true,
       themeModePreference: "system" as const,
       currency: "EUR" as const,
     };
@@ -146,6 +160,19 @@ describe("SettingsScreen", () => {
     mockDeleteAllLocalData.mockResolvedValue(undefined);
     mockIsConnected.mockResolvedValue(false);
     mockGetSelectedOneDriveFolder.mockResolvedValue(null);
+    mockGetDocumentAsync.mockResolvedValue({ canceled: true, assets: [] });
+    mockCreateLocalBackupZip.mockResolvedValue({
+      fileUri: "file:///exports/backup.zip",
+      fileName: "backup.zip",
+      sizeBytes: 1024,
+      manifest: { attachmentCount: 0, missingAttachmentCount: 0 },
+    });
+    mockRestoreFromBackupZip.mockResolvedValue({
+      itemCountRestored: 0,
+      attachmentCountRestored: 0,
+      missingFilesCount: 0,
+    });
+    mockShareBackupZip.mockResolvedValue(undefined);
   });
 
   it("switches theme and saves tax defaults", async () => {
@@ -166,6 +193,7 @@ describe("SettingsScreen", () => {
     render(<SettingsScreen />);
 
     expect(await screen.findByText("Settings")).toBeTruthy();
+    expect(screen.getByTestId("settings-default-work-percent-input").props.value).toBe("64");
 
     fireEvent.press(screen.getByTestId("settings-delete-local-data"));
     expect(screen.getByText("Delete all local data?")).toBeTruthy();
@@ -173,6 +201,31 @@ describe("SettingsScreen", () => {
     fireEvent.press(screen.getByTestId("settings-confirm-accept"));
     await waitFor(() => {
       expect(mockDeleteAllLocalData).toHaveBeenCalled();
+      expect(mockEmitLocalDataDeleted).toHaveBeenCalled();
+      expect(mockSetPreference).toHaveBeenCalledWith("system");
+      expect(screen.getByTestId("settings-default-work-percent-input").props.value).toBe("100");
+    });
+  });
+
+  it("keeps local data unchanged when backup import picker is canceled", async () => {
+    mockGetDocumentAsync.mockResolvedValueOnce({
+      canceled: true,
+      assets: [],
+    });
+
+    render(<SettingsScreen />);
+    expect(await screen.findByText("Settings")).toBeTruthy();
+
+    fireEvent.press(screen.getByText("Import backup (overwrite)"));
+    expect(screen.getByText("Import backup snapshot?")).toBeTruthy();
+
+    fireEvent.press(screen.getByTestId("settings-confirm-accept"));
+
+    await waitFor(() => {
+      expect(mockGetDocumentAsync).toHaveBeenCalled();
+      expect(mockRestoreFromBackupZip).not.toHaveBeenCalled();
+      expect(mockEmitDatabaseRestored).not.toHaveBeenCalled();
+      expect(screen.queryByText("Import backup snapshot?")).toBeNull();
     });
   });
 });

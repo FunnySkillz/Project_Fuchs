@@ -286,4 +286,30 @@ describe("ExportRoute", () => {
       expect(mockListItems).toHaveBeenCalledTimes(2);
     });
   });
+
+  it("does not create export history when PDF generation fails", async () => {
+    mockGeneratePdfExport.mockRejectedValueOnce(new Error("PDF engine failed"));
+
+    render(<ExportRoute />);
+    expect(await screen.findByText("Export")).toBeTruthy();
+
+    fireEvent.press(screen.getByTestId("export-row-toggle-item-1"));
+    fireEvent.press(screen.getByTestId("export-generate-pdf"));
+
+    expect(await screen.findByText("Could not generate PDF export.")).toBeTruthy();
+    expect(mockCreateExportRun).not.toHaveBeenCalled();
+  });
+
+  it("does not create export history when ZIP generation fails", async () => {
+    mockGenerateZipExport.mockRejectedValueOnce(new Error("ZIP creation failed"));
+
+    render(<ExportRoute />);
+    expect(await screen.findByText("Export")).toBeTruthy();
+
+    fireEvent.press(screen.getByTestId("export-row-toggle-item-1"));
+    fireEvent.press(screen.getByTestId("export-generate-zip"));
+
+    expect(await screen.findByText("Could not generate ZIP export.")).toBeTruthy();
+    expect(mockCreateExportRun).not.toHaveBeenCalled();
+  });
 });
