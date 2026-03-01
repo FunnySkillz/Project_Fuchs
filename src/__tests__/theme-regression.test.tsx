@@ -2,7 +2,7 @@ import React from "react";
 import { render, screen } from "@testing-library/react-native";
 
 import HomeRoute from "@/app/(tabs)/home";
-import SettingsScreen from "@/app/settings";
+import SettingsRoute from "@/app/(tabs)/settings";
 import { ThemeModeContext } from "@/contexts/theme-mode-context";
 import type { ThemeMode } from "@/theme/theme-mode";
 
@@ -202,10 +202,10 @@ describe("theme regression smoke", () => {
   });
 
   it.each(["light", "dark"] as const)("renders Settings in %s mode", async (mode) => {
-    renderWithTheme(<SettingsScreen />, mode);
+    renderWithTheme(<SettingsRoute />, mode);
 
     expect(await screen.findByText("Settings")).toBeTruthy();
-    expect(screen.getByText("Theme")).toBeTruthy();
-    expect(screen.getByText("Save settings")).toBeTruthy();
+    expect(screen.getByText("Appearance")).toBeTruthy();
+    expect(screen.getByText("Tax & Calculation")).toBeTruthy();
   });
 });
