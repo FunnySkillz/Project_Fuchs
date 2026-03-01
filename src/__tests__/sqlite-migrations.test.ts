@@ -2,6 +2,7 @@ import { MigrationError, runMigrations } from "@/db/migrate";
 import { DB_MIGRATIONS } from "@/db/migrations";
 import type { DbMigration } from "@/db/migrations/types";
 import { withTempSqliteExecutor } from "@/__tests__/helpers/sqlite-test-utils";
+import type { SQLiteBindParams, SQLiteExecutor } from "@/db/profile-settings-db";
 
 interface SqliteMasterRow {
   type: "table" | "index" | "trigger";
@@ -74,7 +75,86 @@ describe("runMigrations integration", () => {
         expect(thrown).toMatchObject({
           name: "MigrationError",
           migrationVersion: failingMigration.version,
+          details: {
+            code: "MIGRATION_EXECUTION_FAILED",
+            migrationVersion: failingMigration.version,
+            migrationName: failingMigration.name,
+          },
         });
+      });
+    } finally {
+      const index = DB_MIGRATIONS.findIndex((migration) => migration.version === failingMigration.version);
+      if (index >= 0) {
+        DB_MIGRATIONS.splice(index, 1);
+      }
+    }
+  });
+
+  it("returns structured MigrationError when migration metadata initialization fails", async () => {
+    const failingExecutor: SQLiteExecutor = {
+      async execAsync(source: string) {
+        if (source.includes("schema_migrations")) {
+          throw new Error("meta init failed");
+        }
+      },
+      async getFirstAsync<T>() {
+        return { version: 0 } as T;
+      },
+      async getAllAsync<T>() {
+        return [] as T[];
+      },
+      async runAsync() {
+        return {};
+      },
+    };
+
+    await expect(runMigrations(failingExecutor)).rejects.toMatchObject({
+      name: "MigrationError",
+      details: {
+        code: "MIGRATION_META_INIT_FAILED",
+        reason: "meta init failed",
+      },
+    });
+  });
+
+  it("returns structured MigrationError when rollback fails after migration error", async () => {
+    const failingMigration: DbMigration = {
+      version: 99_998,
+      name: "test-rollback-failing-migration",
+      up: async () => {
+        throw new Error("forced migration failure");
+      },
+    };
+
+    const rollbackFailingExecutor: SQLiteExecutor = {
+      async execAsync(source: string) {
+        if (source.includes("ROLLBACK")) {
+          throw new Error("forced rollback failure");
+        }
+      },
+      async getFirstAsync<T>() {
+        return { version: 0 } as T;
+      },
+      async getAllAsync<T>() {
+        return [] as T[];
+      },
+      async runAsync(_source: string, _params: SQLiteBindParams) {
+        return {};
+      },
+    };
+
+    DB_MIGRATIONS.push(failingMigration);
+    try {
+      await expect(runMigrations(rollbackFailingExecutor)).rejects.toMatchObject({
+        name: "MigrationError",
+        migrationVersion: failingMigration.version,
+        details: {
+          code: "MIGRATION_ROLLBACK_FAILED",
+          migrationVersion: failingMigration.version,
+          migrationName: failingMigration.name,
+          reason: "forced migration failure",
+          rollbackReason: "forced rollback failure",
+        },
       });
     } finally {
       const index = DB_MIGRATIONS.findIndex((migration) => migration.version === failingMigration.version);

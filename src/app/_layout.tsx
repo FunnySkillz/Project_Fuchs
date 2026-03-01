@@ -10,12 +10,15 @@ import { AnimatedSplashOverlay } from "@/components/animated-icon";
 import { AppGluestackUIProvider } from "@/components/gluestack-ui-provider";
 import { ThemeModeContext } from "@/contexts/theme-mode-context";
 import { InitErrorScreen } from "@/components/init-error-screen";
+import { MigrationError } from "@/db/migrate";
 import { getProfileSettingsRepository } from "@/repositories/create-profile-settings-repository";
 import {
+  emitLocalDataDeleted,
   onDatabaseRestored,
   onLocalDataDeleted,
   onProfileSettingsSaved,
 } from "@/services/app-events";
+import { createInitDebugReport, shareDebugReport } from "@/services/debug-report";
 import { deleteAllLocalData } from "@/services/local-data";
 import { hasPinAsync, verifyPinAsync } from "@/services/pin-auth";
 import {
@@ -24,17 +27,53 @@ import {
 } from "@/services/theme-preference";
 import { resolveThemeMode, type ThemeMode } from "@/theme/theme-mode";
 
+interface InitErrorReportPayload {
+  message: string;
+  rawError: string;
+  errorName: string;
+  stack?: string;
+  migrationVersion?: number;
+  occurredAtIso: string;
+}
+
 function friendlyInitErrorMessage(error: unknown): string {
+  if (error instanceof MigrationError) {
+    const versionSuffix =
+      typeof error.migrationVersion === "number"
+        ? ` (migration v${error.migrationVersion})`
+        : "";
+    return `Database migration failed${versionSuffix}. Retry initialization. If it still fails, export debug info and use 'Reset Local Data'.`;
+  }
+
   const message = error instanceof Error ? error.message : String(error);
   const lowered = message.toLowerCase();
 
   if (lowered.includes("migration")) {
-    return "Database migration failed. Retry initialization. If it still fails, use 'Reset Local Data' to recover.";
+    return "Database migration failed. Retry initialization. If it still fails, export debug info and use 'Reset Local Data' to recover.";
   }
   if (lowered.includes("database") || lowered.includes("sqlite")) {
-    return "Database initialization failed. Retry first. If the error persists, use 'Reset Local Data' to rebuild local storage.";
+    return "Database initialization failed. Retry first. If the error persists, export debug info and use 'Reset Local Data' to rebuild local storage.";
   }
   return message || "Database initialization failed.";
+}
+
+function buildInitErrorReportPayload(error: unknown): InitErrorReportPayload {
+  const rawError = error instanceof Error ? error.message : String(error);
+  const errorName = error instanceof Error ? error.name : "UnknownError";
+  const stack = error instanceof Error ? error.stack : undefined;
+  const migrationVersion =
+    error instanceof MigrationError && typeof error.migrationVersion === "number"
+      ? error.migrationVersion
+      : undefined;
+
+  return {
+    message: friendlyInitErrorMessage(error),
+    rawError,
+    errorName,
+    stack,
+    migrationVersion,
+    occurredAtIso: new Date().toISOString(),
+  };
 }
 
 export default function RootLayout() {
@@ -47,6 +86,7 @@ export default function RootLayout() {
   const [isAuthenticating, setIsAuthenticating] = React.useState(false);
   const [authError, setAuthError] = React.useState<string | null>(null);
   const [initError, setInitError] = React.useState<string | null>(null);
+  const [initErrorPayload, setInitErrorPayload] = React.useState<InitErrorReportPayload | null>(null);
   const [pinAvailable, setPinAvailable] = React.useState(false);
   const [showPinEntry, setShowPinEntry] = React.useState(false);
   const [pinInput, setPinInput] = React.useState("");
@@ -171,10 +211,12 @@ export default function RootLayout() {
       setAppLockEnabled(false);
       setIsUnlocked(true);
       setAuthError(null);
+      setInitError(null);
       setPinInput("");
       setShowPinEntry(false);
       setPinAvailable(false);
       setThemeModeState("system");
+      setInitErrorPayload(null);
     });
 
     const unsubscribeProfileSave = onProfileSettingsSaved(() => {
@@ -194,6 +236,31 @@ export default function RootLayout() {
 
   const retryInitialization = useCallback(() => {
     setBootstrapState("loading");
+    setInitError(null);
+    setInitErrorPayload(null);
+  }, []);
+
+  const exportInitDebugInfo = useCallback(async () => {
+    const payload = initErrorPayload ?? {
+      message: initError ?? "Database initialization failed.",
+      rawError: initError ?? "Unknown initialization error.",
+      errorName: "InitializationError",
+      occurredAtIso: new Date().toISOString(),
+    };
+    const { fileUri } = await createInitDebugReport({
+      errorMessage: payload.message,
+      rawError: payload.rawError,
+      errorName: payload.errorName,
+      stack: payload.stack,
+      migrationVersion: payload.migrationVersion,
+      timestampIso: payload.occurredAtIso,
+    });
+    await shareDebugReport(fileUri);
+  }, [initError, initErrorPayload]);
+
+  const resetLocalDataFromInitError = useCallback(async () => {
+    await deleteAllLocalData();
+    emitLocalDataDeleted();
   }, []);
 
   useEffect(() => {
@@ -230,6 +297,7 @@ export default function RootLayout() {
 
       try {
         setInitError(null);
+        setInitErrorPayload(null);
         const repository = await getProfileSettingsRepository();
         const hasSettings = await repository.hasValidSettings();
         if (!active) {
@@ -269,7 +337,9 @@ export default function RootLayout() {
         }
 
         console.error("Failed to initialize app", error);
-        setInitError(friendlyInitErrorMessage(error));
+        const payload = buildInitErrorReportPayload(error);
+        setInitError(payload.message);
+        setInitErrorPayload(payload);
         setBootstrapState("init_error");
       }
     };
@@ -330,46 +400,40 @@ export default function RootLayout() {
     <ThemeModeContext.Provider value={themeModeContextValue}>
       <ThemeProvider value={resolvedColorMode === "dark" ? DarkTheme : DefaultTheme}>
         <AppGluestackUIProvider colorMode={resolvedColorMode}>
-        <AnimatedSplashOverlay />
-        {bootstrapState === "ready" && !hasProfile && !inOnboarding && <Redirect href="/(onboarding)/welcome" />}
-        {bootstrapState === "ready" && hasProfile && inOnboarding && <Redirect href="/(tabs)/home" />}
-        {bootstrapState === "ready" && (!appLockEnabled || isUnlocked || !hasProfile) && <Slot />}
-        {bootstrapState === "ready" && appLockEnabled && !isUnlocked && (
-          <AppLockGate
-            isAuthenticating={isAuthenticating}
-            errorMessage={authError}
-            pinEnabled={pinAvailable}
-            pinValue={pinInput}
-            onPinValueChange={setPinInput}
-            onPinSubmit={() => void handlePinSubmit()}
-            onUsePin={() => setShowPinEntry(true)}
-            onUseBiometric={() => {
-              setShowPinEntry(false);
-              void authenticate();
-            }}
-            showPinEntry={showPinEntry}
-            onRetry={() => void authenticate()}
-            onCancel={() => {
-              setIsUnlocked(false);
-              setAuthError("Authentication canceled.");
-              setShowPinEntry(false);
-            }}
-          />
-        )}
-        {bootstrapState === "init_error" && (
-          <InitErrorScreen
-            message={initError ?? "Database initialization failed."}
-            onRetry={retryInitialization}
-            onResetData={() => {
-              void deleteAllLocalData().then(() => {
-                setHasProfile(false);
-                setBootstrapState("ready");
-                setInitError(null);
-                setThemeModeState("system");
-              });
-            }}
-          />
-        )}
+          <AnimatedSplashOverlay />
+          {bootstrapState === "ready" && !hasProfile && !inOnboarding && <Redirect href="/(onboarding)/welcome" />}
+          {bootstrapState === "ready" && hasProfile && inOnboarding && <Redirect href="/(tabs)/home" />}
+          {bootstrapState === "ready" && (!appLockEnabled || isUnlocked || !hasProfile) && <Slot />}
+          {bootstrapState === "ready" && appLockEnabled && !isUnlocked && (
+            <AppLockGate
+              isAuthenticating={isAuthenticating}
+              errorMessage={authError}
+              pinEnabled={pinAvailable}
+              pinValue={pinInput}
+              onPinValueChange={setPinInput}
+              onPinSubmit={() => void handlePinSubmit()}
+              onUsePin={() => setShowPinEntry(true)}
+              onUseBiometric={() => {
+                setShowPinEntry(false);
+                void authenticate();
+              }}
+              showPinEntry={showPinEntry}
+              onRetry={() => void authenticate()}
+              onCancel={() => {
+                setIsUnlocked(false);
+                setAuthError("Authentication canceled.");
+                setShowPinEntry(false);
+              }}
+            />
+          )}
+          {bootstrapState === "init_error" && (
+            <InitErrorScreen
+              message={initError ?? "Database initialization failed."}
+              onRetry={retryInitialization}
+              onExportDebugInfo={exportInitDebugInfo}
+              onResetData={resetLocalDataFromInitError}
+            />
+          )}
         </AppGluestackUIProvider>
       </ThemeProvider>
     </ThemeModeContext.Provider>

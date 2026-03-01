@@ -171,6 +171,121 @@ describe("estimateTaxImpact", () => {
     expect(result.explanations.join(" ")).toContain("marginal rate 4200 bps");
   });
 
+  it("uses default work percent when usage is MIXED and explicit value is missing", () => {
+    const result = estimateTaxImpact(
+      {
+        totalCents: 120_000,
+        usageType: "MIXED",
+        workPercent: null,
+        purchaseDate: "2026-04-10",
+        usefulLifeMonths: 12,
+      },
+      {
+        gwgThresholdCents: 100_000,
+        applyHalfYearRule: false,
+        marginalRateBps: 4_000,
+        defaultWorkPercent: 65,
+      },
+      2026
+    );
+
+    expect(result.deductibleThisYearCents).toBe(78_000);
+    expect(result.explanations.join(" ")).toContain("resolved to 65% work share");
+  });
+
+  it("deducts immediately when work-relevant base equals GWG threshold exactly", () => {
+    const result = estimateTaxImpact(
+      {
+        totalCents: 100_000,
+        usageType: "WORK",
+        workPercent: null,
+        purchaseDate: "2026-08-01",
+        usefulLifeMonths: 36,
+      },
+      {
+        gwgThresholdCents: 100_000,
+        applyHalfYearRule: true,
+        marginalRateBps: 4_000,
+        defaultWorkPercent: 100,
+      },
+      2026
+    );
+
+    expect(result.scheduleByYear).toEqual([{ year: 2026, deductibleCents: 100_000 }]);
+    expect(result.explanations.join(" ")).toContain("below/equal GWG threshold");
+  });
+
+  it("half-year rule does not reduce first year for June purchases", () => {
+    const result = estimateTaxImpact(
+      {
+        totalCents: 150_000,
+        usageType: "WORK",
+        workPercent: null,
+        purchaseDate: "2026-06-15",
+        usefulLifeMonths: 24,
+      },
+      {
+        gwgThresholdCents: 100_000,
+        applyHalfYearRule: true,
+        marginalRateBps: 4_000,
+        defaultWorkPercent: 100,
+      },
+      2026
+    );
+
+    expect(result.scheduleByYear).toEqual([
+      { year: 2026, deductibleCents: 75_000 },
+      { year: 2027, deductibleCents: 75_000 },
+    ]);
+    expect(result.explanations.join(" ")).toContain(
+      "Half-year rule active, but purchase on/before 30 June"
+    );
+  });
+
+  it("clamps useful life to minimum 1 month for above-threshold items", () => {
+    const result = estimateTaxImpact(
+      {
+        totalCents: 180_000,
+        usageType: "WORK",
+        workPercent: null,
+        purchaseDate: "2026-01-15",
+        usefulLifeMonths: 0,
+      },
+      {
+        gwgThresholdCents: 100_000,
+        applyHalfYearRule: true,
+        marginalRateBps: 4_000,
+        defaultWorkPercent: 100,
+      },
+      2026
+    );
+
+    expect(result.scheduleByYear).toEqual([{ year: 2026, deductibleCents: 180_000 }]);
+    expect(result.deductibleThisYearCents).toBe(180_000);
+  });
+
+  it("returns zero for tax years outside the deduction schedule", () => {
+    const result = estimateTaxImpact(
+      {
+        totalCents: 180_000,
+        usageType: "WORK",
+        workPercent: null,
+        purchaseDate: "2026-01-15",
+        usefulLifeMonths: 24,
+      },
+      {
+        gwgThresholdCents: 100_000,
+        applyHalfYearRule: false,
+        marginalRateBps: 4_000,
+        defaultWorkPercent: 100,
+      },
+      2025
+    );
+
+    expect(result.deductibleThisYearCents).toBe(0);
+    expect(result.estimatedRefundThisYearCents).toBe(0);
+  });
+
   it("throws on invalid purchase date", () => {
     expect(() =>
       estimateTaxImpact(

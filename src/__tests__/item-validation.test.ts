@@ -80,6 +80,32 @@ describe("validateItemInput", () => {
     expect(atMax.errors).toEqual([]);
   });
 
+  it("returns invalid when usageType is MIXED and workPercent is out of range", () => {
+    const belowRange = validateItemInput({
+      ...baseInput,
+      usageType: "MIXED",
+      workPercent: -1,
+    });
+    const aboveRange = validateItemInput({
+      ...baseInput,
+      usageType: "MIXED",
+      workPercent: 101,
+    });
+
+    expect(belowRange.valid).toBe(false);
+    expect(aboveRange.valid).toBe(false);
+    expect(belowRange.errors).toContainEqual({
+      field: "workPercent",
+      code: "WORK_PERCENT_OUT_OF_RANGE",
+      message: "Work percent must be between 0 and 100.",
+    });
+    expect(aboveRange.errors).toContainEqual({
+      field: "workPercent",
+      code: "WORK_PERCENT_OUT_OF_RANGE",
+      message: "Work percent must be between 0 and 100.",
+    });
+  });
+
   it("treats usageType WORK as implicitly 100% work", () => {
     const result = validateItemInput({
       ...baseInput,
@@ -104,5 +130,23 @@ describe("validateItemInput", () => {
       code: "WARRANTY_MONTHS_NEGATIVE",
       message: "Warranty months must be 0 or higher.",
     });
+  });
+
+  it("resolves non-mixed usage to deterministic work percentages", () => {
+    const privateResult = validateItemInput({
+      ...baseInput,
+      usageType: "PRIVATE",
+      workPercent: 75,
+    });
+    const otherResult = validateItemInput({
+      ...baseInput,
+      usageType: "OTHER",
+      workPercent: 25,
+    });
+
+    expect(privateResult.valid).toBe(true);
+    expect(otherResult.valid).toBe(true);
+    expect(privateResult.resolvedWorkPercent).toBe(0);
+    expect(otherResult.resolvedWorkPercent).toBe(0);
   });
 });

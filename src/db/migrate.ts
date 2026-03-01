@@ -17,8 +17,25 @@ interface MigrationVersionRow {
   version: number;
 }
 
+export type MigrationErrorCode =
+  | "MIGRATION_META_INIT_FAILED"
+  | "MIGRATION_EXECUTION_FAILED"
+  | "MIGRATION_ROLLBACK_FAILED";
+
+export interface MigrationErrorDetails {
+  code: MigrationErrorCode;
+  migrationVersion?: number;
+  migrationName?: string;
+  reason: string;
+  rollbackReason?: string;
+}
+
 export class MigrationError extends Error {
-  constructor(message: string, public readonly migrationVersion?: number) {
+  constructor(
+    message: string,
+    public readonly migrationVersion?: number,
+    public readonly details?: MigrationErrorDetails
+  ) {
     super(message);
     this.name = "MigrationError";
   }
@@ -46,8 +63,19 @@ async function setCurrentSchemaVersion(db: SQLiteExecutor, version: number): Pro
 }
 
 export async function runMigrations(db: SQLiteExecutor): Promise<void> {
-  await db.execAsync("PRAGMA foreign_keys = ON;");
-  await db.execAsync(MIGRATION_META_TABLE_SQL);
+  try {
+    await db.execAsync("PRAGMA foreign_keys = ON;");
+    await db.execAsync(MIGRATION_META_TABLE_SQL);
+  } catch (error) {
+    const reason =
+      typeof error === "object" && error !== null && "message" in error
+        ? String((error as { message: unknown }).message)
+        : String(error);
+    throw new MigrationError("Database migration metadata initialization failed.", undefined, {
+      code: "MIGRATION_META_INIT_FAILED",
+      reason,
+    });
+  }
 
   const currentVersion = await getCurrentSchemaVersion(db);
   const pending = DB_MIGRATIONS.filter((migration) => migration.version > currentVersion);
@@ -59,14 +87,38 @@ export async function runMigrations(db: SQLiteExecutor): Promise<void> {
       await setCurrentSchemaVersion(db, migration.version);
       await db.execAsync("COMMIT;");
     } catch (error) {
-      await db.execAsync("ROLLBACK;");
       const reason =
         typeof error === "object" && error !== null && "message" in error
           ? String((error as { message: unknown }).message)
           : String(error);
+      try {
+        await db.execAsync("ROLLBACK;");
+      } catch (rollbackError) {
+        const rollbackReason =
+          typeof rollbackError === "object" && rollbackError !== null && "message" in rollbackError
+            ? String((rollbackError as { message: unknown }).message)
+            : String(rollbackError);
+        throw new MigrationError(
+          `Database migration ${migration.version} (${migration.name}) failed and rollback also failed.`,
+          migration.version,
+          {
+            code: "MIGRATION_ROLLBACK_FAILED",
+            migrationVersion: migration.version,
+            migrationName: migration.name,
+            reason,
+            rollbackReason,
+          }
+        );
+      }
       throw new MigrationError(
         `Database migration ${migration.version} (${migration.name}) failed: ${reason}`,
-        migration.version
+        migration.version,
+        {
+          code: "MIGRATION_EXECUTION_FAILED",
+          migrationVersion: migration.version,
+          migrationName: migration.name,
+          reason,
+        }
       );
     }
   }
