@@ -1,6 +1,6 @@
 ﻿import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ScrollView } from "react-native";
+import { Linking, ScrollView } from "react-native";
 import {
   Actionsheet as GActionsheet,
   ActionsheetBackdrop as GActionsheetBackdrop,
@@ -46,7 +46,11 @@ import {
 } from "@/services/item-draft-store";
 import { parseEuroInputToCents } from "@/utils/money";
 import { addMonthsToYmd, formatYmdFromDateLocal } from "@/utils/date";
-import { friendlyFileErrorMessage } from "@/services/friendly-errors";
+import {
+  friendlyFileErrorMessage,
+  isUserCancellationError,
+  shouldOfferOpenSettingsForError,
+} from "@/services/friendly-errors";
 import { validateItemInput } from "@/domain/item-validation";
 
 function toSingleParam(value: string | string[] | undefined): string | undefined {
@@ -91,6 +95,7 @@ export default function NewItemRoute() {
   const [isBusy, setIsBusy] = useState(false);
   const [isSavingItem, setIsSavingItem] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [showOpenSettingsAction, setShowOpenSettingsAction] = useState(false);
   const [attachments, setAttachments] = useState<StoredAttachmentFile[]>([]);
 
   const [title, setTitle] = useState("");
@@ -216,6 +221,7 @@ export default function NewItemRoute() {
     } catch (error) {
       console.error("Failed to load categories", error);
       setErrorMessage("Could not load categories.");
+      setShowOpenSettingsAction(false);
     } finally {
       setIsLoadingCategories(false);
     }
@@ -248,12 +254,34 @@ export default function NewItemRoute() {
     };
   }, [draftId]);
 
+  const clearError = useCallback(() => {
+    setErrorMessage(null);
+    setShowOpenSettingsAction(false);
+  }, []);
+
+  const setActionableError = useCallback(
+    (error: unknown, fallback: string) => {
+      setErrorMessage(friendlyFileErrorMessage(error, fallback));
+      setShowOpenSettingsAction(shouldOfferOpenSettingsForError(error));
+    },
+    []
+  );
+
+  const openDeviceSettings = useCallback(async () => {
+    try {
+      await Linking.openSettings();
+    } catch {
+      setErrorMessage("Could not open device settings. Open system settings manually.");
+      setShowOpenSettingsAction(false);
+    }
+  }, []);
+
   const addReceiptFromCamera = async () => {
     if (!draftId) {
       return;
     }
     setIsBusy(true);
-    setErrorMessage(null);
+    clearError();
     try {
       const captured = await saveFromCamera("draft");
       if (!captured) {
@@ -262,8 +290,11 @@ export default function NewItemRoute() {
       addAttachmentToDraft(draftId, withType(captured, "RECEIPT"));
       reloadDraftAttachments(draftId);
     } catch (error) {
+      if (isUserCancellationError(error)) {
+        return;
+      }
       console.error("Failed to capture receipt", error);
-      setErrorMessage(friendlyFileErrorMessage(error, "Could not capture receipt photo."));
+      setActionableError(error, "Could not capture receipt photo.");
     } finally {
       setIsBusy(false);
     }
@@ -274,7 +305,7 @@ export default function NewItemRoute() {
       return;
     }
     setIsBusy(true);
-    setErrorMessage(null);
+    clearError();
     try {
       const picked = await saveFromPicker("draft");
       if (!picked) {
@@ -283,8 +314,11 @@ export default function NewItemRoute() {
       addAttachmentToDraft(draftId, withType(picked, "RECEIPT"));
       reloadDraftAttachments(draftId);
     } catch (error) {
+      if (isUserCancellationError(error)) {
+        return;
+      }
       console.error("Failed to upload receipt", error);
-      setErrorMessage(friendlyFileErrorMessage(error, "Could not upload receipt."));
+      setActionableError(error, "Could not upload receipt.");
     } finally {
       setIsBusy(false);
     }
@@ -295,7 +329,7 @@ export default function NewItemRoute() {
       return;
     }
     setIsBusy(true);
-    setErrorMessage(null);
+    clearError();
     try {
       const captured = await saveFromCamera("draft");
       if (!captured) {
@@ -304,8 +338,11 @@ export default function NewItemRoute() {
       addAttachmentToDraft(draftId, withType(captured, "PHOTO"));
       reloadDraftAttachments(draftId);
     } catch (error) {
+      if (isUserCancellationError(error)) {
+        return;
+      }
       console.error("Failed to capture extra photo", error);
-      setErrorMessage(friendlyFileErrorMessage(error, "Could not capture extra photo."));
+      setActionableError(error, "Could not capture extra photo.");
     } finally {
       setIsBusy(false);
     }
@@ -320,7 +357,7 @@ export default function NewItemRoute() {
       reloadDraftAttachments(draftId);
     } catch (error) {
       console.error("Failed to remove attachment", error);
-      setErrorMessage(friendlyFileErrorMessage(error, "Could not remove attachment."));
+      setActionableError(error, "Could not remove attachment.");
     }
   };
 
@@ -328,11 +365,12 @@ export default function NewItemRoute() {
     const name = newCategoryName.trim();
     if (name.length === 0) {
       setErrorMessage("Category name cannot be empty.");
+      setShowOpenSettingsAction(false);
       return;
     }
 
     setIsCreatingCategory(true);
-    setErrorMessage(null);
+    clearError();
     try {
       const repository = await getCategoryRepository();
       const created = await repository.createCustomCategory({ name });
@@ -342,7 +380,7 @@ export default function NewItemRoute() {
       setIsCategorySheetOpen(false);
     } catch (error) {
       console.error("Failed to create category", error);
-      setErrorMessage("Could not create category.");
+      setActionableError(error, "Could not create category.");
     } finally {
       setIsCreatingCategory(false);
     }
@@ -355,13 +393,13 @@ export default function NewItemRoute() {
     }
 
     setIsBusy(true);
-    setErrorMessage(null);
+    clearError();
     try {
       await clearItemDraft(draftId);
       router.replace("/(tabs)/items");
     } catch (error) {
       console.error("Failed to clear item draft", error);
-      setErrorMessage("Could not cancel draft safely. Please retry.");
+      setActionableError(error, "Could not cancel draft safely. Please retry.");
     } finally {
       setIsBusy(false);
     }
@@ -378,7 +416,7 @@ export default function NewItemRoute() {
     }
 
     setIsSavingItem(true);
-    setErrorMessage(null);
+    clearError();
     try {
       const itemRepository = await getItemRepository();
       const created = await itemRepository.create({
@@ -402,7 +440,7 @@ export default function NewItemRoute() {
       router.replace(`/item/${created.id}`);
     } catch (error) {
       console.error("Failed to save item", error);
-      setErrorMessage("Could not save item. Please retry.");
+      setActionableError(error, "Could not save item. Please retry.");
     } finally {
       setIsSavingItem(false);
     }
@@ -451,7 +489,20 @@ export default function NewItemRoute() {
 
             {errorMessage && (
               <GCard borderWidth="$1" borderColor="$error300">
-                <GText size="sm">{errorMessage}</GText>
+                <GVStack space="sm">
+                  <GText size="sm">{errorMessage}</GText>
+                  {showOpenSettingsAction && (
+                    <GButton
+                      variant="outline"
+                      action="secondary"
+                      alignSelf="flex-start"
+                      onPress={() => void openDeviceSettings()}
+                      testID="new-item-open-settings"
+                    >
+                      <GButtonText>Open Settings</GButtonText>
+                    </GButton>
+                  )}
+                </GVStack>
               </GCard>
             )}
 
@@ -830,7 +881,20 @@ export default function NewItemRoute() {
 
           {errorMessage && (
             <GCard borderWidth="$1" borderColor="$error300">
-              <GText size="sm">{errorMessage}</GText>
+              <GVStack space="sm">
+                <GText size="sm">{errorMessage}</GText>
+                {showOpenSettingsAction && (
+                  <GButton
+                    variant="outline"
+                    action="secondary"
+                    alignSelf="flex-start"
+                    onPress={() => void openDeviceSettings()}
+                    testID="new-item-open-settings"
+                  >
+                    <GButtonText>Open Settings</GButtonText>
+                  </GButton>
+                )}
+              </GVStack>
             </GCard>
           )}
 

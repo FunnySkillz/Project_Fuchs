@@ -1,5 +1,6 @@
 import React from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react-native";
+import { Linking } from "react-native";
 
 import NewItemRoute from "@/app/item/new";
 
@@ -13,6 +14,7 @@ const mockDeleteLocalAttachmentFile = jest.fn();
 const mockClearItemDraft = jest.fn();
 const mockAddAttachmentToDraft = jest.fn();
 const mockGetItemDraftAttachments = jest.fn();
+let mockOpenSettingsSpy: jest.SpyInstance<Promise<void>, []>;
 const mockDraftAttachments: Array<{
   filePath: string;
   mimeType: string;
@@ -137,6 +139,10 @@ describe("NewItemRoute step 1", () => {
     mockAddAttachmentToDraft.mockReset();
     mockGetItemDraftAttachments.mockReset();
     mockDraftAttachments.splice(0, mockDraftAttachments.length);
+    if (mockOpenSettingsSpy) {
+      mockOpenSettingsSpy.mockRestore();
+    }
+    mockOpenSettingsSpy = jest.spyOn(Linking, "openSettings").mockResolvedValue();
 
     mockGetCategoryRepository.mockResolvedValue({
       list: jest.fn().mockResolvedValue([]),
@@ -153,6 +159,10 @@ describe("NewItemRoute step 1", () => {
       mockDraftAttachments.push(attachment);
     });
     mockGetItemDraftAttachments.mockImplementation(() => [...mockDraftAttachments]);
+  });
+
+  afterEach(() => {
+    mockOpenSettingsSpy.mockRestore();
   });
 
   it("clears draft attachments on cancel after taking a photo", async () => {
@@ -208,6 +218,43 @@ describe("NewItemRoute step 1", () => {
     await waitFor(() => {
       expect(mockClearItemDraft).toHaveBeenCalledWith("draft-1");
       expect(mockDeleteLocalAttachmentFile).toHaveBeenCalledWith("/tmp/receipt-exit.pdf");
+    });
+  });
+
+  it("shows open settings action when camera permission is denied", async () => {
+    mockSaveFromCamera.mockRejectedValue(
+      new Error(
+        "Camera permission denied. Enable camera access in your device settings to capture receipt photos."
+      )
+    );
+
+    render(<NewItemRoute />);
+    expect(await screen.findByText("Add Item: Attachments")).toBeTruthy();
+
+    fireEvent.press(screen.getByTestId("new-item-step1-take-photo"));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Camera access is denied/i)).toBeTruthy();
+      expect(screen.getByTestId("new-item-open-settings")).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByTestId("new-item-open-settings"));
+    await waitFor(() => {
+      expect(mockOpenSettingsSpy).toHaveBeenCalled();
+    });
+  });
+
+  it("treats canceled picker exceptions as no-op with no error UI", async () => {
+    mockSaveFromPicker.mockRejectedValue(new Error("User canceled document picker"));
+
+    render(<NewItemRoute />);
+    expect(await screen.findByText("Add Item: Attachments")).toBeTruthy();
+
+    fireEvent.press(screen.getByTestId("new-item-step1-upload"));
+
+    await waitFor(() => {
+      expect(mockAddAttachmentToDraft).not.toHaveBeenCalled();
+      expect(screen.queryByText("Action canceled.")).toBeNull();
     });
   });
 });

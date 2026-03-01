@@ -5,6 +5,7 @@ import * as ImagePicker from "expo-image-picker";
 import { manipulateAsync, SaveFormat } from "expo-image-manipulator";
 
 import type { AttachmentType } from "@/models/attachment";
+import { isUserCancellationError } from "@/services/friendly-errors";
 
 const ATTACHMENT_ROOT_DIR = `${FileSystem.documentDirectory}attachments`;
 const ATTACHMENT_STAGING_DIR = `${FileSystem.documentDirectory}attachment-staging`;
@@ -194,7 +195,10 @@ export async function pickAttachmentFromDevice(
       type: ["application/pdf", "image/*"],
       copyToCacheDirectory: true,
     });
-  } catch {
+  } catch (error) {
+    if (isUserCancellationError(error)) {
+      return null;
+    }
     throw new Error(
       "File picker access failed. Please allow file/photo access in system settings and try again."
     );

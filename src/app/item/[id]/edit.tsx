@@ -1,7 +1,7 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Image } from "expo-image";
 import React, { useCallback, useMemo, useState } from "react";
-import { ActivityIndicator, Alert, ScrollView, StyleSheet, View } from "react-native";
+import { ActivityIndicator, Alert, Linking, ScrollView, StyleSheet, View } from "react-native";
 
 import { Badge, Button, Card, DatePickerTrigger, FormField, Input, Select, TextArea } from "@/components/ui";
 import { ThemedText } from "@/components/themed-text";
@@ -25,7 +25,11 @@ import {
 import { deleteAttachment } from "@/services/attachment-service";
 import { parseEuroInputToCents } from "@/utils/money";
 import { formatYmdFromDateLocal } from "@/utils/date";
-import { friendlyFileErrorMessage } from "@/services/friendly-errors";
+import {
+  friendlyFileErrorMessage,
+  isUserCancellationError,
+  shouldOfferOpenSettingsForError,
+} from "@/services/friendly-errors";
 import { attachmentFileExists, resolveAttachmentPreviewUri } from "@/services/attachment-storage";
 import { validateItemInput } from "@/domain/item-validation";
 
@@ -74,6 +78,7 @@ export default function ItemEditRoute() {
   const [isSaving, setIsSaving] = useState(false);
   const [isAttachmentBusy, setIsAttachmentBusy] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [showOpenSettingsAction, setShowOpenSettingsAction] = useState(false);
 
   const [item, setItem] = useState<Item | null>(null);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -154,7 +159,7 @@ export default function ItemEditRoute() {
     }
 
     setIsLoading(true);
-    setLoadError(null);
+    clearLoadError();
     try {
       const [itemRepository, attachmentRepository, categoryRepository] = await Promise.all([
         getItemRepository(),
@@ -212,13 +217,32 @@ export default function ItemEditRoute() {
     void loadEditData();
   }, [loadEditData]);
 
+  const clearLoadError = useCallback(() => {
+    setLoadError(null);
+    setShowOpenSettingsAction(false);
+  }, []);
+
+  const setActionableLoadError = useCallback((error: unknown, fallback: string) => {
+    setLoadError(friendlyFileErrorMessage(error, fallback));
+    setShowOpenSettingsAction(shouldOfferOpenSettingsForError(error));
+  }, []);
+
+  const openDeviceSettings = useCallback(async () => {
+    try {
+      await Linking.openSettings();
+    } catch {
+      setLoadError("Could not open device settings. Open system settings manually.");
+      setShowOpenSettingsAction(false);
+    }
+  }, []);
+
   const saveChanges = async () => {
     if (!itemId || !validation.valid || parsedTotalCents === null) {
       return;
     }
 
     setIsSaving(true);
-    setLoadError(null);
+    clearLoadError();
     try {
       const repository = await getItemRepository();
       const updated = await repository.update({
@@ -248,7 +272,7 @@ export default function ItemEditRoute() {
       return;
     }
     setIsAttachmentBusy(true);
-    setLoadError(null);
+    clearLoadError();
     let picked: StoredAttachmentFile | null = null;
     let attachmentPersisted = false;
     try {
@@ -294,6 +318,9 @@ export default function ItemEditRoute() {
         Object.fromEntries(checks.map((entry) => [entry.id, entry.previewUri]))
       );
     } catch (error) {
+      if (isUserCancellationError(error)) {
+        return;
+      }
       if (picked?.filePath && !attachmentPersisted) {
         try {
           await deleteLocalAttachmentFile(picked.filePath);
@@ -302,7 +329,7 @@ export default function ItemEditRoute() {
         }
       }
       console.error("Failed to add attachment", error);
-      setLoadError(friendlyFileErrorMessage(error, "Could not add attachment."));
+      setActionableLoadError(error, "Could not add attachment.");
     } finally {
       setIsAttachmentBusy(false);
     }
@@ -333,7 +360,7 @@ export default function ItemEditRoute() {
       );
     } catch (error) {
       console.error("Failed to remove attachment", error);
-      setLoadError(friendlyFileErrorMessage(error, "Could not remove attachment."));
+      setActionableLoadError(error, "Could not remove attachment.");
     }
   };
 
@@ -344,7 +371,7 @@ export default function ItemEditRoute() {
       return;
     }
 
-    setLoadError(null);
+    clearLoadError();
     try {
       const repository = await getCategoryRepository();
       const created = await repository.createCustomCategory({ name });
@@ -354,7 +381,7 @@ export default function ItemEditRoute() {
       setNewCategoryName("");
     } catch (error) {
       console.error("Failed to create category", error);
-      setLoadError("Could not create category.");
+      setActionableLoadError(error, "Could not create category.");
     }
   };
 
@@ -374,6 +401,9 @@ export default function ItemEditRoute() {
         <ThemedText style={[styles.errorText, dynamicStyles.errorText]}>
           {loadError ?? "Item not found."}
         </ThemedText>
+        {loadError && showOpenSettingsAction && (
+          <Button variant="secondary" label="Open Settings" onPress={() => void openDeviceSettings()} />
+        )}
         <Button variant="secondary" label="Back to Items" onPress={() => router.replace("/(tabs)/items")} />
       </ThemedView>
     );
@@ -388,6 +418,9 @@ export default function ItemEditRoute() {
         <ThemedText themeColor="textSecondary">Updated at: {item.updatedAt}</ThemedText>
 
         {loadError && <ThemedText style={[styles.errorText, dynamicStyles.errorText]}>{loadError}</ThemedText>}
+        {loadError && showOpenSettingsAction && (
+          <Button variant="secondary" label="Open Settings" onPress={() => void openDeviceSettings()} />
+        )}
         {validationMessage && (
           <ThemedText style={[styles.errorText, dynamicStyles.errorText]}>{validationMessage}</ThemedText>
         )}
