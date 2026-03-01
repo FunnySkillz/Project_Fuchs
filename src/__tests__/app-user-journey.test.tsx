@@ -600,7 +600,7 @@ describe("App first-user UI journey", () => {
 
     const homeBeforeItems = render(<HomeRoute />);
     expect(await screen.findByText("No items yet")).toBeTruthy();
-    fireEvent.press(screen.getByTestId("home-add-item-cta"));
+    fireEvent.press(screen.getByTestId("home-add-item-empty-cta"));
     expect(mockPush).toHaveBeenCalledWith("/item/new");
     homeBeforeItems.unmount();
 

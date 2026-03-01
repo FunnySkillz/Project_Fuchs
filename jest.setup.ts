@@ -9,6 +9,12 @@ jest.mock("expo-crypto", () => ({
   },
 }));
 
+jest.mock("react-native-safe-area-context", () => ({
+  SafeAreaProvider: ({ children }: { children: any }) => children,
+  SafeAreaView: ({ children }: { children: any }) => children,
+  useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
+}));
+
 beforeEach(() => {
   mockRandomUUID.mockReturnValue("00000000-0000-4000-8000-000000000000");
   jest.useFakeTimers();

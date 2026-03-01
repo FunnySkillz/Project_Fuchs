@@ -1,5 +1,6 @@
 import React from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react-native";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import HomeRoute from "@/app/(tabs)/home";
 import { formatCents } from "@/utils/money";
@@ -80,7 +81,11 @@ jest.mock("@/repositories/create-core-repositories", () => ({
 }));
 
 function renderHome() {
-  return render(<HomeRoute />);
+  return render(
+    <SafeAreaProvider>
+      <HomeRoute />
+    </SafeAreaProvider>
+  );
 }
 
 describe("HomeRoute", () => {
@@ -170,8 +175,13 @@ describe("HomeRoute", () => {
     renderHome();
 
     expect(await screen.findByText("No items yet")).toBeTruthy();
+    expect(screen.queryByTestId("home-add-item-cta")).toBeNull();
+    expect(screen.getAllByText("Add Item")).toHaveLength(1);
     expect(screen.queryByTestId("home-missing-receipts-card")).toBeNull();
     expect(screen.queryByTestId("home-missing-notes-card")).toBeNull();
+
+    fireEvent.press(screen.getByTestId("home-add-item-empty-cta"));
+    expect(mockPush).toHaveBeenCalledWith("/item/new");
   });
 
   it("shows error state and retries loading", async () => {
