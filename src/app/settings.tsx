@@ -137,7 +137,7 @@ function calculatePreview(values: TaxDefaultsValues) {
   };
 }
 
-const themeOptions: Array<{ label: string; value: ThemeMode }> = [
+const themeOptions: { label: string; value: ThemeMode }[] = [
   { label: "System", value: "system" },
   { label: "Light", value: "light" },
   { label: "Dark", value: "dark" },
@@ -215,46 +215,51 @@ export default function SettingsScreen() {
 
   const validation = useMemo(() => {
     if (!formState) {
-      return { valid: false, message: "Settings are still loading." } as const;
+      return { valid: false, fieldErrors: { formState: "Settings are still loading." } } as const;
     }
 
     const parsedTaxYear = parseNumber(formState.taxYearDefault);
     const parsedRate = parseNumber(formState.marginalRatePercent);
     const parsedWorkPercent = parseNumber(formState.defaultWorkPercent);
     const parsedGwgThresholdEuros = parseNumber(formState.gwgThresholdEuros);
+    const fieldErrors: Record<string, string> = {};
 
     if (parsedTaxYear === null || !Number.isInteger(parsedTaxYear)) {
-      return { valid: false, message: "Tax year must be a whole number." } as const;
+      fieldErrors.taxYearDefault = "Tax year must be a whole number.";
+    } else if (parsedTaxYear < 2000 || parsedTaxYear > 2100) {
+      fieldErrors.taxYearDefault = "Tax year must be between 2000 and 2100.";
     }
-    if (parsedTaxYear < 2000 || parsedTaxYear > 2100) {
-      return { valid: false, message: "Tax year must be between 2000 and 2100." } as const;
-    }
+
     if (parsedRate === null) {
-      return { valid: false, message: "Marginal tax rate is required." } as const;
+      fieldErrors.marginalRatePercent = "Marginal tax rate is required.";
+    } else if (parsedRate < 0 || parsedRate > 55) {
+      fieldErrors.marginalRatePercent = "Marginal tax rate must be between 0 and 55%.";
     }
-    if (parsedRate < 0 || parsedRate > 55) {
-      return { valid: false, message: "Marginal tax rate must be between 0 and 55%." } as const;
-    }
+
     if (parsedWorkPercent === null) {
-      return { valid: false, message: "Default work percent is required." } as const;
+      fieldErrors.defaultWorkPercent = "Default work percent is required.";
+    } else if (parsedWorkPercent < 0 || parsedWorkPercent > 100) {
+      fieldErrors.defaultWorkPercent = "Default work percent must be between 0 and 100.";
     }
-    if (parsedWorkPercent < 0 || parsedWorkPercent > 100) {
-      return { valid: false, message: "Default work percent must be between 0 and 100." } as const;
-    }
+
     if (parsedGwgThresholdEuros === null) {
-      return { valid: false, message: "GWG threshold is required." } as const;
+      fieldErrors.gwgThresholdEuros = "GWG threshold is required.";
+    } else if (parsedGwgThresholdEuros < 0) {
+      fieldErrors.gwgThresholdEuros = "GWG threshold must be 0 or higher.";
     }
-    if (parsedGwgThresholdEuros < 0) {
-      return { valid: false, message: "GWG threshold must be 0 or higher." } as const;
+
+    if (Object.keys(fieldErrors).length > 0) {
+      return { valid: false, fieldErrors } as const;
     }
 
     return {
       valid: true,
+      fieldErrors,
       values: {
-        taxYearDefault: Math.round(parsedTaxYear),
-        marginalRateBps: Math.round(parsedRate * 100),
-        defaultWorkPercent: Math.round(parsedWorkPercent),
-        gwgThresholdCents: Math.round(parsedGwgThresholdEuros * 100),
+        taxYearDefault: Math.round(parsedTaxYear!),
+        marginalRateBps: Math.round(parsedRate! * 100),
+        defaultWorkPercent: Math.round(parsedWorkPercent!),
+        gwgThresholdCents: Math.round(parsedGwgThresholdEuros! * 100),
         applyHalfYearRule: formState.applyHalfYearRule,
         appLockEnabled: formState.appLockEnabled,
         uploadToOneDriveAfterExport: formState.uploadToOneDriveAfterExport,
@@ -623,6 +628,9 @@ export default function SettingsScreen() {
                     testID="settings-tax-year-input"
                   />
                 </GInput>
+                {validation.fieldErrors.taxYearDefault && (
+                  <GText size="xs" color="$error600">{validation.fieldErrors.taxYearDefault}</GText>
+                )}
               </GVStack>
 
               <GVStack space="xs">
@@ -636,6 +644,9 @@ export default function SettingsScreen() {
                     testID="settings-marginal-rate-input"
                   />
                 </GInput>
+                {validation.fieldErrors.marginalRatePercent && (
+                  <GText size="xs" color="$error600">{validation.fieldErrors.marginalRatePercent}</GText>
+                )}
               </GVStack>
 
               <GVStack space="xs">
@@ -649,6 +660,9 @@ export default function SettingsScreen() {
                     testID="settings-default-work-percent-input"
                   />
                 </GInput>
+                {validation.fieldErrors.defaultWorkPercent && (
+                  <GText size="xs" color="$error600">{validation.fieldErrors.defaultWorkPercent}</GText>
+                )}
               </GVStack>
 
               <GVStack space="xs">
@@ -662,6 +676,9 @@ export default function SettingsScreen() {
                     testID="settings-gwg-threshold-input"
                   />
                 </GInput>
+                {validation.fieldErrors.gwgThresholdEuros && (
+                  <GText size="xs" color="$error600">{validation.fieldErrors.gwgThresholdEuros}</GText>
+                )}
               </GVStack>
 
               <GHStack justifyContent="space-between" alignItems="center">
@@ -690,9 +707,6 @@ export default function SettingsScreen() {
                 />
               </GHStack>
 
-              {!validation.valid && (
-                <GText size="sm" color="$error600">{validation.message}</GText>
-              )}
               {saveError && <GText size="sm" color="$error600">{saveError}</GText>}
               {saveSuccess && <GText size="sm" color="$success600">{saveSuccess}</GText>}
 

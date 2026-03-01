@@ -1,13 +1,32 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Image } from "expo-image";
 import React, { useCallback, useMemo, useState } from "react";
-import { ActivityIndicator, Alert, Linking, ScrollView, StyleSheet, View } from "react-native";
+import { Linking, ScrollView } from "react-native";
+import {
+  Actionsheet,
+  ActionsheetBackdrop,
+  ActionsheetContent,
+  ActionsheetDragIndicator,
+  ActionsheetDragIndicatorWrapper,
+  ActionsheetItem,
+  ActionsheetItemText,
+  Badge,
+  BadgeText,
+  Box,
+  Button,
+  ButtonText,
+  Card,
+  Heading,
+  HStack,
+  Input,
+  InputField,
+  Spinner,
+  Text,
+  Textarea,
+  TextareaInput,
+  VStack,
+} from "@gluestack-ui/themed";
 
-import { Badge, Button, Card, DatePickerTrigger, FormField, Input, Select, TextArea } from "@/components/ui";
-import { ThemedText } from "@/components/themed-text";
-import { ThemedView } from "@/components/themed-view";
-import { Spacing } from "@/constants/theme";
-import { useTheme } from "@/hooks/use-theme";
 import type { Attachment } from "@/models/attachment";
 import type { Category } from "@/models/category";
 import type { Item, ItemUsageType } from "@/models/item";
@@ -18,20 +37,21 @@ import {
 } from "@/repositories/create-core-repositories";
 import type { StoredAttachmentFile } from "@/services/attachment-storage";
 import {
+  attachmentFileExists,
   deleteLocalAttachmentFile,
+  resolveAttachmentPreviewUri,
   saveFromCamera,
   saveFromPicker,
 } from "@/services/attachment-storage";
 import { deleteAttachment } from "@/services/attachment-service";
-import { parseEuroInputToCents } from "@/utils/money";
-import { formatYmdFromDateLocal } from "@/utils/date";
 import {
   friendlyFileErrorMessage,
   isUserCancellationError,
   shouldOfferOpenSettingsForError,
 } from "@/services/friendly-errors";
-import { attachmentFileExists, resolveAttachmentPreviewUri } from "@/services/attachment-storage";
 import { validateItemInput } from "@/domain/item-validation";
+import { formatYmdFromDateLocal } from "@/utils/date";
+import { parseEuroInputToCents } from "@/utils/money";
 
 function toSingleParam(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
@@ -62,21 +82,21 @@ function withType(
 }
 
 const usageOptions: { value: ItemUsageType; label: string }[] = [
-  { value: "WORK", label: "Work" },
-  { value: "PRIVATE", label: "Private" },
-  { value: "MIXED", label: "Mixed" },
-  { value: "OTHER", label: "Other" },
+  { value: "WORK", label: "WORK" },
+  { value: "PRIVATE", label: "PRIVATE" },
+  { value: "MIXED", label: "MIXED" },
+  { value: "OTHER", label: "OTHER" },
 ];
 
 export default function ItemEditRoute() {
   const router = useRouter();
-  const theme = useTheme();
   const params = useLocalSearchParams<{ id?: string | string[] }>();
   const itemId = toSingleParam(params.id);
 
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isAttachmentBusy, setIsAttachmentBusy] = useState(false);
+  const [isCreatingCategory, setIsCreatingCategory] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [showOpenSettingsAction, setShowOpenSettingsAction] = useState(false);
 
@@ -85,6 +105,7 @@ export default function ItemEditRoute() {
   const [missingAttachmentIds, setMissingAttachmentIds] = useState<Set<string>>(new Set());
   const [attachmentPreviewUris, setAttachmentPreviewUris] = useState<Record<string, string>>({});
   const [categories, setCategories] = useState<Category[]>([]);
+  const [isCategorySheetOpen, setIsCategorySheetOpen] = useState(false);
 
   const [title, setTitle] = useState("");
   const [purchaseDate, setPurchaseDate] = useState(formatYmdFromDateLocal(new Date()));
@@ -95,17 +116,6 @@ export default function ItemEditRoute() {
   const [warrantyMonths, setWarrantyMonths] = useState("");
   const [notes, setNotes] = useState("");
   const [newCategoryName, setNewCategoryName] = useState("");
-  const dynamicStyles = useMemo(
-    () => ({
-      errorText: { color: theme.danger },
-      thumbnail: { backgroundColor: theme.backgroundElement },
-      pdfTile: {
-        borderColor: theme.border,
-        backgroundColor: theme.background,
-      },
-    }),
-    [theme.background, theme.backgroundElement, theme.border, theme.danger]
-  );
 
   const parsedTotalCents = useMemo(() => parseEuroInputToCents(totalPrice), [totalPrice]);
   const parsedWorkPercent = useMemo(() => {
@@ -114,10 +124,7 @@ export default function ItemEditRoute() {
       return null;
     }
     const parsed = Number.parseInt(trimmed, 10);
-    if (!Number.isFinite(parsed)) {
-      return null;
-    }
-    return parsed;
+    return Number.isFinite(parsed) ? parsed : null;
   }, [workPercent]);
   const parsedWarrantyMonths = useMemo(() => {
     const trimmed = warrantyMonths.trim();
@@ -125,10 +132,7 @@ export default function ItemEditRoute() {
       return null;
     }
     const parsed = Number.parseInt(trimmed, 10);
-    if (!Number.isFinite(parsed)) {
-      return null;
-    }
-    return parsed;
+    return Number.isFinite(parsed) ? parsed : null;
   }, [warrantyMonths]);
 
   const validation = useMemo(() => {
@@ -141,15 +145,54 @@ export default function ItemEditRoute() {
       warrantyMonths: parsedWarrantyMonths,
     });
   }, [parsedTotalCents, parsedWarrantyMonths, parsedWorkPercent, purchaseDate, title, usageType]);
-  const validationMessage = validation.errors[0]?.message ?? null;
 
-  const categoryOptions = useMemo(
-    () => [
-      { value: "__none", label: "No category selected" },
-      ...categories.map((category) => ({ value: category.id, label: category.name })),
-    ],
-    [categories]
-  );
+  const fieldErrors = useMemo(() => {
+    const grouped: Record<string, string> = {};
+    for (const issue of validation.errors) {
+      if (!grouped[issue.field]) {
+        grouped[issue.field] = issue.message;
+      }
+    }
+    return grouped;
+  }, [validation.errors]);
+
+  const selectedCategoryName = useMemo(() => {
+    if (!categoryId) {
+      return "No category selected";
+    }
+    return categories.find((entry) => entry.id === categoryId)?.name ?? "Unknown category";
+  }, [categories, categoryId]);
+
+  const clearLoadError = useCallback(() => {
+    setLoadError(null);
+    setShowOpenSettingsAction(false);
+  }, []);
+
+  const setActionableLoadError = useCallback((error: unknown, fallback: string) => {
+    setLoadError(friendlyFileErrorMessage(error, fallback));
+    setShowOpenSettingsAction(shouldOfferOpenSettingsForError(error));
+  }, []);
+
+  const openDeviceSettings = useCallback(async () => {
+    try {
+      await Linking.openSettings();
+    } catch {
+      setLoadError("Could not open device settings. Open system settings manually.");
+      setShowOpenSettingsAction(false);
+    }
+  }, []);
+
+  const refreshAttachmentReadModel = useCallback(async (nextAttachments: Attachment[]) => {
+    const checks = await Promise.all(
+      nextAttachments.map(async (attachment) => ({
+        id: attachment.id,
+        exists: await attachmentFileExists(attachment.filePath),
+        previewUri: await resolveAttachmentPreviewUri(attachment.filePath, attachment.mimeType),
+      }))
+    );
+    setMissingAttachmentIds(new Set(checks.filter((entry) => !entry.exists).map((entry) => entry.id)));
+    setAttachmentPreviewUris(Object.fromEntries(checks.map((entry) => [entry.id, entry.previewUri])));
+  }, []);
 
   const loadEditData = useCallback(async () => {
     if (!itemId) {
@@ -180,20 +223,8 @@ export default function ItemEditRoute() {
 
       setItem(loadedItem);
       setAttachments(loadedAttachments);
-      const checks = await Promise.all(
-        loadedAttachments.map(async (attachment) => ({
-          id: attachment.id,
-          exists: await attachmentFileExists(attachment.filePath),
-          previewUri: await resolveAttachmentPreviewUri(attachment.filePath, attachment.mimeType),
-        }))
-      );
-      setMissingAttachmentIds(
-        new Set(checks.filter((entry) => !entry.exists).map((entry) => entry.id))
-      );
-      setAttachmentPreviewUris(
-        Object.fromEntries(checks.map((entry) => [entry.id, entry.previewUri]))
-      );
       setCategories(loadedCategories);
+      await refreshAttachmentReadModel(loadedAttachments);
 
       setTitle(loadedItem.title);
       setPurchaseDate(loadedItem.purchaseDate);
@@ -201,40 +232,19 @@ export default function ItemEditRoute() {
       setCategoryId(loadedItem.categoryId);
       setUsageType(loadedItem.usageType);
       setWorkPercent(loadedItem.workPercent !== null ? String(loadedItem.workPercent) : "");
-      setWarrantyMonths(
-        loadedItem.warrantyMonths !== null ? String(loadedItem.warrantyMonths) : ""
-      );
+      setWarrantyMonths(loadedItem.warrantyMonths !== null ? String(loadedItem.warrantyMonths) : "");
       setNotes(loadedItem.notes ?? "");
     } catch (error) {
       console.error("Failed to load item for edit", error);
-      setLoadError("Could not load item for editing.");
+      setActionableLoadError(error, "Could not load item for editing.");
     } finally {
       setIsLoading(false);
     }
-  }, [itemId]);
+  }, [clearLoadError, itemId, refreshAttachmentReadModel, setActionableLoadError]);
 
   React.useEffect(() => {
     void loadEditData();
   }, [loadEditData]);
-
-  const clearLoadError = useCallback(() => {
-    setLoadError(null);
-    setShowOpenSettingsAction(false);
-  }, []);
-
-  const setActionableLoadError = useCallback((error: unknown, fallback: string) => {
-    setLoadError(friendlyFileErrorMessage(error, fallback));
-    setShowOpenSettingsAction(shouldOfferOpenSettingsForError(error));
-  }, []);
-
-  const openDeviceSettings = useCallback(async () => {
-    try {
-      await Linking.openSettings();
-    } catch {
-      setLoadError("Could not open device settings. Open system settings manually.");
-      setShowOpenSettingsAction(false);
-    }
-  }, []);
 
   const saveChanges = async () => {
     if (!itemId || !validation.valid || parsedTotalCents === null) {
@@ -261,7 +271,7 @@ export default function ItemEditRoute() {
       router.replace(`/item/${itemId}`);
     } catch (error) {
       console.error("Failed to update item", error);
-      setLoadError("Could not save changes.");
+      setActionableLoadError(error, "Could not save changes.");
     } finally {
       setIsSaving(false);
     }
@@ -304,19 +314,7 @@ export default function ItemEditRoute() {
 
       const refreshed = await repository.listByItem(itemId);
       setAttachments(refreshed);
-      const checks = await Promise.all(
-        refreshed.map(async (attachment) => ({
-          id: attachment.id,
-          exists: await attachmentFileExists(attachment.filePath),
-          previewUri: await resolveAttachmentPreviewUri(attachment.filePath, attachment.mimeType),
-        }))
-      );
-      setMissingAttachmentIds(
-        new Set(checks.filter((entry) => !entry.exists).map((entry) => entry.id))
-      );
-      setAttachmentPreviewUris(
-        Object.fromEntries(checks.map((entry) => [entry.id, entry.previewUri]))
-      );
+      await refreshAttachmentReadModel(refreshed);
     } catch (error) {
       if (isUserCancellationError(error)) {
         return;
@@ -335,7 +333,7 @@ export default function ItemEditRoute() {
     }
   };
 
-  const removeAttachment = async (attachmentId: string) => {
+  const removeAttachmentById = async (attachmentId: string) => {
     if (!itemId) {
       return;
     }
@@ -345,19 +343,7 @@ export default function ItemEditRoute() {
       await deleteAttachment(attachmentId);
       const refreshed = await repository.listByItem(itemId);
       setAttachments(refreshed);
-      const checks = await Promise.all(
-        refreshed.map(async (attachment) => ({
-          id: attachment.id,
-          exists: await attachmentFileExists(attachment.filePath),
-          previewUri: await resolveAttachmentPreviewUri(attachment.filePath, attachment.mimeType),
-        }))
-      );
-      setMissingAttachmentIds(
-        new Set(checks.filter((entry) => !entry.exists).map((entry) => entry.id))
-      );
-      setAttachmentPreviewUris(
-        Object.fromEntries(checks.map((entry) => [entry.id, entry.previewUri]))
-      );
+      await refreshAttachmentReadModel(refreshed);
     } catch (error) {
       console.error("Failed to remove attachment", error);
       setActionableLoadError(error, "Could not remove attachment.");
@@ -368,9 +354,11 @@ export default function ItemEditRoute() {
     const name = newCategoryName.trim();
     if (name.length === 0) {
       setLoadError("Category name cannot be empty.");
+      setShowOpenSettingsAction(false);
       return;
     }
 
+    setIsCreatingCategory(true);
     clearLoadError();
     try {
       const repository = await getCategoryRepository();
@@ -379,270 +367,407 @@ export default function ItemEditRoute() {
       setCategories(refreshed);
       setCategoryId(created.id);
       setNewCategoryName("");
+      setIsCategorySheetOpen(false);
     } catch (error) {
       console.error("Failed to create category", error);
       setActionableLoadError(error, "Could not create category.");
+    } finally {
+      setIsCreatingCategory(false);
     }
   };
 
   if (isLoading) {
     return (
-      <ThemedView style={styles.centered}>
-        <ActivityIndicator />
-        <ThemedText>Loading item for edit...</ThemedText>
-      </ThemedView>
+      <Box flex={1} alignItems="center" justifyContent="center" px="$5" py="$6">
+        <VStack space="md" alignItems="center">
+          <Spinner size="large" />
+          <Text size="sm">Loading item for edit...</Text>
+        </VStack>
+      </Box>
     );
   }
 
   if (!item) {
     return (
-      <ThemedView style={styles.centered}>
-        <ThemedText type="title">Edit Item</ThemedText>
-        <ThemedText style={[styles.errorText, dynamicStyles.errorText]}>
-          {loadError ?? "Item not found."}
-        </ThemedText>
-        {loadError && showOpenSettingsAction && (
-          <Button variant="secondary" label="Open Settings" onPress={() => void openDeviceSettings()} />
-        )}
-        <Button variant="secondary" label="Back to Items" onPress={() => router.replace("/(tabs)/items")} />
-      </ThemedView>
+      <Box flex={1} px="$5" py="$6">
+        <VStack space="lg" maxWidth={760} width="$full" alignSelf="center">
+          <Heading size="xl">Edit Item</Heading>
+          <Card borderWidth="$1" borderColor="$error300">
+            <VStack space="sm">
+              <Text bold size="md">
+                Could not load item
+              </Text>
+              <Text size="sm">{loadError ?? "Item not found."}</Text>
+              <HStack space="sm" flexWrap="wrap">
+                <Button variant="outline" action="secondary" onPress={() => void loadEditData()}>
+                  <ButtonText>Retry</ButtonText>
+                </Button>
+                {showOpenSettingsAction ? (
+                  <Button
+                    variant="outline"
+                    action="secondary"
+                    onPress={() => void openDeviceSettings()}
+                  >
+                    <ButtonText>Open Settings</ButtonText>
+                  </Button>
+                ) : null}
+              </HStack>
+            </VStack>
+          </Card>
+          <Button variant="outline" action="secondary" onPress={() => router.replace("/(tabs)/items")}>
+            <ButtonText>Back to Items</ButtonText>
+          </Button>
+        </VStack>
+      </Box>
     );
   }
 
   return (
-    <ThemedView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.content}>
-        <Badge text="Edit Item" />
-        <ThemedText type="title">Edit Item</ThemedText>
-        <ThemedText themeColor="textSecondary">ID: {item.id}</ThemedText>
-        <ThemedText themeColor="textSecondary">Updated at: {item.updatedAt}</ThemedText>
+    <Box flex={1} px="$5" py="$6">
+      <ScrollView
+        contentContainerStyle={{
+          width: "100%",
+          maxWidth: 860,
+          alignSelf: "center",
+          paddingBottom: 24,
+        }}
+      >
+        <VStack space="lg">
+          <VStack space="xs">
+            <Heading size="2xl">Edit Item</Heading>
+            <Text size="sm">
+              Update details and attachments for {item.title}.
+            </Text>
+          </VStack>
 
-        {loadError && <ThemedText style={[styles.errorText, dynamicStyles.errorText]}>{loadError}</ThemedText>}
-        {loadError && showOpenSettingsAction && (
-          <Button variant="secondary" label="Open Settings" onPress={() => void openDeviceSettings()} />
-        )}
-        {validationMessage && (
-          <ThemedText style={[styles.errorText, dynamicStyles.errorText]}>{validationMessage}</ThemedText>
-        )}
+          {loadError ? (
+            <Card borderWidth="$1" borderColor="$error300">
+              <VStack space="sm">
+                <Text size="sm">{loadError}</Text>
+                <HStack space="sm" flexWrap="wrap">
+                  <Button variant="outline" action="secondary" onPress={() => void loadEditData()}>
+                    <ButtonText>Retry</ButtonText>
+                  </Button>
+                  {showOpenSettingsAction ? (
+                    <Button
+                      variant="outline"
+                      action="secondary"
+                      onPress={() => void openDeviceSettings()}
+                    >
+                      <ButtonText>Open Settings</ButtonText>
+                    </Button>
+                  ) : null}
+                </HStack>
+              </VStack>
+            </Card>
+          ) : null}
 
-        <Card>
-          <FormField label="Title *">
-            <Input value={title} onChangeText={setTitle} placeholder="e.g. Laptop for work" />
-          </FormField>
+          <Card borderWidth="$1" borderColor="$border200">
+            <VStack space="md">
+              <Heading size="md">Fields</Heading>
 
-          <FormField label="Purchase Date *">
-            <DatePickerTrigger value={purchaseDate} onPress={() => setPurchaseDate(formatYmdFromDateLocal(new Date()))} />
-            <Input
-              value={purchaseDate}
-              onChangeText={setPurchaseDate}
-              placeholder="YYYY-MM-DD"
-              autoCapitalize="none"
-            />
-          </FormField>
-
-          <FormField label="Total Price (EUR) *">
-            <Input
-              value={totalPrice}
-              onChangeText={setTotalPrice}
-              keyboardType="decimal-pad"
-              placeholder="e.g. 1299.90"
-            />
-          </FormField>
-
-          <FormField label="Category">
-            <Select
-              value={categoryId ?? "__none"}
-              options={categoryOptions}
-              onChange={(nextValue) => setCategoryId(nextValue === "__none" ? null : nextValue)}
-            />
-            <View style={styles.row}>
-              <Input
-                value={newCategoryName}
-                onChangeText={setNewCategoryName}
-                placeholder="Create new category"
-                style={styles.flexInput}
-              />
-              <Button variant="secondary" label="Add" onPress={() => void createCategory()} />
-            </View>
-          </FormField>
-
-          <FormField label="Usage Type *">
-            <Select
-              value={usageType}
-              options={usageOptions}
-              onChange={(nextValue) => setUsageType(nextValue as ItemUsageType)}
-            />
-          </FormField>
-
-          {usageType === "MIXED" && (
-            <FormField label="Work Percent *">
-              <Input
-                value={workPercent}
-                onChangeText={setWorkPercent}
-                keyboardType="number-pad"
-                placeholder="0-100"
-              />
-            </FormField>
-          )}
-
-          <FormField label="Warranty Months">
-            <Input
-              value={warrantyMonths}
-              onChangeText={setWarrantyMonths}
-              keyboardType="number-pad"
-              placeholder="Optional"
-            />
-          </FormField>
-
-          <FormField label="Notes">
-            <TextArea
-              value={notes}
-              onChangeText={setNotes}
-              placeholder="Optional notes for invoice/audit context"
-            />
-          </FormField>
-        </Card>
-
-        <Card>
-          <ThemedText type="smallBold">Attachments</ThemedText>
-          <View style={styles.row}>
-            <Button
-              variant="secondary"
-              label={isAttachmentBusy ? "Working..." : "Add Receipt Photo"}
-              onPress={() => void addAttachment("receipt_camera")}
-              disabled={isAttachmentBusy}
-            />
-            <Button
-              variant="secondary"
-              label={isAttachmentBusy ? "Working..." : "Upload Receipt PDF/Image"}
-              onPress={() => void addAttachment("receipt_upload")}
-              disabled={isAttachmentBusy}
-            />
-            <Button
-              variant="secondary"
-              label={isAttachmentBusy ? "Working..." : "Add Extra Photo"}
-              onPress={() => void addAttachment("photo_camera")}
-              disabled={isAttachmentBusy}
-            />
-          </View>
-
-          {attachments.length === 0 ? (
-            <ThemedText type="small" themeColor="textSecondary">
-              No attachments linked.
-            </ThemedText>
-          ) : (
-            <View style={styles.galleryGrid}>
-              {attachments.map((attachment) => (
-                <View key={attachment.id} style={styles.attachmentCard}>
-                  {isImageAttachment(attachment) ? (
-                    <Image
-                      source={{ uri: attachmentPreviewUris[attachment.id] ?? attachment.filePath }}
-                      style={[styles.thumbnail, dynamicStyles.thumbnail]}
-                      contentFit="cover"
-                    />
-                  ) : (
-                    <View style={[styles.pdfTile, dynamicStyles.pdfTile]}>
-                      <ThemedText type="smallBold">PDF</ThemedText>
-                    </View>
-                  )}
-                  <ThemedText type="small" numberOfLines={1}>
-                    {attachment.originalFileName ?? attachment.type}
-                  </ThemedText>
-                  {missingAttachmentIds.has(attachment.id) && (
-                    <Badge text="Missing file" variant="warning" />
-                  )}
-                  <ThemedText type="small" themeColor="textSecondary">
-                    {formatFileSize(attachment.fileSizeBytes)}
-                  </ThemedText>
-                  <Button
-                    variant="ghost"
-                    label="Remove"
-                    onPress={() =>
-                      Alert.alert(
-                        "Remove attachment",
-                        "This will remove attachment record and delete local file. Continue?",
-                        [
-                          { text: "Cancel", style: "cancel" },
-                          {
-                            text: "Remove",
-                            style: "destructive",
-                            onPress: () => void removeAttachment(attachment.id),
-                          },
-                        ]
-                      )
-                    }
+              <VStack space="xs">
+                <Text bold size="sm">
+                  Title *
+                </Text>
+                <Input variant="outline">
+                  <InputField
+                    value={title}
+                    onChangeText={setTitle}
+                    placeholder="e.g. Work laptop"
+                    testID="item-edit-title-input"
                   />
-                </View>
-              ))}
-            </View>
-          )}
-        </Card>
+                </Input>
+                {fieldErrors.title ? <Text size="xs" color="$error600">{fieldErrors.title}</Text> : null}
+              </VStack>
 
-        <View style={styles.row}>
-          <Button
-            variant="secondary"
-            label="Cancel"
-            onPress={() => router.replace(`/item/${item.id}`)}
-          />
-          <Button
-            label={isSaving ? "Saving..." : "Save Changes"}
-            onPress={() => void saveChanges()}
-            disabled={validationMessage !== null || isSaving}
-          />
-        </View>
+              <VStack space="xs">
+                <Text bold size="sm">
+                  Purchase date *
+                </Text>
+                <HStack space="sm" flexWrap="wrap" alignItems="center">
+                  <Input variant="outline" flex={1} minWidth={180}>
+                    <InputField
+                      value={purchaseDate}
+                      onChangeText={setPurchaseDate}
+                      placeholder="YYYY-MM-DD"
+                      testID="item-edit-purchase-date-input"
+                    />
+                  </Input>
+                  <Button
+                    variant="outline"
+                    action="secondary"
+                    onPress={() => setPurchaseDate(formatYmdFromDateLocal(new Date()))}
+                  >
+                    <ButtonText>Set today</ButtonText>
+                  </Button>
+                </HStack>
+                {fieldErrors.purchaseDate ? (
+                  <Text size="xs" color="$error600">{fieldErrors.purchaseDate}</Text>
+                ) : null}
+              </VStack>
+
+              <VStack space="xs">
+                <Text bold size="sm">
+                  Price (EUR) *
+                </Text>
+                <Input variant="outline">
+                  <InputField
+                    value={totalPrice}
+                    onChangeText={setTotalPrice}
+                    keyboardType="decimal-pad"
+                    placeholder="e.g. 1299.90"
+                    testID="item-edit-total-price-input"
+                  />
+                </Input>
+                {fieldErrors.totalCents ? (
+                  <Text size="xs" color="$error600">{fieldErrors.totalCents}</Text>
+                ) : null}
+              </VStack>
+
+              <VStack space="xs">
+                <Text bold size="sm">
+                  Category
+                </Text>
+                <Button
+                  variant="outline"
+                  action="secondary"
+                  justifyContent="space-between"
+                  onPress={() => setIsCategorySheetOpen(true)}
+                  testID="item-edit-category-open"
+                >
+                  <ButtonText>{selectedCategoryName}</ButtonText>
+                </Button>
+                <HStack space="sm" flexWrap="wrap" alignItems="center">
+                  <Input variant="outline" flex={1} minWidth={200}>
+                    <InputField
+                      value={newCategoryName}
+                      onChangeText={setNewCategoryName}
+                      placeholder="Create new category"
+                      testID="item-edit-category-create-input"
+                    />
+                  </Input>
+                  <Button
+                    variant="outline"
+                    action="secondary"
+                    onPress={() => void createCategory()}
+                    disabled={isCreatingCategory}
+                    testID="item-edit-category-create-button"
+                  >
+                    <ButtonText>{isCreatingCategory ? "Adding..." : "Add"}</ButtonText>
+                  </Button>
+                </HStack>
+              </VStack>
+
+              <VStack space="xs">
+                <Text bold size="sm">
+                  Usage type *
+                </Text>
+                <HStack space="sm" flexWrap="wrap">
+                  {usageOptions.map((option) => (
+                    <Button
+                      key={option.value}
+                      size="sm"
+                      variant={usageType === option.value ? "solid" : "outline"}
+                      action={usageType === option.value ? "primary" : "secondary"}
+                      onPress={() => setUsageType(option.value)}
+                      testID={`item-edit-usage-${option.value.toLowerCase()}`}
+                    >
+                      <ButtonText>{option.label}</ButtonText>
+                    </Button>
+                  ))}
+                </HStack>
+              </VStack>
+
+              {usageType === "MIXED" ? (
+                <VStack space="xs">
+                  <Text bold size="sm">
+                    Work percent *
+                  </Text>
+                  <Input variant="outline">
+                    <InputField
+                      value={workPercent}
+                      onChangeText={setWorkPercent}
+                      keyboardType="number-pad"
+                      placeholder="0-100"
+                      testID="item-edit-work-percent-input"
+                    />
+                  </Input>
+                  {fieldErrors.workPercent ? (
+                    <Text size="xs" color="$error600">{fieldErrors.workPercent}</Text>
+                  ) : null}
+                </VStack>
+              ) : null}
+
+              <VStack space="xs">
+                <Text bold size="sm">
+                  Warranty months
+                </Text>
+                <Input variant="outline">
+                  <InputField
+                    value={warrantyMonths}
+                    onChangeText={setWarrantyMonths}
+                    keyboardType="number-pad"
+                    placeholder="Optional"
+                    testID="item-edit-warranty-months-input"
+                  />
+                </Input>
+                {fieldErrors.warrantyMonths ? (
+                  <Text size="xs" color="$error600">{fieldErrors.warrantyMonths}</Text>
+                ) : null}
+              </VStack>
+
+              <VStack space="xs">
+                <Text bold size="sm">
+                  Notes
+                </Text>
+                <Textarea>
+                  <TextareaInput
+                    value={notes}
+                    onChangeText={setNotes}
+                    placeholder="Optional notes for invoice/audit context"
+                    testID="item-edit-notes-input"
+                  />
+                </Textarea>
+              </VStack>
+            </VStack>
+          </Card>
+
+          <Card borderWidth="$1" borderColor="$border200">
+            <VStack space="md">
+              <Heading size="md">Attachments</Heading>
+              <HStack space="sm" flexWrap="wrap">
+                <Button
+                  variant="outline"
+                  action="secondary"
+                  disabled={isAttachmentBusy}
+                  onPress={() => void addAttachment("receipt_camera")}
+                >
+                  <ButtonText>{isAttachmentBusy ? "Working..." : "Add Receipt Photo"}</ButtonText>
+                </Button>
+                <Button
+                  variant="outline"
+                  action="secondary"
+                  disabled={isAttachmentBusy}
+                  onPress={() => void addAttachment("receipt_upload")}
+                >
+                  <ButtonText>{isAttachmentBusy ? "Working..." : "Upload Receipt PDF/Image"}</ButtonText>
+                </Button>
+                <Button
+                  variant="outline"
+                  action="secondary"
+                  disabled={isAttachmentBusy}
+                  onPress={() => void addAttachment("photo_camera")}
+                >
+                  <ButtonText>{isAttachmentBusy ? "Working..." : "Add Extra Photo"}</ButtonText>
+                </Button>
+              </HStack>
+
+              {attachments.length === 0 ? (
+                <Card borderWidth="$1" borderColor="$border200">
+                  <Text size="sm">No attachments linked to this item.</Text>
+                </Card>
+              ) : (
+                <VStack space="sm">
+                  {attachments.map((attachment) => {
+                    const missing = missingAttachmentIds.has(attachment.id);
+                    return (
+                      <Card key={attachment.id} borderWidth="$1" borderColor={missing ? "$warning300" : "$border200"}>
+                        <VStack space="sm">
+                          <HStack justifyContent="space-between" alignItems="center" space="sm">
+                            <VStack flex={1} space="xs">
+                              <Text bold size="sm" numberOfLines={1}>
+                                {attachment.originalFileName ?? attachment.type}
+                              </Text>
+                              <Text size="xs">{formatFileSize(attachment.fileSizeBytes)}</Text>
+                            </VStack>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              action="secondary"
+                              onPress={() => void removeAttachmentById(attachment.id)}
+                            >
+                              <ButtonText>Remove</ButtonText>
+                            </Button>
+                          </HStack>
+
+                          {missing ? (
+                            <Card borderWidth="$1" borderColor="$warning300">
+                              <Text size="sm">Attachment file missing on disk.</Text>
+                            </Card>
+                          ) : isImageAttachment(attachment) ? (
+                            <Image
+                              source={{ uri: attachmentPreviewUris[attachment.id] ?? attachment.filePath }}
+                              style={{ width: "100%", height: 140, borderRadius: 8 }}
+                              contentFit="cover"
+                            />
+                          ) : (
+                            <Card borderWidth="$1" borderColor="$border200">
+                              <Text size="sm">PDF file attached.</Text>
+                            </Card>
+                          )}
+
+                          {missing ? (
+                            <Badge size="sm" action="warning" variant="outline" alignSelf="flex-start">
+                              <BadgeText>Missing file</BadgeText>
+                            </Badge>
+                          ) : null}
+                        </VStack>
+                      </Card>
+                    );
+                  })}
+                </VStack>
+              )}
+            </VStack>
+          </Card>
+
+          <HStack space="sm" flexWrap="wrap">
+            <Button
+              variant="outline"
+              action="secondary"
+              onPress={() => router.replace(`/item/${item.id}`)}
+              testID="item-edit-cancel"
+            >
+              <ButtonText>Cancel</ButtonText>
+            </Button>
+            <Button
+              onPress={() => void saveChanges()}
+              disabled={!validation.valid || isSaving}
+              testID="item-edit-save"
+            >
+              <ButtonText>{isSaving ? "Saving..." : "Save Changes"}</ButtonText>
+            </Button>
+          </HStack>
+        </VStack>
       </ScrollView>
-    </ThemedView>
+
+      <Actionsheet isOpen={isCategorySheetOpen} onClose={() => setIsCategorySheetOpen(false)}>
+        <ActionsheetBackdrop />
+        <ActionsheetContent>
+          <ActionsheetDragIndicatorWrapper>
+            <ActionsheetDragIndicator />
+          </ActionsheetDragIndicatorWrapper>
+          <ActionsheetItem
+            onPress={() => {
+              setCategoryId(null);
+              setIsCategorySheetOpen(false);
+            }}
+          >
+            <ActionsheetItemText>No category selected</ActionsheetItemText>
+          </ActionsheetItem>
+          {categories.map((category) => (
+            <ActionsheetItem
+              key={category.id}
+              onPress={() => {
+                setCategoryId(category.id);
+                setIsCategorySheetOpen(false);
+              }}
+            >
+              <ActionsheetItemText>{category.name}</ActionsheetItemText>
+            </ActionsheetItem>
+          ))}
+        </ActionsheetContent>
+      </Actionsheet>
+    </Box>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  centered: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    gap: Spacing.two,
-    padding: Spacing.four,
-  },
-  content: {
-    width: "100%",
-    maxWidth: 860,
-    alignSelf: "center",
-    padding: Spacing.four,
-    gap: Spacing.three,
-  },
-  row: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: Spacing.two,
-  },
-  flexInput: {
-    flex: 1,
-    minWidth: 220,
-  },
-  galleryGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: Spacing.two,
-  },
-  attachmentCard: {
-    width: 170,
-    gap: Spacing.one,
-  },
-  thumbnail: {
-    width: 170,
-    height: 120,
-    borderRadius: 10,
-  },
-  pdfTile: {
-    width: 170,
-    height: 120,
-    borderRadius: 10,
-    borderWidth: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  errorText: {},
-});

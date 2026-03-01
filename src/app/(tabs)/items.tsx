@@ -40,7 +40,7 @@ import { formatCents } from "@/utils/money";
 
 type FilterSheetKind = "year" | "usageType" | "category" | null;
 
-const usageTypeOptions: Array<{ label: string; value: ItemUsageType | null }> = [
+const usageTypeOptions: { label: string; value: ItemUsageType | null }[] = [
   { label: "All usage types", value: null },
   { label: "WORK", value: "WORK" },
   { label: "PRIVATE", value: "PRIVATE" },

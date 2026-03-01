@@ -51,7 +51,7 @@ import {
 
 type FilterSheetKind = "usageType" | "category" | null;
 
-const usageOptions: Array<{ label: string; value: ItemUsageType | null }> = [
+const usageOptions: { label: string; value: ItemUsageType | null }[] = [
   { label: "All usage types", value: null },
   { label: "WORK", value: "WORK" },
   { label: "PRIVATE", value: "PRIVATE" },

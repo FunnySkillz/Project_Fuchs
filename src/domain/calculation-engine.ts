@@ -58,8 +58,8 @@ function buildYearMonthAllocations(
   purchaseMonth: number,
   usefulLifeMonths: number,
   applyHalfYearRule: boolean
-): Array<{ year: number; months: number }> {
-  const allocations: Array<{ year: number; months: number }> = [];
+): { year: number; months: number }[] {
+  const allocations: { year: number; months: number }[] = [];
   const firstYearMonths = applyHalfYearRule && purchaseMonth > 6 ? 6 : 12;
 
   let remainingMonths = usefulLifeMonths;

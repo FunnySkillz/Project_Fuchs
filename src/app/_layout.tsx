@@ -1,4 +1,4 @@
-﻿import { DarkTheme, DefaultTheme, ThemeProvider } from "@react-navigation/native";
+import { DarkTheme, DefaultTheme, ThemeProvider } from "@react-navigation/native";
 import * as LocalAuthentication from "expo-local-authentication";
 import { Redirect, Slot, useSegments } from "expo-router";
 import React, { useCallback, useEffect, useRef } from "react";
