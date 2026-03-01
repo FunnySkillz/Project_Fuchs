@@ -25,6 +25,11 @@ import {
 
 import { useThemeMode } from "@/contexts/theme-mode-context";
 import { estimateTaxImpact } from "@/domain/calculation-engine";
+import {
+  type ProfileSettingsFormInput,
+  type ProfileSettingsUpsertValues,
+  validateProfileSettingsFormInput,
+} from "@/domain/profile-settings-validation";
 import { createDefaultProfileSettings, type ProfileSettings } from "@/models/profile-settings";
 import { getProfileSettingsRepository } from "@/repositories/create-profile-settings-repository";
 import {
@@ -63,25 +68,7 @@ import { formatCents } from "@/utils/money";
 WebBrowser.maybeCompleteAuthSession();
 const oneDriveAuthProvider = getOneDriveAuthProvider();
 
-interface TaxDefaultsFormState {
-  taxYearDefault: string;
-  marginalRatePercent: string;
-  defaultWorkPercent: string;
-  gwgThresholdEuros: string;
-  applyHalfYearRule: boolean;
-  appLockEnabled: boolean;
-  uploadToOneDriveAfterExport: boolean;
-}
-
-interface TaxDefaultsValues {
-  taxYearDefault: number;
-  marginalRateBps: number;
-  defaultWorkPercent: number;
-  gwgThresholdCents: number;
-  applyHalfYearRule: boolean;
-  appLockEnabled: boolean;
-  uploadToOneDriveAfterExport: boolean;
-}
+type TaxDefaultsFormState = ProfileSettingsFormInput;
 
 function createFormState(settings: ProfileSettings): TaxDefaultsFormState {
   return {
@@ -95,20 +82,7 @@ function createFormState(settings: ProfileSettings): TaxDefaultsFormState {
   };
 }
 
-function parseNumber(input: string): number | null {
-  const trimmed = input.trim().replace(",", ".");
-  if (trimmed.length === 0) {
-    return null;
-  }
-
-  const parsed = Number(trimmed);
-  if (!Number.isFinite(parsed)) {
-    return null;
-  }
-  return parsed;
-}
-
-function calculatePreview(values: TaxDefaultsValues) {
+function calculatePreview(values: ProfileSettingsUpsertValues) {
   const sampleItemCents = 150_000;
   const estimate = estimateTaxImpact(
     {
@@ -215,56 +189,13 @@ export default function SettingsScreen() {
 
   const validation = useMemo(() => {
     if (!formState) {
-      return { valid: false, fieldErrors: { formState: "Settings are still loading." } } as const;
+      return {
+        valid: false,
+        fieldErrors: { formState: "Settings are still loading." } as Record<string, string>,
+      } as const;
     }
 
-    const parsedTaxYear = parseNumber(formState.taxYearDefault);
-    const parsedRate = parseNumber(formState.marginalRatePercent);
-    const parsedWorkPercent = parseNumber(formState.defaultWorkPercent);
-    const parsedGwgThresholdEuros = parseNumber(formState.gwgThresholdEuros);
-    const fieldErrors: Record<string, string> = {};
-
-    if (parsedTaxYear === null || !Number.isInteger(parsedTaxYear)) {
-      fieldErrors.taxYearDefault = "Tax year must be a whole number.";
-    } else if (parsedTaxYear < 2000 || parsedTaxYear > 2100) {
-      fieldErrors.taxYearDefault = "Tax year must be between 2000 and 2100.";
-    }
-
-    if (parsedRate === null) {
-      fieldErrors.marginalRatePercent = "Marginal tax rate is required.";
-    } else if (parsedRate < 0 || parsedRate > 55) {
-      fieldErrors.marginalRatePercent = "Marginal tax rate must be between 0 and 55%.";
-    }
-
-    if (parsedWorkPercent === null) {
-      fieldErrors.defaultWorkPercent = "Default work percent is required.";
-    } else if (parsedWorkPercent < 0 || parsedWorkPercent > 100) {
-      fieldErrors.defaultWorkPercent = "Default work percent must be between 0 and 100.";
-    }
-
-    if (parsedGwgThresholdEuros === null) {
-      fieldErrors.gwgThresholdEuros = "GWG threshold is required.";
-    } else if (parsedGwgThresholdEuros < 0) {
-      fieldErrors.gwgThresholdEuros = "GWG threshold must be 0 or higher.";
-    }
-
-    if (Object.keys(fieldErrors).length > 0) {
-      return { valid: false, fieldErrors } as const;
-    }
-
-    return {
-      valid: true,
-      fieldErrors,
-      values: {
-        taxYearDefault: Math.round(parsedTaxYear!),
-        marginalRateBps: Math.round(parsedRate! * 100),
-        defaultWorkPercent: Math.round(parsedWorkPercent!),
-        gwgThresholdCents: Math.round(parsedGwgThresholdEuros! * 100),
-        applyHalfYearRule: formState.applyHalfYearRule,
-        appLockEnabled: formState.appLockEnabled,
-        uploadToOneDriveAfterExport: formState.uploadToOneDriveAfterExport,
-      },
-    } as const;
+    return validateProfileSettingsFormInput(formState);
   }, [formState]);
 
   const preview = useMemo(() => {
