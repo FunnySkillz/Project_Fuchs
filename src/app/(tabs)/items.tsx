@@ -1,9 +1,16 @@
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
-import { FlatList, ScrollView } from "react-native";
+import { FlatList, ScrollView, StyleSheet, View } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { GestureHandlerRootView, Swipeable } from "react-native-gesture-handler";
 import {
+  AlertDialog,
+  AlertDialogBackdrop,
+  AlertDialogBody,
+  AlertDialogContent,
+  AlertDialogFooter,
+  AlertDialogHeader,
   Actionsheet,
   ActionsheetBackdrop,
   ActionsheetContent,
@@ -27,17 +34,23 @@ import {
   VStack,
 } from "@gluestack-ui/themed";
 
+import { useTheme } from "@/hooks/use-theme";
 import { computeDeductibleImpactCents } from "@/domain/deductible-impact";
 import type { Category } from "@/models/category";
 import type { Item, ItemUsageType } from "@/models/item";
 import type { ProfileSettings } from "@/models/profile-settings";
-import { getCategoryRepository, getItemRepository } from "@/repositories/create-core-repositories";
+import {
+  getAttachmentRepository,
+  getCategoryRepository,
+  getItemRepository,
+} from "@/repositories/create-core-repositories";
 import { getProfileSettingsRepository } from "@/repositories/create-profile-settings-repository";
 import {
   getItemListSessionState,
   updateItemListSessionState,
   type ItemSortMode,
 } from "@/services/item-list-session";
+import { deleteItemWithAttachments } from "@/services/item-service";
 import { formatCents } from "@/utils/money";
 
 type FilterSheetKind = "year" | "usageType" | "category" | null;
@@ -69,6 +82,7 @@ function missingNotesForItem(item: Item): boolean {
 
 export default function ItemsRoute() {
   const router = useRouter();
+  const theme = useTheme();
   const insets = useSafeAreaInsets();
   const tabBarHeight = useBottomTabBarHeight();
   const params = useLocalSearchParams<{
@@ -94,6 +108,11 @@ export default function ItemsRoute() {
   const [settings, setSettings] = useState<ProfileSettings | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [deleteCandidateItem, setDeleteCandidateItem] = useState<Item | null>(null);
+  const [isDeletingItem, setIsDeletingItem] = useState(false);
+
+  const swipeableRefs = useRef<Map<string, Swipeable | null>>(new Map());
+  const openedSwipeableIdRef = useRef<string | null>(null);
 
   const parsedYear = useMemo(() => parseYearInput(year), [year]);
   const categoryMap = useMemo(
@@ -259,225 +278,402 @@ export default function ItemsRoute() {
   };
   const listBottomPadding = tabBarHeight + insets.bottom + 24;
 
+  const closeOpenedSwipeable = useCallback(() => {
+    if (!openedSwipeableIdRef.current) {
+      return;
+    }
+
+    const openedRef = swipeableRefs.current.get(openedSwipeableIdRef.current);
+    openedRef?.close();
+    openedSwipeableIdRef.current = null;
+  }, []);
+
+  const handleSwipeableWillOpen = useCallback((itemId: string) => {
+    const currentlyOpenItemId = openedSwipeableIdRef.current;
+    if (currentlyOpenItemId && currentlyOpenItemId !== itemId) {
+      const currentlyOpenSwipeable = swipeableRefs.current.get(currentlyOpenItemId);
+      currentlyOpenSwipeable?.close();
+    }
+    openedSwipeableIdRef.current = itemId;
+  }, []);
+
+  const handleSwipeableWillClose = useCallback((itemId: string) => {
+    if (openedSwipeableIdRef.current === itemId) {
+      openedSwipeableIdRef.current = null;
+    }
+  }, []);
+
+  const performDelete = useCallback(
+    async (item: Item) => {
+      if (isDeletingItem) {
+        return;
+      }
+
+      setIsDeletingItem(true);
+      closeOpenedSwipeable();
+      setLoadError(null);
+
+      setAllItems((current) => current.filter((entry) => entry.id !== item.id));
+      setMissingReceiptItemIds((current) => {
+        if (!current.has(item.id)) {
+          return current;
+        }
+        const next = new Set(current);
+        next.delete(item.id);
+        return next;
+      });
+
+      try {
+        await deleteItemWithAttachments(item.id);
+        void loadData();
+      } catch (error) {
+        console.error("Failed to delete item from list", error);
+        setLoadError("Could not delete item.");
+        void loadData();
+      } finally {
+        setIsDeletingItem(false);
+      }
+    },
+    [closeOpenedSwipeable, isDeletingItem, loadData]
+  );
+
+  const requestDelete = useCallback(
+    async (item: Item) => {
+      if (isDeletingItem) {
+        return;
+      }
+
+      try {
+        const attachmentRepository = await getAttachmentRepository();
+        const linkedAttachments = await attachmentRepository.listByItem(item.id);
+
+        if (linkedAttachments.length > 0) {
+          setDeleteCandidateItem(item);
+          return;
+        }
+
+        await performDelete(item);
+      } catch (error) {
+        console.error("Failed to inspect attachments before item delete", error);
+        setLoadError("Could not delete item.");
+      }
+    },
+    [isDeletingItem, performDelete]
+  );
+
+  const confirmDeleteCandidate = useCallback(() => {
+    if (!deleteCandidateItem) {
+      return;
+    }
+    const selectedItem = deleteCandidateItem;
+    setDeleteCandidateItem(null);
+    void performDelete(selectedItem);
+  }, [deleteCandidateItem, performDelete]);
+
+  const renderRightActions = useCallback(
+    (item: Item) => (
+      <View style={[styles.deleteActionContainer, { backgroundColor: theme.danger }]}>
+        <Button
+          action="negative"
+          variant="solid"
+          onPress={() => void requestDelete(item)}
+          testID={`items-delete-action-${item.id}`}
+          accessibilityLabel={`Delete ${item.title}`}
+          style={styles.deleteActionButton}
+          disabled={isDeletingItem}
+        >
+          <ButtonText>Delete</ButtonText>
+        </Button>
+      </View>
+    ),
+    [isDeletingItem, requestDelete, theme.danger]
+  );
+
   return (
     <SafeAreaView style={{ flex: 1 }} edges={["top"]}>
-      <Box flex={1} px="$5" py="$6">
-      <FlatList
-        data={displayedItems}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={{ paddingBottom: listBottomPadding }}
-        ListHeaderComponent={
-          <VStack space="lg" maxWidth={900} width="$full" alignSelf="center" pb="$4">
-            <VStack space="xs">
-              <Heading size="2xl">Items</Heading>
-              <Text size="sm">Search, filter and review deductible impact by item.</Text>
-            </VStack>
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <Box flex={1} px="$5" py="$6">
+          <FlatList
+            data={displayedItems}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={{ paddingBottom: listBottomPadding }}
+            ListHeaderComponent={
+              <VStack space="lg" maxWidth={900} width="$full" alignSelf="center" pb="$4">
+                <VStack space="xs">
+                  <Heading size="2xl">Items</Heading>
+                  <Text size="sm">Search, filter and review deductible impact by item.</Text>
+                </VStack>
 
-            <Input variant="outline" size="md">
-              <InputField
-                value={search}
-                onChangeText={setSearch}
-                placeholder="Search title or vendor"
-                testID="items-search-input"
-              />
-            </Input>
+                <Input variant="outline" size="md">
+                  <InputField
+                    value={search}
+                    onChangeText={setSearch}
+                    placeholder="Search title or vendor"
+                    testID="items-search-input"
+                  />
+                </Input>
 
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              <HStack space="sm" alignItems="center" pr="$2">
-                <Button
-                  size="sm"
-                  variant={parsedYear ? "solid" : "outline"}
-                  action={parsedYear ? "primary" : "secondary"}
-                  onPress={() => setActiveSheet("year")}
-                  testID="items-filter-year"
+                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                  <HStack space="sm" alignItems="center" pr="$2">
+                    <Button
+                      size="sm"
+                      variant={parsedYear ? "solid" : "outline"}
+                      action={parsedYear ? "primary" : "secondary"}
+                      onPress={() => setActiveSheet("year")}
+                      testID="items-filter-year"
+                    >
+                      <ButtonText>{yearChipLabel}</ButtonText>
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant={usageType ? "solid" : "outline"}
+                      action={usageType ? "primary" : "secondary"}
+                      onPress={() => setActiveSheet("usageType")}
+                      testID="items-filter-usage"
+                    >
+                      <ButtonText>{usageTypeChipLabel}</ButtonText>
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant={missingReceipt ? "solid" : "outline"}
+                      action={missingReceipt ? "primary" : "secondary"}
+                      onPress={() => setMissingReceipt((current) => !current)}
+                      testID="items-filter-missing-receipt"
+                    >
+                      <ButtonText>Missing receipt</ButtonText>
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant={missingNotes ? "solid" : "outline"}
+                      action={missingNotes ? "primary" : "secondary"}
+                      onPress={() => setMissingNotes((current) => !current)}
+                      testID="items-filter-missing-notes"
+                    >
+                      <ButtonText>Missing notes</ButtonText>
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant={categoryId ? "solid" : "outline"}
+                      action={categoryId ? "primary" : "secondary"}
+                      onPress={() => setActiveSheet("category")}
+                      testID="items-filter-category"
+                    >
+                      <ButtonText>{categoryChipLabel}</ButtonText>
+                    </Button>
+                  </HStack>
+                </ScrollView>
+              </VStack>
+            }
+            ListEmptyComponent={
+              <VStack maxWidth={900} width="$full" alignSelf="center" space="md">
+                {isLoading ? (
+                  <Card borderWidth="$1" borderColor="$border200">
+                    <HStack space="sm" alignItems="center">
+                      <Spinner size="small" />
+                      <Text>Loading items...</Text>
+                    </HStack>
+                  </Card>
+                ) : loadError ? (
+                  <Card borderWidth="$1" borderColor="$error300">
+                    <VStack space="sm">
+                      <Text bold size="md">
+                        Could not load items
+                      </Text>
+                      <Text size="sm">{loadError}</Text>
+                      <Button onPress={() => void loadData()} alignSelf="flex-start">
+                        <ButtonText>Retry</ButtonText>
+                      </Button>
+                    </VStack>
+                  </Card>
+                ) : (
+                  <Card borderWidth="$1" borderColor="$border200">
+                    <Text size="sm">No items found. Adjust filters or add a new item.</Text>
+                  </Card>
+                )}
+              </VStack>
+            }
+            renderItem={({ item }) => {
+              const deductibleImpact = deductibleImpactByItemId.get(item.id) ?? 0;
+              const hasMissingReceipt = missingReceiptItemIds.has(item.id);
+              const hasMissingNotes = missingNotesForItem(item);
+
+              return (
+                <Swipeable
+                  ref={(node) => {
+                    swipeableRefs.current.set(item.id, node);
+                  }}
+                  friction={2}
+                  overshootRight={false}
+                  rightThreshold={44}
+                  testID={`items-swipeable-${item.id}`}
+                  onSwipeableWillOpen={() => handleSwipeableWillOpen(item.id)}
+                  onSwipeableWillClose={() => handleSwipeableWillClose(item.id)}
+                  renderRightActions={() => renderRightActions(item)}
                 >
-                  <ButtonText>{yearChipLabel}</ButtonText>
-                </Button>
-                <Button
-                  size="sm"
-                  variant={usageType ? "solid" : "outline"}
-                  action={usageType ? "primary" : "secondary"}
-                  onPress={() => setActiveSheet("usageType")}
-                  testID="items-filter-usage"
-                >
-                  <ButtonText>{usageTypeChipLabel}</ButtonText>
-                </Button>
-                <Button
-                  size="sm"
-                  variant={missingReceipt ? "solid" : "outline"}
-                  action={missingReceipt ? "primary" : "secondary"}
-                  onPress={() => setMissingReceipt((current) => !current)}
-                  testID="items-filter-missing-receipt"
-                >
-                  <ButtonText>Missing receipt</ButtonText>
-                </Button>
-                <Button
-                  size="sm"
-                  variant={missingNotes ? "solid" : "outline"}
-                  action={missingNotes ? "primary" : "secondary"}
-                  onPress={() => setMissingNotes((current) => !current)}
-                  testID="items-filter-missing-notes"
-                >
-                  <ButtonText>Missing notes</ButtonText>
-                </Button>
-                <Button
-                  size="sm"
-                  variant={categoryId ? "solid" : "outline"}
-                  action={categoryId ? "primary" : "secondary"}
-                  onPress={() => setActiveSheet("category")}
-                  testID="items-filter-category"
-                >
-                  <ButtonText>{categoryChipLabel}</ButtonText>
-                </Button>
-              </HStack>
-            </ScrollView>
-          </VStack>
-        }
-        ListEmptyComponent={
-          <VStack maxWidth={900} width="$full" alignSelf="center" space="md">
-            {isLoading ? (
-              <Card borderWidth="$1" borderColor="$border200">
-                <HStack space="sm" alignItems="center">
-                  <Spinner size="small" />
-                  <Text>Loading items...</Text>
-                </HStack>
-              </Card>
-            ) : loadError ? (
-              <Card borderWidth="$1" borderColor="$error300">
-                <VStack space="sm">
-                  <Text bold size="md">
-                    Could not load items
-                  </Text>
-                  <Text size="sm">{loadError}</Text>
-                  <Button onPress={() => void loadData()} alignSelf="flex-start">
-                    <ButtonText>Retry</ButtonText>
+                  <Pressable
+                    onPress={() => router.push(`/item/${item.id}`)}
+                    testID={`items-row-${item.id}`}
+                    mb="$3"
+                    maxWidth={900}
+                    alignSelf="center"
+                    width="$full"
+                  >
+                    <Card borderWidth="$1" borderColor="$border200">
+                      <VStack space="sm">
+                        <HStack alignItems="flex-start" justifyContent="space-between" space="md">
+                          <Text bold size="md" flex={1}>
+                            {item.title}
+                          </Text>
+                          <Text bold size="md">
+                            {formatCents(item.totalCents)}
+                          </Text>
+                        </HStack>
+
+                        <Text size="sm">{rowPriceAndDate(item)}</Text>
+                        <Text size="sm">Deductible this year: {formatCents(deductibleImpact)}</Text>
+
+                        <HStack space="sm" flexWrap="wrap">
+                          {hasMissingReceipt && (
+                            <Badge size="sm" action="warning" variant="outline">
+                              <BadgeText>Missing receipt</BadgeText>
+                            </Badge>
+                          )}
+                          {hasMissingNotes && (
+                            <Badge size="sm" action="warning" variant="outline">
+                              <BadgeText>Missing notes</BadgeText>
+                            </Badge>
+                          )}
+                        </HStack>
+                      </VStack>
+                    </Card>
+                  </Pressable>
+                </Swipeable>
+              );
+            }}
+          />
+
+          <Actionsheet isOpen={activeSheet !== null} onClose={() => setActiveSheet(null)}>
+            <ActionsheetBackdrop />
+            <ActionsheetContent>
+              <ActionsheetDragIndicatorWrapper>
+                <ActionsheetDragIndicator />
+              </ActionsheetDragIndicatorWrapper>
+
+              {activeSheet === "year" && (
+                <>
+                  <ActionsheetItem
+                    onPress={() => {
+                      setYear("");
+                      setActiveSheet(null);
+                    }}
+                  >
+                    <ActionsheetItemText>All years</ActionsheetItemText>
+                  </ActionsheetItem>
+                  {availableYears.map((optionYear) => (
+                    <ActionsheetItem
+                      key={optionYear}
+                      onPress={() => {
+                        setYear(String(optionYear));
+                        setActiveSheet(null);
+                      }}
+                    >
+                      <ActionsheetItemText>{optionYear}</ActionsheetItemText>
+                    </ActionsheetItem>
+                  ))}
+                </>
+              )}
+
+              {activeSheet === "usageType" &&
+                usageTypeOptions.map((option) => (
+                  <ActionsheetItem
+                    key={option.label}
+                    onPress={() => {
+                      setUsageType(option.value);
+                      setActiveSheet(null);
+                    }}
+                  >
+                    <ActionsheetItemText>{option.label}</ActionsheetItemText>
+                  </ActionsheetItem>
+                ))}
+
+              {activeSheet === "category" && (
+                <>
+                  <ActionsheetItem
+                    onPress={() => {
+                      setCategoryId(null);
+                      setActiveSheet(null);
+                    }}
+                  >
+                    <ActionsheetItemText>All categories</ActionsheetItemText>
+                  </ActionsheetItem>
+                  {categories.map((category) => (
+                    <ActionsheetItem
+                      key={category.id}
+                      onPress={() => {
+                        setCategoryId(category.id);
+                        setActiveSheet(null);
+                      }}
+                    >
+                      <ActionsheetItemText>{category.name}</ActionsheetItemText>
+                    </ActionsheetItem>
+                  ))}
+                </>
+              )}
+            </ActionsheetContent>
+          </Actionsheet>
+
+          <AlertDialog
+            isOpen={deleteCandidateItem !== null}
+            onClose={() => setDeleteCandidateItem(null)}
+            testID="items-delete-confirm-modal"
+          >
+            <AlertDialogBackdrop />
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <Heading size="md">Delete item?</Heading>
+              </AlertDialogHeader>
+              <AlertDialogBody>
+                <Text size="sm">This will delete the item and its attachments from this device.</Text>
+              </AlertDialogBody>
+              <AlertDialogFooter>
+                <HStack space="sm">
+                  <Button
+                    variant="outline"
+                    action="secondary"
+                    onPress={() => setDeleteCandidateItem(null)}
+                    testID="items-delete-confirm-cancel"
+                  >
+                    <ButtonText>Cancel</ButtonText>
                   </Button>
-                </VStack>
-              </Card>
-            ) : (
-              <Card borderWidth="$1" borderColor="$border200">
-                <Text size="sm">No items found. Adjust filters or add a new item.</Text>
-              </Card>
-            )}
-          </VStack>
-        }
-        renderItem={({ item }) => {
-          const deductibleImpact = deductibleImpactByItemId.get(item.id) ?? 0;
-          const hasMissingReceipt = missingReceiptItemIds.has(item.id);
-          const hasMissingNotes = missingNotesForItem(item);
-
-          return (
-            <Pressable
-              onPress={() => router.push(`/item/${item.id}`)}
-              testID={`items-row-${item.id}`}
-              mb="$3"
-              maxWidth={900}
-              alignSelf="center"
-              width="$full"
-            >
-              <Card borderWidth="$1" borderColor="$border200">
-                <VStack space="sm">
-                  <HStack alignItems="flex-start" justifyContent="space-between" space="md">
-                    <Text bold size="md" flex={1}>
-                      {item.title}
-                    </Text>
-                    <Text bold size="md">
-                      {formatCents(item.totalCents)}
-                    </Text>
-                  </HStack>
-
-                  <Text size="sm">{rowPriceAndDate(item)}</Text>
-                  <Text size="sm">Deductible this year: {formatCents(deductibleImpact)}</Text>
-
-                  <HStack space="sm" flexWrap="wrap">
-                    {hasMissingReceipt && (
-                      <Badge size="sm" action="warning" variant="outline">
-                        <BadgeText>Missing receipt</BadgeText>
-                      </Badge>
-                    )}
-                    {hasMissingNotes && (
-                      <Badge size="sm" action="warning" variant="outline">
-                        <BadgeText>Missing notes</BadgeText>
-                      </Badge>
-                    )}
-                  </HStack>
-                </VStack>
-              </Card>
-            </Pressable>
-          );
-        }}
-      />
-
-      <Actionsheet isOpen={activeSheet !== null} onClose={() => setActiveSheet(null)}>
-        <ActionsheetBackdrop />
-        <ActionsheetContent>
-          <ActionsheetDragIndicatorWrapper>
-            <ActionsheetDragIndicator />
-          </ActionsheetDragIndicatorWrapper>
-
-          {activeSheet === "year" && (
-            <>
-              <ActionsheetItem
-                onPress={() => {
-                  setYear("");
-                  setActiveSheet(null);
-                }}
-              >
-                <ActionsheetItemText>All years</ActionsheetItemText>
-              </ActionsheetItem>
-              {availableYears.map((optionYear) => (
-                <ActionsheetItem
-                  key={optionYear}
-                  onPress={() => {
-                    setYear(String(optionYear));
-                    setActiveSheet(null);
-                  }}
-                >
-                  <ActionsheetItemText>{optionYear}</ActionsheetItemText>
-                </ActionsheetItem>
-              ))}
-            </>
-          )}
-
-          {activeSheet === "usageType" &&
-            usageTypeOptions.map((option) => (
-              <ActionsheetItem
-                key={option.label}
-                onPress={() => {
-                  setUsageType(option.value);
-                  setActiveSheet(null);
-                }}
-              >
-                <ActionsheetItemText>{option.label}</ActionsheetItemText>
-              </ActionsheetItem>
-            ))}
-
-          {activeSheet === "category" && (
-            <>
-              <ActionsheetItem
-                onPress={() => {
-                  setCategoryId(null);
-                  setActiveSheet(null);
-                }}
-              >
-                <ActionsheetItemText>All categories</ActionsheetItemText>
-              </ActionsheetItem>
-              {categories.map((category) => (
-                <ActionsheetItem
-                  key={category.id}
-                  onPress={() => {
-                    setCategoryId(category.id);
-                    setActiveSheet(null);
-                  }}
-                >
-                  <ActionsheetItemText>{category.name}</ActionsheetItemText>
-                </ActionsheetItem>
-              ))}
-            </>
-          )}
-        </ActionsheetContent>
-      </Actionsheet>
-      </Box>
+                  <Button
+                    action="negative"
+                    onPress={confirmDeleteCandidate}
+                    disabled={isDeletingItem}
+                    testID="items-delete-confirm-delete"
+                  >
+                    <ButtonText>{isDeletingItem ? "Deleting..." : "Delete"}</ButtonText>
+                  </Button>
+                </HStack>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </Box>
+      </GestureHandlerRootView>
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  deleteActionContainer: {
+    height: "100%",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 12,
+    borderRadius: 12,
+    minWidth: 96,
+  },
+  deleteActionButton: {
+    minHeight: 44,
+    minWidth: 88,
+  },
+});
