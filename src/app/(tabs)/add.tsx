@@ -1,3 +1,5 @@
+import { Redirect } from "expo-router";
+
 export default function AddTabRoute() {
-  return null;
+  return <Redirect href="/item/new" />;
 }

@@ -8,10 +8,13 @@ const mockPush = jest.fn();
 let mockRouteParams: { year?: string; missingReceipt?: string; missingNotes?: string } = {};
 const mockListItems = jest.fn();
 const mockListMissingReceiptItemIds = jest.fn();
+const mockListAttachmentsByItem = jest.fn();
 const mockListCategories = jest.fn();
 const mockGetSettings = jest.fn();
 const mockComputeDeductibleImpactCents = jest.fn();
 const mockUpdateItemListSessionState = jest.fn();
+const mockDeleteItemWithAttachments = jest.fn();
+const mockSwipeableCloseByTestId = new Map<string, jest.Mock>();
 
 jest.mock("@/hooks/use-theme", () => ({
   useTheme: () => ({
@@ -41,6 +44,12 @@ jest.mock("@gluestack-ui/themed", () => {
   const MockContainer = ({ children, testID }: any) => <MockView testID={testID}>{children}</MockView>;
 
   return {
+    AlertDialog: ({ isOpen, children, testID }: any) => (isOpen ? <MockView testID={testID}>{children}</MockView> : null),
+    AlertDialogBackdrop: MockContainer,
+    AlertDialogBody: MockContainer,
+    AlertDialogContent: MockContainer,
+    AlertDialogFooter: MockContainer,
+    AlertDialogHeader: MockContainer,
     Box: MockContainer,
     VStack: MockContainer,
     HStack: MockContainer,
@@ -64,6 +73,46 @@ jest.mock("@gluestack-ui/themed", () => {
       <MockTouchableOpacity {...props}>{children}</MockTouchableOpacity>
     ),
     ActionsheetItemText: ({ children, ...props }: any) => <MockText {...props}>{children}</MockText>,
+  };
+});
+
+jest.mock("react-native-gesture-handler", () => {
+  const ReactModule = require("react");
+  const { TouchableOpacity, View } = require("react-native");
+
+  const Swipeable = ReactModule.forwardRef(
+    (
+      {
+        children,
+        onSwipeableWillClose,
+        onSwipeableWillOpen,
+        renderRightActions,
+        testID,
+      }: any,
+      ref: React.Ref<{ close: () => void }>
+    ) => {
+      const closeMock = jest.fn(() => {
+        onSwipeableWillClose?.();
+      });
+      mockSwipeableCloseByTestId.set(testID, closeMock);
+
+      ReactModule.useImperativeHandle(ref, () => ({
+        close: closeMock,
+      }));
+
+      return (
+        <View testID={testID}>
+          <TouchableOpacity testID={`${testID}-open`} onPress={() => onSwipeableWillOpen?.()} />
+          {typeof renderRightActions === "function" ? renderRightActions() : null}
+          {children}
+        </View>
+      );
+    }
+  );
+
+  return {
+    GestureHandlerRootView: ({ children }: any) => <View>{children}</View>,
+    Swipeable,
   };
 });
 
@@ -105,6 +154,9 @@ jest.mock("@/repositories/create-core-repositories", () => ({
     list: mockListItems,
     listMissingReceiptItemIds: mockListMissingReceiptItemIds,
   }),
+  getAttachmentRepository: async () => ({
+    listByItem: mockListAttachmentsByItem,
+  }),
   getCategoryRepository: async () => ({
     list: mockListCategories,
   }),
@@ -116,16 +168,23 @@ jest.mock("@/repositories/create-profile-settings-repository", () => ({
   }),
 }));
 
+jest.mock("@/services/item-service", () => ({
+  deleteItemWithAttachments: (itemId: string) => mockDeleteItemWithAttachments(itemId),
+}));
+
 describe("ItemsRoute", () => {
   beforeEach(() => {
     mockPush.mockReset();
     mockRouteParams = {};
     mockListItems.mockReset();
     mockListMissingReceiptItemIds.mockReset();
+    mockListAttachmentsByItem.mockReset();
     mockListCategories.mockReset();
     mockGetSettings.mockReset();
     mockComputeDeductibleImpactCents.mockReset();
     mockUpdateItemListSessionState.mockReset();
+    mockDeleteItemWithAttachments.mockReset();
+    mockSwipeableCloseByTestId.clear();
   });
 
   it("renders item rows with required fields and opens item detail on row tap", async () => {
@@ -258,5 +317,168 @@ describe("ItemsRoute", () => {
       });
       expect(hasFilteredCall).toBe(true);
     });
+  });
+
+  it("swipes left and deletes an item after attachment confirmation", async () => {
+    const item = {
+      id: "item-1",
+      title: "Work Laptop",
+      purchaseDate: "2026-02-01",
+      totalCents: 199_900,
+      currency: "EUR",
+      usageType: "WORK",
+      workPercent: null,
+      categoryId: null,
+      vendor: "Store",
+      warrantyMonths: 24,
+      notes: "Invoice attached",
+      usefulLifeMonthsOverride: null,
+      createdAt: "2026-02-01T10:00:00.000Z",
+      updatedAt: "2026-02-01T10:00:00.000Z",
+      deletedAt: null,
+    };
+
+    mockGetSettings.mockResolvedValue({
+      taxYearDefault: 2026,
+      marginalRateBps: 4_000,
+      defaultWorkPercent: 100,
+      gwgThresholdCents: 100_000,
+      applyHalfYearRule: false,
+      appLockEnabled: false,
+      uploadToOneDriveAfterExport: false,
+      themeModePreference: "system",
+      currency: "EUR",
+    });
+    let currentItems = [item];
+    mockListItems.mockImplementation(async () => [...currentItems]);
+    mockListMissingReceiptItemIds.mockImplementation(async () => []);
+    mockListCategories.mockResolvedValue([]);
+    mockListAttachmentsByItem.mockResolvedValue([{ id: "att-1", itemId: "item-1" }]);
+    mockComputeDeductibleImpactCents.mockReturnValue(100_000);
+    mockDeleteItemWithAttachments.mockImplementation(async () => {
+      currentItems = [];
+    });
+
+    render(<ItemsRoute />);
+
+    expect(await screen.findByText("Work Laptop")).toBeTruthy();
+    fireEvent.press(screen.getByTestId("items-swipeable-item-1-open"));
+    fireEvent.press(screen.getByTestId("items-delete-action-item-1"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("items-delete-confirm-modal")).toBeTruthy();
+    });
+    fireEvent.press(screen.getByTestId("items-delete-confirm-delete"));
+
+    await waitFor(() => {
+      expect(mockDeleteItemWithAttachments).toHaveBeenCalledWith("item-1");
+      expect(screen.queryByText("Work Laptop")).toBeNull();
+    });
+  });
+
+  it("keeps the item when delete confirmation is canceled", async () => {
+    const item = {
+      id: "item-1",
+      title: "Office Chair",
+      purchaseDate: "2026-02-01",
+      totalCents: 199_900,
+      currency: "EUR",
+      usageType: "WORK",
+      workPercent: null,
+      categoryId: null,
+      vendor: "Store",
+      warrantyMonths: 24,
+      notes: "Invoice attached",
+      usefulLifeMonthsOverride: null,
+      createdAt: "2026-02-01T10:00:00.000Z",
+      updatedAt: "2026-02-01T10:00:00.000Z",
+      deletedAt: null,
+    };
+
+    mockGetSettings.mockResolvedValue({
+      taxYearDefault: 2026,
+      marginalRateBps: 4_000,
+      defaultWorkPercent: 100,
+      gwgThresholdCents: 100_000,
+      applyHalfYearRule: false,
+      appLockEnabled: false,
+      uploadToOneDriveAfterExport: false,
+      themeModePreference: "system",
+      currency: "EUR",
+    });
+    let currentItems = [item];
+    mockListItems.mockImplementation(async () => [...currentItems]);
+    mockListMissingReceiptItemIds.mockImplementation(async () => []);
+    mockListCategories.mockResolvedValue([]);
+    mockListAttachmentsByItem.mockResolvedValue([{ id: "att-1", itemId: "item-1" }]);
+    mockComputeDeductibleImpactCents.mockReturnValue(100_000);
+    mockDeleteItemWithAttachments.mockResolvedValue(undefined);
+
+    render(<ItemsRoute />);
+
+    expect(await screen.findByText("Office Chair")).toBeTruthy();
+    fireEvent.press(screen.getByTestId("items-swipeable-item-1-open"));
+    fireEvent.press(screen.getByTestId("items-delete-action-item-1"));
+    await waitFor(() => {
+      expect(screen.getByTestId("items-delete-confirm-modal")).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByTestId("items-delete-confirm-cancel"));
+
+    expect(screen.queryByTestId("items-delete-confirm-modal")).toBeNull();
+    expect(screen.getByText("Office Chair")).toBeTruthy();
+    expect(mockDeleteItemWithAttachments).not.toHaveBeenCalled();
+  });
+
+  it("keeps only one swipeable row open at a time", async () => {
+    const firstItem = {
+      id: "item-1",
+      title: "First Item",
+      purchaseDate: "2026-02-01",
+      totalCents: 199_900,
+      currency: "EUR",
+      usageType: "WORK",
+      workPercent: null,
+      categoryId: null,
+      vendor: "Store",
+      warrantyMonths: 24,
+      notes: null,
+      usefulLifeMonthsOverride: null,
+      createdAt: "2026-02-01T10:00:00.000Z",
+      updatedAt: "2026-02-01T10:00:00.000Z",
+      deletedAt: null,
+    };
+    const secondItem = {
+      ...firstItem,
+      id: "item-2",
+      title: "Second Item",
+    };
+
+    mockGetSettings.mockResolvedValue({
+      taxYearDefault: 2026,
+      marginalRateBps: 4_000,
+      defaultWorkPercent: 100,
+      gwgThresholdCents: 100_000,
+      applyHalfYearRule: false,
+      appLockEnabled: false,
+      uploadToOneDriveAfterExport: false,
+      themeModePreference: "system",
+      currency: "EUR",
+    });
+    mockListItems.mockResolvedValue([firstItem, secondItem]);
+    mockListMissingReceiptItemIds.mockResolvedValue([]);
+    mockListCategories.mockResolvedValue([]);
+    mockListAttachmentsByItem.mockResolvedValue([]);
+    mockComputeDeductibleImpactCents.mockReturnValue(100_000);
+
+    render(<ItemsRoute />);
+
+    expect(await screen.findByText("First Item")).toBeTruthy();
+    fireEvent.press(screen.getByTestId("items-swipeable-item-1-open"));
+    fireEvent.press(screen.getByTestId("items-swipeable-item-2-open"));
+
+    const firstRowCloseMock = mockSwipeableCloseByTestId.get("items-swipeable-item-1");
+    expect(firstRowCloseMock).toBeDefined();
+    expect(firstRowCloseMock).toHaveBeenCalled();
   });
 });
