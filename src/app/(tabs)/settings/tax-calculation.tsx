@@ -1,5 +1,5 @@
 import { useRouter } from "expo-router";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ScrollView } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import {
@@ -29,6 +29,22 @@ import { emitProfileSettingsSaved } from "@/services/app-events";
 import { formatCents } from "@/utils/money";
 
 type TaxDefaultsFormState = ProfileSettingsFormInput;
+type FieldKey =
+  | "taxYearDefault"
+  | "marginalRatePercent"
+  | "defaultWorkPercent"
+  | "gwgThresholdEuros";
+
+const fieldOrder: FieldKey[] = [
+  "taxYearDefault",
+  "marginalRatePercent",
+  "defaultWorkPercent",
+  "gwgThresholdEuros",
+];
+
+type FocusTarget = {
+  focus?: () => void;
+};
 
 function createFormState(settings: ProfileSettings): TaxDefaultsFormState {
   return {
@@ -84,6 +100,12 @@ export default function SettingsTaxCalculationRoute() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
+  const [submitAttempted, setSubmitAttempted] = useState(false);
+  const [touchedFields, setTouchedFields] = useState<Partial<Record<FieldKey, boolean>>>({});
+
+  const scrollRef = useRef<ScrollView | null>(null);
+  const fieldYRef = useRef<Partial<Record<FieldKey, number>>>({});
+  const inputRef = useRef<Partial<Record<FieldKey, FocusTarget | null>>>({});
 
   const loadSettings = useCallback(async () => {
     setIsLoading(true);
@@ -92,6 +114,8 @@ export default function SettingsTaxCalculationRoute() {
       const repository = await getProfileSettingsRepository();
       const settings = await repository.getSettings();
       setFormState(createFormState(settings));
+      setSubmitAttempted(false);
+      setTouchedFields({});
     } catch (error) {
       console.error("Failed to load tax settings", error);
       setFormState(createFormState(createDefaultProfileSettings()));
@@ -123,6 +147,44 @@ export default function SettingsTaxCalculationRoute() {
     return calculatePreview(validation.values);
   }, [validation]);
 
+  const shouldShowFieldError = useCallback(
+    (field: FieldKey) => Boolean((submitAttempted || touchedFields[field]) && validation.fieldErrors[field]),
+    [submitAttempted, touchedFields, validation.fieldErrors]
+  );
+
+  const isSubmitDisabled = (submitAttempted && !validation.valid) || isSaving;
+
+  const setFieldTouched = useCallback((field: FieldKey) => {
+    setTouchedFields((current) => ({ ...current, [field]: true }));
+  }, []);
+
+  const scrollToField = useCallback((field: FieldKey) => {
+    const y = fieldYRef.current[field];
+    if (typeof y !== "number") {
+      return;
+    }
+    scrollRef.current?.scrollTo({ y: Math.max(0, y - 20), animated: true });
+  }, []);
+
+  const focusField = useCallback((field: FieldKey) => {
+    const target = inputRef.current[field];
+    if (!target || typeof target.focus !== "function") {
+      return;
+    }
+    requestAnimationFrame(() => {
+      target.focus?.();
+    });
+  }, []);
+
+  const focusAndScrollFirstInvalid = useCallback(() => {
+    const firstInvalid = fieldOrder.find((field) => validation.fieldErrors[field]);
+    if (!firstInvalid) {
+      return;
+    }
+    scrollToField(firstInvalid);
+    focusField(firstInvalid);
+  }, [focusField, scrollToField, validation.fieldErrors]);
+
   const updateFormField = <K extends keyof TaxDefaultsFormState>(
     key: K,
     value: TaxDefaultsFormState[K]
@@ -133,7 +195,9 @@ export default function SettingsTaxCalculationRoute() {
   };
 
   const handleSave = async () => {
+    setSubmitAttempted(true);
     if (!validation.valid || isSaving) {
+      focusAndScrollFirstInvalid();
       return;
     }
     setIsSaving(true);
@@ -169,6 +233,7 @@ export default function SettingsTaxCalculationRoute() {
     <SafeAreaView style={{ flex: 1 }} edges={["bottom"]}>
       <Box flex={1} px="$5" py="$6">
         <ScrollView
+          ref={scrollRef}
           contentContainerStyle={{
             width: "100%",
             maxWidth: 860,
@@ -202,68 +267,140 @@ export default function SettingsTaxCalculationRoute() {
 
             <Card borderWidth="$1" borderColor="$border200">
               <VStack space="md">
-                <VStack space="xs">
+                <VStack
+                  space="xs"
+                  onLayout={(event) => {
+                    fieldYRef.current.taxYearDefault = event.nativeEvent.layout.y;
+                  }}
+                  testID="settings-tax-input-taxYearDefault"
+                >
                   <Text bold size="sm">Tax year default</Text>
-                  <Input variant="outline">
+                  <Input
+                    variant="outline"
+                    borderColor={shouldShowFieldError("taxYearDefault") ? "$error600" : "$border200"}
+                  >
                     <InputField
+                      ref={(node) => {
+                        inputRef.current.taxYearDefault = node as FocusTarget | null;
+                      }}
                       value={formState.taxYearDefault}
                       onChangeText={(value) => updateFormField("taxYearDefault", value)}
+                      onBlur={() => setFieldTouched("taxYearDefault")}
                       keyboardType="number-pad"
                       maxLength={4}
                       placeholder="2026"
                       testID="settings-tax-year-input"
+                      accessibilityState={
+                        ({ invalid: shouldShowFieldError("taxYearDefault") } as any)
+                      }
                     />
                   </Input>
-                  {validation.fieldErrors.taxYearDefault && (
-                    <Text size="xs" color="$error600">{validation.fieldErrors.taxYearDefault}</Text>
+                  {shouldShowFieldError("taxYearDefault") && (
+                    <Text size="xs" color="$error600" testID="settings-tax-error-taxYearDefault">
+                      {validation.fieldErrors.taxYearDefault}
+                    </Text>
                   )}
                 </VStack>
 
-                <VStack space="xs">
+                <VStack
+                  space="xs"
+                  onLayout={(event) => {
+                    fieldYRef.current.marginalRatePercent = event.nativeEvent.layout.y;
+                  }}
+                  testID="settings-tax-input-marginalRatePercent"
+                >
                   <Text bold size="sm">Marginal tax rate (%)</Text>
-                  <Input variant="outline">
+                  <Input
+                    variant="outline"
+                    borderColor={shouldShowFieldError("marginalRatePercent") ? "$error600" : "$border200"}
+                  >
                     <InputField
+                      ref={(node) => {
+                        inputRef.current.marginalRatePercent = node as FocusTarget | null;
+                      }}
                       value={formState.marginalRatePercent}
                       onChangeText={(value) => updateFormField("marginalRatePercent", value)}
+                      onBlur={() => setFieldTouched("marginalRatePercent")}
                       keyboardType="decimal-pad"
                       placeholder="40"
                       testID="settings-marginal-rate-input"
+                      accessibilityState={
+                        ({ invalid: shouldShowFieldError("marginalRatePercent") } as any)
+                      }
                     />
                   </Input>
-                  {validation.fieldErrors.marginalRatePercent && (
-                    <Text size="xs" color="$error600">{validation.fieldErrors.marginalRatePercent}</Text>
+                  {shouldShowFieldError("marginalRatePercent") && (
+                    <Text size="xs" color="$error600" testID="settings-tax-error-marginalRatePercent">
+                      {validation.fieldErrors.marginalRatePercent}
+                    </Text>
                   )}
                 </VStack>
 
-                <VStack space="xs">
+                <VStack
+                  space="xs"
+                  onLayout={(event) => {
+                    fieldYRef.current.defaultWorkPercent = event.nativeEvent.layout.y;
+                  }}
+                  testID="settings-tax-input-defaultWorkPercent"
+                >
                   <Text bold size="sm">Default work percent (%)</Text>
-                  <Input variant="outline">
+                  <Input
+                    variant="outline"
+                    borderColor={shouldShowFieldError("defaultWorkPercent") ? "$error600" : "$border200"}
+                  >
                     <InputField
+                      ref={(node) => {
+                        inputRef.current.defaultWorkPercent = node as FocusTarget | null;
+                      }}
                       value={formState.defaultWorkPercent}
                       onChangeText={(value) => updateFormField("defaultWorkPercent", value)}
+                      onBlur={() => setFieldTouched("defaultWorkPercent")}
                       keyboardType="number-pad"
                       placeholder="100"
                       testID="settings-default-work-percent-input"
+                      accessibilityState={
+                        ({ invalid: shouldShowFieldError("defaultWorkPercent") } as any)
+                      }
                     />
                   </Input>
-                  {validation.fieldErrors.defaultWorkPercent && (
-                    <Text size="xs" color="$error600">{validation.fieldErrors.defaultWorkPercent}</Text>
+                  {shouldShowFieldError("defaultWorkPercent") && (
+                    <Text size="xs" color="$error600" testID="settings-tax-error-defaultWorkPercent">
+                      {validation.fieldErrors.defaultWorkPercent}
+                    </Text>
                   )}
                 </VStack>
 
-                <VStack space="xs">
+                <VStack
+                  space="xs"
+                  onLayout={(event) => {
+                    fieldYRef.current.gwgThresholdEuros = event.nativeEvent.layout.y;
+                  }}
+                  testID="settings-tax-input-gwgThresholdEuros"
+                >
                   <Text bold size="sm">GWG threshold (EUR)</Text>
-                  <Input variant="outline">
+                  <Input
+                    variant="outline"
+                    borderColor={shouldShowFieldError("gwgThresholdEuros") ? "$error600" : "$border200"}
+                  >
                     <InputField
+                      ref={(node) => {
+                        inputRef.current.gwgThresholdEuros = node as FocusTarget | null;
+                      }}
                       value={formState.gwgThresholdEuros}
                       onChangeText={(value) => updateFormField("gwgThresholdEuros", value)}
+                      onBlur={() => setFieldTouched("gwgThresholdEuros")}
                       keyboardType="decimal-pad"
                       placeholder="1000.00"
                       testID="settings-gwg-threshold-input"
+                      accessibilityState={
+                        ({ invalid: shouldShowFieldError("gwgThresholdEuros") } as any)
+                      }
                     />
                   </Input>
-                  {validation.fieldErrors.gwgThresholdEuros && (
-                    <Text size="xs" color="$error600">{validation.fieldErrors.gwgThresholdEuros}</Text>
+                  {shouldShowFieldError("gwgThresholdEuros") && (
+                    <Text size="xs" color="$error600" testID="settings-tax-error-gwgThresholdEuros">
+                      {validation.fieldErrors.gwgThresholdEuros}
+                    </Text>
                   )}
                 </VStack>
 
@@ -278,13 +415,15 @@ export default function SettingsTaxCalculationRoute() {
                 {saveError && <Text size="sm" color="$error600">{saveError}</Text>}
                 {saveSuccess && <Text size="sm" color="$success600">{saveSuccess}</Text>}
 
-                <Button
-                  onPress={() => void handleSave()}
-                  disabled={!validation.valid || isSaving}
-                  testID="settings-tax-save"
-                >
-                  <ButtonText>{isSaving ? "Saving..." : "Save Tax Settings"}</ButtonText>
-                </Button>
+                <Box testID="settings-tax-btn-submit">
+                  <Button
+                    onPress={() => void handleSave()}
+                    disabled={isSubmitDisabled}
+                    testID="settings-tax-save"
+                  >
+                    <ButtonText>{isSaving ? "Saving..." : "Save Tax Settings"}</ButtonText>
+                  </Button>
+                </Box>
               </VStack>
             </Card>
 

@@ -1095,6 +1095,9 @@ export default function NewItemRoute() {
                           onBlur={() => setFieldTouched("title")}
                           testID="additem-input-title"
                           accessibilityLabel="Item title"
+                          accessibilityState={
+                            ({ invalid: shouldShowFieldError("title") } as any)
+                          }
                         />
                       </GInput>
                       {shouldShowFieldError("title") && (
@@ -1146,10 +1149,18 @@ export default function NewItemRoute() {
                           onBlur={() => setFieldTouched("purchaseDate")}
                           testID="additem-input-purchaseDate"
                           accessibilityLabel="Purchase date"
+                          accessibilityState={
+                            ({ invalid: shouldShowFieldError("purchaseDate") } as any)
+                          }
                         />
                       </GInput>
                       {shouldShowFieldError("purchaseDate") && (
-                        <GText size="xs" color="$error600" accessibilityLiveRegion="polite">
+                        <GText
+                          size="xs"
+                          color="$error600"
+                          accessibilityLiveRegion="polite"
+                          testID="additem-error-purchaseDate"
+                        >
                           {validationMessages.purchaseDate}
                         </GText>
                       )}
@@ -1180,6 +1191,9 @@ export default function NewItemRoute() {
                           onBlur={() => setFieldTouched("totalCents")}
                           testID="additem-input-price"
                           accessibilityLabel="Price in euros"
+                          accessibilityState={
+                            ({ invalid: shouldShowFieldError("totalCents") } as any)
+                          }
                         />
                       </GInput>
                       {shouldShowFieldError("totalCents") && (
@@ -1291,13 +1305,21 @@ export default function NewItemRoute() {
                             onBlur={() => setFieldTouched("workPercent")}
                             testID="additem-input-workpercent"
                             accessibilityLabel="Work percent"
+                            accessibilityState={
+                              ({ invalid: shouldShowFieldError("workPercent") } as any)
+                            }
                           />
                         </GInput>
                         <GText size="xs" color="$textLight500">
                           Used to calculate deductible share.
                         </GText>
                         {shouldShowFieldError("workPercent") && (
-                          <GText size="xs" color="$error600" accessibilityLiveRegion="polite">
+                          <GText
+                            size="xs"
+                            color="$error600"
+                            accessibilityLiveRegion="polite"
+                            testID="additem-error-workpercent"
+                          >
                             {validationMessages.workPercent}
                           </GText>
                         )}
@@ -1357,10 +1379,18 @@ export default function NewItemRoute() {
                           onBlur={() => setFieldTouched("warrantyMonths")}
                           testID="additem-input-warrantymonths"
                           accessibilityLabel="Warranty months"
+                          accessibilityState={
+                            ({ invalid: shouldShowFieldError("warrantyMonths") } as any)
+                          }
                         />
                       </GInput>
                       {shouldShowFieldError("warrantyMonths") && (
-                        <GText size="xs" color="$error600" accessibilityLiveRegion="polite">
+                        <GText
+                          size="xs"
+                          color="$error600"
+                          accessibilityLiveRegion="polite"
+                          testID="additem-error-warrantymonths"
+                        >
                           {validationMessages.warrantyMonths}
                         </GText>
                       )}
@@ -1432,13 +1462,21 @@ export default function NewItemRoute() {
                             onBlur={() => setFieldTouched("usefulLifeMonthsOverride")}
                             testID="additem-input-usefullife"
                             accessibilityLabel="Useful life override in months"
+                            accessibilityState={
+                              ({ invalid: showUsefulLifeError } as any)
+                            }
                           />
                         </GInput>
                         <GText size="xs" color="$textLight500">
                           Overrides automatic useful-life mapping for this item only.
                         </GText>
                         {showUsefulLifeError && (
-                          <GText size="xs" color="$error600" accessibilityLiveRegion="polite">
+                          <GText
+                            size="xs"
+                            color="$error600"
+                            accessibilityLiveRegion="polite"
+                            testID="additem-error-usefullife"
+                          >
                             {usefulLifeMonthsOverrideError}
                           </GText>
                         )}
@@ -1486,15 +1524,17 @@ export default function NewItemRoute() {
                     <GButtonText testID="additem-cancel">Cancel</GButtonText>
                   </GButton>
 
-                  <GButton
-                    flex={1}
-                    onPress={() => void submitAndSave()}
-                    disabled={isSaveDisabled}
-                    testID="additem-btn-save"
-                    accessibilityLabel="Save item"
-                  >
-                    <GButtonText testID="action-add-item">{isSavingItem ? "Saving..." : "Save Item"}</GButtonText>
-                  </GButton>
+                  <GBox flex={1} testID="additem-btn-submit">
+                    <GButton
+                      flex={1}
+                      onPress={() => void submitAndSave()}
+                      disabled={isSaveDisabled}
+                      testID="additem-btn-save"
+                      accessibilityLabel="Save item"
+                    >
+                      <GButtonText testID="action-add-item">{isSavingItem ? "Saving..." : "Save Item"}</GButtonText>
+                    </GButton>
+                  </GBox>
                 </GHStack>
               </GVStack>
             </GBox>

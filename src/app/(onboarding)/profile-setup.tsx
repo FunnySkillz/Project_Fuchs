@@ -1,5 +1,5 @@
 import { useRouter } from "expo-router";
-import React, { useMemo, useState } from "react";
+import React, { useCallback, useMemo, useRef, useState } from "react";
 import { ScrollView } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import {
@@ -19,6 +19,23 @@ import { createDefaultProfileSettings } from "@/models/profile-settings";
 import { getProfileSettingsRepository } from "@/repositories/create-profile-settings-repository";
 import { emitProfileSettingsSaved } from "@/services/app-events";
 
+type FieldKey =
+  | "taxYearDefault"
+  | "marginalRatePercent"
+  | "defaultWorkPercent"
+  | "gwgThresholdEuros";
+
+const fieldOrder: FieldKey[] = [
+  "taxYearDefault",
+  "marginalRatePercent",
+  "defaultWorkPercent",
+  "gwgThresholdEuros",
+];
+
+type FocusTarget = {
+  focus?: () => void;
+};
+
 export default function OnboardingProfileSetupRoute() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -34,6 +51,12 @@ export default function OnboardingProfileSetupRoute() {
   );
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [submitAttempted, setSubmitAttempted] = useState(false);
+  const [touchedFields, setTouchedFields] = useState<Partial<Record<FieldKey, boolean>>>({});
+
+  const scrollRef = useRef<ScrollView | null>(null);
+  const fieldYRef = useRef<Partial<Record<FieldKey, number>>>({});
+  const inputRef = useRef<Partial<Record<FieldKey, FocusTarget | null>>>({});
 
   const validation = useMemo(
     () =>
@@ -49,8 +72,48 @@ export default function OnboardingProfileSetupRoute() {
     [defaultWorkPercent, gwgThresholdEuros, marginalRatePercent, taxYearDefault]
   );
 
+  const shouldShowFieldError = useCallback(
+    (field: FieldKey) => Boolean((submitAttempted || touchedFields[field]) && validation.fieldErrors[field]),
+    [submitAttempted, touchedFields, validation.fieldErrors]
+  );
+
+  const isSubmitDisabled = (submitAttempted && !validation.valid) || isSaving;
+
+  const setFieldTouched = useCallback((field: FieldKey) => {
+    setTouchedFields((current) => ({ ...current, [field]: true }));
+  }, []);
+
+  const scrollToField = useCallback((field: FieldKey) => {
+    const y = fieldYRef.current[field];
+    if (typeof y !== "number") {
+      return;
+    }
+    scrollRef.current?.scrollTo({ y: Math.max(0, y - 20), animated: true });
+  }, []);
+
+  const focusField = useCallback((field: FieldKey) => {
+    const target = inputRef.current[field];
+    if (!target || typeof target.focus !== "function") {
+      return;
+    }
+    requestAnimationFrame(() => {
+      target.focus?.();
+    });
+  }, []);
+
+  const focusAndScrollFirstInvalid = useCallback(() => {
+    const firstInvalid = fieldOrder.find((field) => validation.fieldErrors[field]);
+    if (!firstInvalid) {
+      return;
+    }
+    scrollToField(firstInvalid);
+    focusField(firstInvalid);
+  }, [focusField, scrollToField, validation.fieldErrors]);
+
   const saveProfileSettings = async () => {
+    setSubmitAttempted(true);
     if (!validation.valid || !validation.values || isSaving) {
+      focusAndScrollFirstInvalid();
       return;
     }
 
@@ -73,6 +136,7 @@ export default function OnboardingProfileSetupRoute() {
     <SafeAreaView style={{ flex: 1 }} edges={["top"]}>
       <Box flex={1}>
         <ScrollView
+          ref={scrollRef}
           contentContainerStyle={{
             flexGrow: 1,
             justifyContent: "center",
@@ -96,82 +160,146 @@ export default function OnboardingProfileSetupRoute() {
 
           <Card borderWidth="$1" borderColor="$border200">
             <VStack space="md">
-              <VStack space="xs">
+              <VStack
+                space="xs"
+                onLayout={(event) => {
+                  fieldYRef.current.taxYearDefault = event.nativeEvent.layout.y;
+                }}
+                testID="onboarding-profile-input-taxYearDefault"
+              >
                 <Text bold size="sm">
                   Tax year default
                 </Text>
-                <Input variant="outline">
+                <Input
+                  variant="outline"
+                  borderColor={shouldShowFieldError("taxYearDefault") ? "$error600" : "$border200"}
+                >
                   <InputField
+                    ref={(node) => {
+                      inputRef.current.taxYearDefault = node as FocusTarget | null;
+                    }}
                     value={taxYearDefault}
                     onChangeText={setTaxYearDefault}
+                    onBlur={() => setFieldTouched("taxYearDefault")}
                     keyboardType="number-pad"
                     maxLength={4}
                     placeholder="2026"
                     testID="onboarding-profile-tax-year-input"
+                    accessibilityState={
+                      ({ invalid: shouldShowFieldError("taxYearDefault") } as any)
+                    }
                   />
                 </Input>
-                {validation.fieldErrors.taxYearDefault ? (
-                  <Text size="xs" color="$error600">
+                {shouldShowFieldError("taxYearDefault") ? (
+                  <Text size="xs" color="$error600" testID="onboarding-profile-error-taxYearDefault">
                     {validation.fieldErrors.taxYearDefault}
                   </Text>
                 ) : null}
               </VStack>
 
-              <VStack space="xs">
+              <VStack
+                space="xs"
+                onLayout={(event) => {
+                  fieldYRef.current.marginalRatePercent = event.nativeEvent.layout.y;
+                }}
+                testID="onboarding-profile-input-marginalRatePercent"
+              >
                 <Text bold size="sm">
                   Marginal tax rate (%)
                 </Text>
-                <Input variant="outline">
+                <Input
+                  variant="outline"
+                  borderColor={shouldShowFieldError("marginalRatePercent") ? "$error600" : "$border200"}
+                >
                   <InputField
+                    ref={(node) => {
+                      inputRef.current.marginalRatePercent = node as FocusTarget | null;
+                    }}
                     value={marginalRatePercent}
                     onChangeText={setMarginalRatePercent}
+                    onBlur={() => setFieldTouched("marginalRatePercent")}
                     keyboardType="decimal-pad"
                     placeholder="40"
                     testID="onboarding-profile-rate-input"
+                    accessibilityState={
+                      ({ invalid: shouldShowFieldError("marginalRatePercent") } as any)
+                    }
                   />
                 </Input>
-                {validation.fieldErrors.marginalRatePercent ? (
-                  <Text size="xs" color="$error600">
+                {shouldShowFieldError("marginalRatePercent") ? (
+                  <Text size="xs" color="$error600" testID="onboarding-profile-error-marginalRatePercent">
                     {validation.fieldErrors.marginalRatePercent}
                   </Text>
                 ) : null}
               </VStack>
 
-              <VStack space="xs">
+              <VStack
+                space="xs"
+                onLayout={(event) => {
+                  fieldYRef.current.defaultWorkPercent = event.nativeEvent.layout.y;
+                }}
+                testID="onboarding-profile-input-defaultWorkPercent"
+              >
                 <Text bold size="sm">
                   Default work percent (%)
                 </Text>
-                <Input variant="outline">
+                <Input
+                  variant="outline"
+                  borderColor={shouldShowFieldError("defaultWorkPercent") ? "$error600" : "$border200"}
+                >
                   <InputField
+                    ref={(node) => {
+                      inputRef.current.defaultWorkPercent = node as FocusTarget | null;
+                    }}
                     value={defaultWorkPercent}
                     onChangeText={setDefaultWorkPercent}
+                    onBlur={() => setFieldTouched("defaultWorkPercent")}
                     keyboardType="number-pad"
                     placeholder="100"
                     testID="onboarding-profile-work-percent-input"
+                    accessibilityState={
+                      ({ invalid: shouldShowFieldError("defaultWorkPercent") } as any)
+                    }
                   />
                 </Input>
-                {validation.fieldErrors.defaultWorkPercent ? (
-                  <Text size="xs" color="$error600">
+                {shouldShowFieldError("defaultWorkPercent") ? (
+                  <Text size="xs" color="$error600" testID="onboarding-profile-error-defaultWorkPercent">
                     {validation.fieldErrors.defaultWorkPercent}
                   </Text>
                 ) : null}
               </VStack>
 
-              <VStack space="xs">
+              <VStack
+                space="xs"
+                onLayout={(event) => {
+                  fieldYRef.current.gwgThresholdEuros = event.nativeEvent.layout.y;
+                }}
+                testID="onboarding-profile-input-gwgThresholdEuros"
+              >
                 <Text bold size="sm">
                   GWG threshold (EUR)
                 </Text>
-                <Input variant="outline">
+                <Input
+                  variant="outline"
+                  borderColor={shouldShowFieldError("gwgThresholdEuros") ? "$error600" : "$border200"}
+                >
                   <InputField
+                    ref={(node) => {
+                      inputRef.current.gwgThresholdEuros = node as FocusTarget | null;
+                    }}
                     value={gwgThresholdEuros}
                     onChangeText={setGwgThresholdEuros}
+                    onBlur={() => setFieldTouched("gwgThresholdEuros")}
                     keyboardType="decimal-pad"
                     placeholder="1000.00"
                     testID="onboarding-profile-gwg-input"
+                    accessibilityState={
+                      ({ invalid: shouldShowFieldError("gwgThresholdEuros") } as any)
+                    }
                   />
                 </Input>
-                {validation.fieldErrors.gwgThresholdEuros ? (
-                  <Text size="xs" color="$error600">
+                {shouldShowFieldError("gwgThresholdEuros") ? (
+                  <Text size="xs" color="$error600" testID="onboarding-profile-error-gwgThresholdEuros">
                     {validation.fieldErrors.gwgThresholdEuros}
                   </Text>
                 ) : null}
@@ -188,7 +316,7 @@ export default function OnboardingProfileSetupRoute() {
                   action="secondary"
                   alignSelf="flex-start"
                   onPress={() => void saveProfileSettings()}
-                  disabled={isSaving || !validation.valid}
+                  disabled={isSubmitDisabled}
                 >
                   <ButtonText>Retry Save</ButtonText>
                 </Button>
@@ -196,13 +324,15 @@ export default function OnboardingProfileSetupRoute() {
             </Card>
           ) : null}
 
-          <Button
-            onPress={() => void saveProfileSettings()}
-            disabled={!validation.valid || isSaving}
-            testID="onboarding-profile-save"
-          >
-            <ButtonText>{isSaving ? "Saving..." : "Save and Continue"}</ButtonText>
-          </Button>
+          <Box testID="onboarding-profile-btn-submit">
+            <Button
+              onPress={() => void saveProfileSettings()}
+              disabled={isSubmitDisabled}
+              testID="onboarding-profile-save"
+            >
+              <ButtonText>{isSaving ? "Saving..." : "Save and Continue"}</ButtonText>
+            </Button>
+          </Box>
           </VStack>
         </ScrollView>
       </Box>

@@ -760,6 +760,7 @@ export default function ItemEditRoute() {
               <Heading size="md">Fields</Heading>
 
               <Box
+                testID="edititem-input-title"
                 onLayout={(event) => {
                   fieldYRef.current.title = event.nativeEvent.layout.y;
                 }}
@@ -781,15 +782,26 @@ export default function ItemEditRoute() {
                     placeholder="e.g. Work laptop"
                     onBlur={() => setFieldTouched("title")}
                     testID="item-edit-title-input"
+                    accessibilityState={
+                      ({ invalid: shouldShowFieldError("title") } as any)
+                    }
                   />
                 </Input>
                 {shouldShowFieldError("title") ? (
-                  <Text size="xs" color="$error600">{validationMessages.title}</Text>
+                  <Text
+                    size="xs"
+                    color="$error600"
+                    testID="edititem-error-title"
+                    accessibilityLiveRegion="polite"
+                  >
+                    {validationMessages.title}
+                  </Text>
                 ) : null}
               </VStack>
               </Box>
 
               <Box
+                testID="edititem-input-purchaseDate"
                 onLayout={(event) => {
                   fieldYRef.current.purchaseDate = event.nativeEvent.layout.y;
                 }}
@@ -814,6 +826,9 @@ export default function ItemEditRoute() {
                       placeholder="YYYY-MM-DD"
                       onBlur={() => setFieldTouched("purchaseDate")}
                       testID="item-edit-purchase-date-input"
+                      accessibilityState={
+                        ({ invalid: shouldShowFieldError("purchaseDate") } as any)
+                      }
                     />
                   </Input>
                   <Button
@@ -825,12 +840,20 @@ export default function ItemEditRoute() {
                   </Button>
                 </HStack>
                 {shouldShowFieldError("purchaseDate") ? (
-                  <Text size="xs" color="$error600">{validationMessages.purchaseDate}</Text>
+                  <Text
+                    size="xs"
+                    color="$error600"
+                    testID="edititem-error-purchaseDate"
+                    accessibilityLiveRegion="polite"
+                  >
+                    {validationMessages.purchaseDate}
+                  </Text>
                 ) : null}
               </VStack>
               </Box>
 
               <Box
+                testID="edititem-input-price"
                 onLayout={(event) => {
                   fieldYRef.current.totalCents = event.nativeEvent.layout.y;
                 }}
@@ -853,15 +876,25 @@ export default function ItemEditRoute() {
                     placeholder="e.g. 1299.90"
                     onBlur={() => setFieldTouched("totalCents")}
                     testID="item-edit-total-price-input"
+                    accessibilityState={
+                      ({ invalid: shouldShowFieldError("totalCents") } as any)
+                    }
                   />
                 </Input>
                 {shouldShowFieldError("totalCents") ? (
-                  <Text size="xs" color="$error600">{validationMessages.totalCents}</Text>
+                  <Text
+                    size="xs"
+                    color="$error600"
+                    testID="edititem-error-price"
+                    accessibilityLiveRegion="polite"
+                  >
+                    {validationMessages.totalCents}
+                  </Text>
                 ) : null}
               </VStack>
               </Box>
 
-              <VStack space="xs">
+              <VStack space="xs" testID="edititem-input-category">
                 <Text bold size="sm">
                   Category
                 </Text>
@@ -895,7 +928,7 @@ export default function ItemEditRoute() {
                 </HStack>
               </VStack>
 
-              <VStack space="xs">
+              <VStack space="xs" testID="edititem-input-usageType">
                 <Text bold size="sm">
                   Usage type *
                 </Text>
@@ -917,6 +950,7 @@ export default function ItemEditRoute() {
 
               {usageType === "MIXED" ? (
                 <Box
+                  testID="edititem-input-workpercent"
                   onLayout={(event) => {
                     fieldYRef.current.workPercent = event.nativeEvent.layout.y;
                   }}
@@ -939,16 +973,27 @@ export default function ItemEditRoute() {
                       placeholder="0-100"
                       onBlur={() => setFieldTouched("workPercent")}
                       testID="item-edit-work-percent-input"
+                      accessibilityState={
+                        ({ invalid: shouldShowFieldError("workPercent") } as any)
+                      }
                     />
                   </Input>
                   {shouldShowFieldError("workPercent") ? (
-                    <Text size="xs" color="$error600">{validationMessages.workPercent}</Text>
+                    <Text
+                      size="xs"
+                      color="$error600"
+                      testID="edititem-error-workpercent"
+                      accessibilityLiveRegion="polite"
+                    >
+                      {validationMessages.workPercent}
+                    </Text>
                   ) : null}
                 </VStack>
                 </Box>
               ) : null}
 
               <Box
+                testID="edititem-input-warrantymonths"
                 onLayout={(event) => {
                   fieldYRef.current.warrantyMonths = event.nativeEvent.layout.y;
                 }}
@@ -971,10 +1016,20 @@ export default function ItemEditRoute() {
                     placeholder="Optional"
                     onBlur={() => setFieldTouched("warrantyMonths")}
                     testID="item-edit-warranty-months-input"
+                    accessibilityState={
+                      ({ invalid: shouldShowFieldError("warrantyMonths") } as any)
+                    }
                   />
                 </Input>
                 {shouldShowFieldError("warrantyMonths") ? (
-                  <Text size="xs" color="$error600">{validationMessages.warrantyMonths}</Text>
+                  <Text
+                    size="xs"
+                    color="$error600"
+                    testID="edititem-error-warrantymonths"
+                    accessibilityLiveRegion="polite"
+                  >
+                    {validationMessages.warrantyMonths}
+                  </Text>
                 ) : null}
                 <Text size="xs" color="$textLight500">
                   Warranty until: {parsedWarrantyMonths && parsedWarrantyMonths > 0 ? addMonthsToYmd(purchaseDate, parsedWarrantyMonths) : "n/a"}
@@ -982,7 +1037,7 @@ export default function ItemEditRoute() {
               </VStack>
               </Box>
 
-              <VStack space="xs">
+              <VStack space="xs" testID="edititem-input-vendor">
                 <Text bold size="sm">
                   Vendor
                 </Text>
@@ -997,6 +1052,7 @@ export default function ItemEditRoute() {
               </VStack>
 
               <Box
+                testID="edititem-input-usefullife"
                 onLayout={(event) => {
                   fieldYRef.current.usefulLifeMonthsOverride = event.nativeEvent.layout.y;
                 }}
@@ -1019,15 +1075,25 @@ export default function ItemEditRoute() {
                     placeholder="Optional, e.g. 36"
                     onBlur={() => setFieldTouched("usefulLifeMonthsOverride")}
                     testID="item-edit-useful-life-input"
+                    accessibilityState={
+                      ({ invalid: showUsefulLifeError } as any)
+                    }
                   />
                 </Input>
                 {showUsefulLifeError ? (
-                  <Text size="xs" color="$error600">{usefulLifeMonthsOverrideError}</Text>
+                  <Text
+                    size="xs"
+                    color="$error600"
+                    testID="edititem-error-usefullife"
+                    accessibilityLiveRegion="polite"
+                  >
+                    {usefulLifeMonthsOverrideError}
+                  </Text>
                 ) : null}
               </VStack>
               </Box>
 
-              <VStack space="xs">
+              <VStack space="xs" testID="edititem-input-notes">
                 <Text bold size="sm">
                   Notes
                 </Text>
@@ -1135,22 +1201,26 @@ export default function ItemEditRoute() {
           </Card>
 
           <HStack space="sm" flexWrap="wrap">
-            <Button
-              variant="outline"
-              action="secondary"
-              onPress={handleExitRequest}
-              testID="edititem-cancel"
-              accessibilityLabel="Cancel editing item"
-            >
-              <ButtonText testID="item-edit-cancel">Cancel</ButtonText>
-            </Button>
-            <Button
-              onPress={() => void saveChanges()}
-              disabled={isSaveDisabled}
-              testID="item-edit-save"
-            >
-              <ButtonText>{isSaving ? "Saving..." : "Save Changes"}</ButtonText>
-            </Button>
+            <Box testID="edititem-btn-cancel">
+              <Button
+                variant="outline"
+                action="secondary"
+                onPress={handleExitRequest}
+                testID="edititem-cancel"
+                accessibilityLabel="Cancel editing item"
+              >
+                <ButtonText testID="item-edit-cancel">Cancel</ButtonText>
+              </Button>
+            </Box>
+            <Box testID="edititem-btn-submit">
+              <Button
+                onPress={() => void saveChanges()}
+                disabled={isSaveDisabled}
+                testID="item-edit-save"
+              >
+                <ButtonText>{isSaving ? "Saving..." : "Save Changes"}</ButtonText>
+              </Button>
+            </Box>
           </HStack>
           </VStack>
         </ScrollView>

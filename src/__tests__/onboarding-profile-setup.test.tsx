@@ -78,4 +78,27 @@ describe("OnboardingProfileSetupRoute", () => {
       expect(mockRouterReplace).toHaveBeenCalledWith("/(tabs)/home");
     });
   });
+
+  it("shows field error only after submit attempt and disables submit until fixed", async () => {
+    mockUpsertSettings.mockResolvedValue(undefined);
+
+    render(<OnboardingProfileSetupRoute />);
+    expect(await screen.findByText("Profile Setup")).toBeTruthy();
+    expect(screen.queryByTestId("onboarding-profile-error-marginalRatePercent")).toBeNull();
+
+    fireEvent.changeText(screen.getByTestId("onboarding-profile-rate-input"), "");
+    fireEvent.press(screen.getByTestId("onboarding-profile-save"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("onboarding-profile-error-marginalRatePercent")).toBeTruthy();
+      expect(screen.getByTestId("onboarding-profile-save").props.accessibilityState?.disabled).toBe(true);
+    });
+    expect(mockUpsertSettings).not.toHaveBeenCalled();
+
+    fireEvent.changeText(screen.getByTestId("onboarding-profile-rate-input"), "40");
+    await waitFor(() => {
+      expect(screen.queryByTestId("onboarding-profile-error-marginalRatePercent")).toBeNull();
+      expect(screen.getByTestId("onboarding-profile-save").props.accessibilityState?.disabled).not.toBe(true);
+    });
+  });
 });

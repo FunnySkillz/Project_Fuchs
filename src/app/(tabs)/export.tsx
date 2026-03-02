@@ -1,5 +1,5 @@
 import { useFocusEffect } from "expo-router";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ScrollView } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import {
@@ -52,6 +52,8 @@ import {
 
 type FilterSheetKind = "usageType" | "category" | null;
 type ExportFormat = "PDF" | "ZIP";
+type ExportFieldKey = "taxYear";
+type FocusTarget = { focus?: () => void };
 
 const usageOptions: { label: string; value: ItemUsageType | null }[] = [
   { label: "All usage types", value: null },
@@ -66,8 +68,26 @@ function parseYearInput(rawYear: string): number | undefined {
   if (trimmed.length === 0) {
     return undefined;
   }
+  if (!/^\d{4}$/.test(trimmed)) {
+    return undefined;
+  }
   const parsed = Number.parseInt(trimmed, 10);
   return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function getTaxYearValidationMessage(rawYear: string): string | null {
+  const trimmed = rawYear.trim();
+  if (trimmed.length === 0) {
+    return null;
+  }
+  if (!/^\d{4}$/.test(trimmed)) {
+    return "Tax year must be a 4-digit year.";
+  }
+  const parsed = Number.parseInt(trimmed, 10);
+  if (!Number.isFinite(parsed) || parsed < 1900 || parsed > 2100) {
+    return "Tax year must be between 1900 and 2100.";
+  }
+  return null;
 }
 
 function missingNotesForItem(item: Item): boolean {
@@ -146,6 +166,9 @@ const ExportItemRow = React.memo(function ExportItemRow({
 export default function ExportRoute() {
   const insets = useSafeAreaInsets();
   const sessionDefaults = useMemo(() => getExportSelectionSessionState(), []);
+  const fieldYRef = useRef<Partial<Record<ExportFieldKey, number>>>({});
+  const scrollRef = useRef<ScrollView | null>(null);
+  const inputRef = useRef<Partial<Record<ExportFieldKey, FocusTarget | null>>>({});
 
   const [taxYear, setTaxYear] = useState(sessionDefaults.taxYear);
   const [search, setSearch] = useState(sessionDefaults.search);
@@ -172,8 +195,13 @@ export default function ExportRoute() {
   const [exportHistory, setExportHistory] = useState<ExportRun[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [submitAttempted, setSubmitAttempted] = useState(false);
+  const [touchedFields, setTouchedFields] = useState<Partial<Record<ExportFieldKey, boolean>>>({});
 
   const parsedTaxYear = useMemo(() => parseYearInput(taxYear), [taxYear]);
+  const taxYearError = useMemo(() => getTaxYearValidationMessage(taxYear), [taxYear]);
+  const isGenerateFormValid = taxYearError === null;
+  const shouldShowTaxYearError = Boolean((submitAttempted || touchedFields.taxYear) && taxYearError);
   const categoryMap = useMemo(
     () => new Map(categories.map((category) => [category.id, category])),
     [categories]
@@ -315,6 +343,8 @@ export default function ExportRoute() {
       estimatedRefundCents,
     };
   }, [deductibleByItemId, selectedItems, settings]);
+  const isGenerateDisabled =
+    selectedItems.length === 0 || isGenerating || (submitAttempted && !isGenerateFormValid);
 
   const toggleItemSelection = (itemId: string) => {
     setSelectedItemIds((current) => {
@@ -348,8 +378,38 @@ export default function ExportRoute() {
     setMissingNotes(false);
   };
 
+  const scrollToField = useCallback((field: ExportFieldKey) => {
+    const y = fieldYRef.current[field];
+    if (typeof y !== "number") {
+      return;
+    }
+    scrollRef.current?.scrollTo({ y: Math.max(0, y - 20), animated: true });
+  }, []);
+
+  const focusField = useCallback((field: ExportFieldKey) => {
+    const target = inputRef.current[field];
+    if (!target || typeof target.focus !== "function") {
+      return;
+    }
+    requestAnimationFrame(() => {
+      target.focus?.();
+    });
+  }, []);
+
+  const focusFirstInvalidField = useCallback(() => {
+    if (!taxYearError) {
+      return;
+    }
+    scrollToField("taxYear");
+    focusField("taxYear");
+  }, [focusField, scrollToField, taxYearError]);
+
   const handleGenerateExport = async () => {
-    if (!settings || selectedItems.length === 0 || isGenerating) {
+    setSubmitAttempted(true);
+    if (!isGenerateFormValid || !settings || selectedItems.length === 0 || isGenerating) {
+      if (!isGenerateFormValid) {
+        focusFirstInvalidField();
+      }
       return;
     }
 
@@ -433,7 +493,10 @@ export default function ExportRoute() {
   return (
     <SafeAreaView style={{ flex: 1 }} edges={["top"]}>
       <Box flex={1} px="$5" py="$6">
-        <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}>
+        <ScrollView
+          ref={scrollRef}
+          contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
+        >
           <VStack space="lg" maxWidth={900} width="$full" alignSelf="center">
             <VStack space="xs">
               <Heading size="2xl">Export</Heading>
@@ -445,16 +508,44 @@ export default function ExportRoute() {
                 <Text bold size="sm">
                   Tax year
                 </Text>
-                <Input variant="outline" size="md">
-                  <InputField
-                    value={taxYear}
-                    onChangeText={setTaxYear}
-                    keyboardType="number-pad"
-                    maxLength={4}
-                    placeholder={settings ? String(settings.taxYearDefault) : "e.g. 2026"}
-                    testID="export-tax-year-input"
-                  />
-                </Input>
+                <Box
+                  testID="export-input-taxYear"
+                  onLayout={(event) => {
+                    fieldYRef.current.taxYear = event.nativeEvent.layout.y;
+                  }}
+                >
+                  <Input
+                    variant="outline"
+                    size="md"
+                    borderColor={shouldShowTaxYearError ? "$error600" : "$border200"}
+                  >
+                    <InputField
+                      ref={(node) => {
+                        inputRef.current.taxYear = node as FocusTarget | null;
+                      }}
+                      value={taxYear}
+                      onChangeText={setTaxYear}
+                      keyboardType="number-pad"
+                      maxLength={4}
+                      placeholder={settings ? String(settings.taxYearDefault) : "e.g. 2026"}
+                      testID="export-tax-year-input"
+                      accessibilityState={({ invalid: shouldShowTaxYearError } as any)}
+                      onBlur={() => {
+                        setTouchedFields((current) => ({ ...current, taxYear: true }));
+                      }}
+                    />
+                  </Input>
+                </Box>
+                {shouldShowTaxYearError ? (
+                  <Text
+                    size="xs"
+                    color="$error600"
+                    testID="export-error-taxYear"
+                    accessibilityLiveRegion="polite"
+                  >
+                    {taxYearError}
+                  </Text>
+                ) : null}
               </VStack>
             </Card>
 
@@ -649,15 +740,18 @@ export default function ExportRoute() {
                   </HStack>
                 </VStack>
 
-                <Button
-                  onPress={() => void handleGenerateExport()}
-                  disabled={selectedItems.length === 0 || isGenerating}
-                  testID="export-generate"
-                >
-                  <ButtonText>
-                    {isGenerating ? `Generating ${selectedFormat}...` : "Generate Export"}
-                  </ButtonText>
-                </Button>
+                <Box testID="export-btn-submit">
+                  <Button
+                    onPress={() => void handleGenerateExport()}
+                    disabled={isGenerateDisabled}
+                    testID="export-generate"
+                    accessibilityState={{ disabled: isGenerateDisabled }}
+                  >
+                    <ButtonText>
+                      {isGenerating ? `Generating ${selectedFormat}...` : "Generate Export"}
+                    </ButtonText>
+                  </Button>
+                </Box>
 
                 {latestGeneratedFileName && <Text size="sm">Last export: {latestGeneratedFileName}</Text>}
                 {zipProgress && (

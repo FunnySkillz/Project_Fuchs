@@ -1,5 +1,5 @@
 import { useRouter } from "expo-router";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ScrollView } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import {
@@ -20,6 +20,13 @@ import {
 import { getProfileSettingsRepository } from "@/repositories/create-profile-settings-repository";
 import { emitProfileSettingsSaved } from "@/services/app-events";
 import { hasPinAsync, isValidPin, setPinAsync, verifyPinAsync } from "@/services/pin-auth";
+
+type PinFieldKey = "currentPin" | "newPin" | "confirmPin";
+const pinFieldOrder: PinFieldKey[] = ["currentPin", "newPin", "confirmPin"];
+
+type FocusTarget = {
+  focus?: () => void;
+};
 
 export default function SettingsSecurityRoute() {
   const router = useRouter();
@@ -43,6 +50,13 @@ export default function SettingsSecurityRoute() {
   const [pinError, setPinError] = useState<string | null>(null);
   const [pinSuccess, setPinSuccess] = useState<string | null>(null);
   const [isSavingPin, setIsSavingPin] = useState(false);
+  const [pinSubmitAttempted, setPinSubmitAttempted] = useState(false);
+  const [pinTouchedFields, setPinTouchedFields] = useState<Partial<Record<PinFieldKey, boolean>>>({});
+  const [currentPinVerificationError, setCurrentPinVerificationError] = useState<string | null>(null);
+
+  const scrollRef = useRef<ScrollView | null>(null);
+  const pinFieldYRef = useRef<Partial<Record<PinFieldKey, number>>>({});
+  const pinInputRef = useRef<Partial<Record<PinFieldKey, FocusTarget | null>>>({});
 
   const loadSettings = useCallback(async () => {
     setIsLoading(true);
@@ -52,6 +66,9 @@ export default function SettingsSecurityRoute() {
       const [settings, hasPin] = await Promise.all([repository.getSettings(), hasPinAsync()]);
       setAppLockEnabled(settings.appLockEnabled);
       setPinExists(hasPin);
+      setPinSubmitAttempted(false);
+      setPinTouchedFields({});
+      setCurrentPinVerificationError(null);
     } catch (error) {
       console.error("Failed to load security settings", error);
       setLoadError("Could not load security settings.");
@@ -89,20 +106,82 @@ export default function SettingsSecurityRoute() {
     }
   };
 
+  const pinValidationErrors = useMemo(() => {
+    const errors: Partial<Record<PinFieldKey, string>> = {};
+
+    if (pinExists && currentPin.trim().length === 0) {
+      errors.currentPin = "Current PIN is required.";
+    }
+
+    if (!isValidPin(newPin)) {
+      errors.newPin = "PIN must be 4 to 6 digits.";
+    }
+
+    if (confirmPin.trim().length === 0) {
+      errors.confirmPin = "Please confirm your PIN.";
+    } else if (newPin !== confirmPin) {
+      errors.confirmPin = "PIN confirmation does not match.";
+    }
+
+    if (currentPinVerificationError) {
+      errors.currentPin = currentPinVerificationError;
+    }
+
+    return errors;
+  }, [confirmPin, currentPin, currentPinVerificationError, newPin, pinExists]);
+
+  const isPinFormValid = Object.keys(pinValidationErrors).length === 0;
+  const isPinSubmitDisabled = (pinSubmitAttempted && !isPinFormValid) || isSavingPin;
+
+  const shouldShowPinFieldError = useCallback(
+    (field: PinFieldKey) =>
+      Boolean((pinSubmitAttempted || pinTouchedFields[field]) && pinValidationErrors[field]),
+    [pinSubmitAttempted, pinTouchedFields, pinValidationErrors]
+  );
+
+  const setPinFieldTouched = useCallback((field: PinFieldKey) => {
+    setPinTouchedFields((current) => ({ ...current, [field]: true }));
+  }, []);
+
+  const scrollToPinField = useCallback((field: PinFieldKey) => {
+    const y = pinFieldYRef.current[field];
+    if (typeof y !== "number") {
+      return;
+    }
+    scrollRef.current?.scrollTo({ y: Math.max(0, y - 20), animated: true });
+  }, []);
+
+  const focusPinField = useCallback((field: PinFieldKey) => {
+    const target = pinInputRef.current[field];
+    if (!target || typeof target.focus !== "function") {
+      return;
+    }
+    requestAnimationFrame(() => {
+      target.focus?.();
+    });
+  }, []);
+
+  const focusAndScrollFirstPinError = useCallback(() => {
+    const firstInvalid = pinFieldOrder.find((field) => pinValidationErrors[field]);
+    if (!firstInvalid) {
+      return;
+    }
+    scrollToPinField(firstInvalid);
+    focusPinField(firstInvalid);
+  }, [focusPinField, pinValidationErrors, scrollToPinField]);
+
   const handleSavePin = async () => {
     if (isSavingPin) {
       return;
     }
 
+    setPinSubmitAttempted(true);
     setPinError(null);
     setPinSuccess(null);
+    setCurrentPinVerificationError(null);
 
-    if (!isValidPin(newPin)) {
-      setPinError("PIN must be 4 to 6 digits.");
-      return;
-    }
-    if (newPin !== confirmPin) {
-      setPinError("PIN confirmation does not match.");
+    if (!isPinFormValid) {
+      focusAndScrollFirstPinError();
       return;
     }
 
@@ -111,7 +190,10 @@ export default function SettingsSecurityRoute() {
       if (pinExists) {
         const check = await verifyPinAsync(currentPin);
         if (!check.success) {
+          setCurrentPinVerificationError("Current PIN is incorrect.");
           setPinError("Current PIN is incorrect.");
+          focusPinField("currentPin");
+          scrollToPinField("currentPin");
           return;
         }
       }
@@ -121,6 +203,9 @@ export default function SettingsSecurityRoute() {
       setCurrentPin("");
       setNewPin("");
       setConfirmPin("");
+      setPinSubmitAttempted(false);
+      setPinTouchedFields({});
+      setCurrentPinVerificationError(null);
       setPinSuccess("PIN saved successfully.");
     } catch (error) {
       console.error("Failed to save PIN", error);
@@ -147,6 +232,7 @@ export default function SettingsSecurityRoute() {
     <SafeAreaView style={{ flex: 1 }} edges={["bottom"]}>
       <Box flex={1} px="$5" py="$6">
         <ScrollView
+          ref={scrollRef}
           contentContainerStyle={{
             width: "100%",
             maxWidth: 860,
@@ -198,54 +284,132 @@ export default function SettingsSecurityRoute() {
                 </Text>
 
                 {pinExists && (
-                  <Input variant="outline">
+                  <VStack
+                    space="xs"
+                    onLayout={(event) => {
+                      pinFieldYRef.current.currentPin = event.nativeEvent.layout.y;
+                    }}
+                    testID="settings-security-input-currentPin"
+                  >
+                    <Input
+                      variant="outline"
+                      borderColor={shouldShowPinFieldError("currentPin") ? "$error600" : "$border200"}
+                    >
+                      <InputField
+                        ref={(node) => {
+                          pinInputRef.current.currentPin = node as FocusTarget | null;
+                        }}
+                        value={currentPin}
+                        onChangeText={(value) => {
+                          setCurrentPin(value);
+                          setCurrentPinVerificationError(null);
+                          setPinError(null);
+                        }}
+                        onBlur={() => setPinFieldTouched("currentPin")}
+                        secureTextEntry
+                        keyboardType="number-pad"
+                        maxLength={6}
+                        placeholder="Current PIN"
+                        testID="settings-security-current-pin-input"
+                        accessibilityState={
+                          ({ invalid: shouldShowPinFieldError("currentPin") } as any)
+                        }
+                      />
+                    </Input>
+                    {shouldShowPinFieldError("currentPin") ? (
+                      <Text size="xs" color="$error600" testID="settings-security-error-currentPin">
+                        {pinValidationErrors.currentPin}
+                      </Text>
+                    ) : null}
+                  </VStack>
+                )}
+
+                <VStack
+                  space="xs"
+                  onLayout={(event) => {
+                    pinFieldYRef.current.newPin = event.nativeEvent.layout.y;
+                  }}
+                  testID="settings-security-input-newPin"
+                >
+                  <Input
+                    variant="outline"
+                    borderColor={shouldShowPinFieldError("newPin") ? "$error600" : "$border200"}
+                  >
                     <InputField
-                      value={currentPin}
-                      onChangeText={setCurrentPin}
+                      ref={(node) => {
+                        pinInputRef.current.newPin = node as FocusTarget | null;
+                      }}
+                      value={newPin}
+                      onChangeText={setNewPin}
+                      onBlur={() => setPinFieldTouched("newPin")}
                       secureTextEntry
                       keyboardType="number-pad"
                       maxLength={6}
-                      placeholder="Current PIN"
+                      placeholder={pinExists ? "New PIN (4-6 digits)" : "PIN (4-6 digits)"}
+                      testID="settings-security-new-pin-input"
+                      accessibilityState={
+                        ({ invalid: shouldShowPinFieldError("newPin") } as any)
+                      }
                     />
                   </Input>
-                )}
+                  {shouldShowPinFieldError("newPin") ? (
+                    <Text size="xs" color="$error600" testID="settings-security-error-newPin">
+                      {pinValidationErrors.newPin}
+                    </Text>
+                  ) : null}
+                </VStack>
 
-                <Input variant="outline">
-                  <InputField
-                    value={newPin}
-                    onChangeText={setNewPin}
-                    secureTextEntry
-                    keyboardType="number-pad"
-                    maxLength={6}
-                    placeholder={pinExists ? "New PIN (4-6 digits)" : "PIN (4-6 digits)"}
-                  />
-                </Input>
-
-                <Input variant="outline">
-                  <InputField
-                    value={confirmPin}
-                    onChangeText={setConfirmPin}
-                    secureTextEntry
-                    keyboardType="number-pad"
-                    maxLength={6}
-                    placeholder="Confirm PIN"
-                  />
-                </Input>
+                <VStack
+                  space="xs"
+                  onLayout={(event) => {
+                    pinFieldYRef.current.confirmPin = event.nativeEvent.layout.y;
+                  }}
+                  testID="settings-security-input-confirmPin"
+                >
+                  <Input
+                    variant="outline"
+                    borderColor={shouldShowPinFieldError("confirmPin") ? "$error600" : "$border200"}
+                  >
+                    <InputField
+                      ref={(node) => {
+                        pinInputRef.current.confirmPin = node as FocusTarget | null;
+                      }}
+                      value={confirmPin}
+                      onChangeText={setConfirmPin}
+                      onBlur={() => setPinFieldTouched("confirmPin")}
+                      secureTextEntry
+                      keyboardType="number-pad"
+                      maxLength={6}
+                      placeholder="Confirm PIN"
+                      testID="settings-security-confirm-pin-input"
+                      accessibilityState={
+                        ({ invalid: shouldShowPinFieldError("confirmPin") } as any)
+                      }
+                    />
+                  </Input>
+                  {shouldShowPinFieldError("confirmPin") ? (
+                    <Text size="xs" color="$error600" testID="settings-security-error-confirmPin">
+                      {pinValidationErrors.confirmPin}
+                    </Text>
+                  ) : null}
+                </VStack>
 
                 {pinError && <Text size="sm" color="$error600">{pinError}</Text>}
                 {pinSuccess && <Text size="sm" color="$success600">{pinSuccess}</Text>}
 
-                <Button
-                  variant="outline"
-                  action="secondary"
-                  onPress={() => void handleSavePin()}
-                  disabled={isSavingPin}
-                  testID="settings-security-save-pin"
-                >
-                  <ButtonText>
-                    {isSavingPin ? "Saving PIN..." : pinExists ? "Change PIN" : "Set PIN"}
-                  </ButtonText>
-                </Button>
+                <Box testID="settings-security-btn-submit">
+                  <Button
+                    variant="outline"
+                    action="secondary"
+                    onPress={() => void handleSavePin()}
+                    disabled={isPinSubmitDisabled}
+                    testID="settings-security-save-pin"
+                  >
+                    <ButtonText>
+                      {isSavingPin ? "Saving PIN..." : pinExists ? "Change PIN" : "Set PIN"}
+                    </ButtonText>
+                  </Button>
+                </Box>
               </VStack>
             </Card>
           </VStack>

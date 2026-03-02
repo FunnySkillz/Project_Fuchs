@@ -324,4 +324,29 @@ describe("ExportRoute", () => {
     expect(await screen.findByText("Could not generate ZIP export.")).toBeTruthy();
     expect(mockCreateExportRun).not.toHaveBeenCalled();
   });
+
+  it("shows validation feedback when tax year is invalid and blocks generation", async () => {
+    render(<ExportRoute />);
+    expect(await screen.findByText("Export")).toBeTruthy();
+
+    fireEvent.press(screen.getByTestId("export-selection-toggle"));
+    fireEvent.press(screen.getByTestId("export-row-toggle-item-1"));
+    fireEvent.changeText(screen.getByTestId("export-tax-year-input"), "20ab");
+
+    fireEvent.press(screen.getByTestId("export-generate"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("export-error-taxYear")).toBeTruthy();
+    });
+
+    expect(mockGeneratePdfExport).not.toHaveBeenCalled();
+    expect(mockGenerateZipExport).not.toHaveBeenCalled();
+    expect(screen.getByTestId("export-generate").props.accessibilityState?.disabled).toBe(true);
+
+    fireEvent.changeText(screen.getByTestId("export-tax-year-input"), "2026");
+    await waitFor(() => {
+      expect(screen.queryByTestId("export-error-taxYear")).toBeNull();
+      expect(screen.getByTestId("export-generate").props.accessibilityState?.disabled).toBe(false);
+    });
+  });
 });
