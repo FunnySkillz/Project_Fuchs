@@ -11,7 +11,7 @@ jest.mock("expo-router", () => {
 });
 
 describe("AddTabRoute", () => {
-  it("redirects the add tab route to the add-item screen", () => {
+  it("redirects add tab route to add item flow", () => {
     render(<AddTabRoute />);
 
     expect(screen.getByTestId("tabs-add-redirect").props.children).toBe("/item/new");

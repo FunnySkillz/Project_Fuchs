@@ -11,6 +11,7 @@ export default function TabsLayout() {
   const insets = useSafeAreaInsets();
   const bottomInset = Math.max(insets.bottom, 8);
   const tabBarHeight = 56 + bottomInset;
+  const addButtonLift = Math.max(6, Math.min(12, insets.bottom + 6));
   const mutedForeground = theme.textSecondary;
 
   return (
@@ -57,30 +58,38 @@ export default function TabsLayout() {
         options={{
           title: "Add",
           tabBarLabel: "",
-          tabBarButton: ({ style, onLongPress }) => (
+          tabBarButton: ({ style, onLongPress, accessibilityState }) => (
             <Pressable
               onPress={() => {
                 router.push("/item/new");
               }}
               onLongPress={onLongPress}
-              testID="tab-add"
+              testID="tab-add-center"
               accessibilityLabel="Add Item"
               accessibilityRole="button"
+              accessibilityState={{
+                ...accessibilityState,
+                selected: false,
+              }}
+              hitSlop={8}
               style={({ pressed }) => [
                 style,
                 {
+                  width: "100%",
+                  minHeight: 64,
+                  minWidth: 64,
                   alignItems: "center",
                   justifyContent: "center",
                   opacity: pressed ? 0.9 : 1,
+                  overflow: "visible",
                 },
               ]}
             >
               <View
                 style={{
-                  marginTop: -6,
-                  width: 54,
-                  height: 54,
-                  borderRadius: 27,
+                  width: 56,
+                  height: 56,
+                  borderRadius: 28,
                   justifyContent: "center",
                   alignItems: "center",
                   backgroundColor: theme.primary,
@@ -89,7 +98,7 @@ export default function TabsLayout() {
                   shadowRadius: 10,
                   shadowOffset: { width: 0, height: 4 },
                   elevation: 4,
-                  transform: [{ translateX: 2 }],
+                  transform: [{ translateY: -addButtonLift }],
                 }}
               >
                 <Plus size={24} color={theme.textOnPrimary} strokeWidth={2.1} />

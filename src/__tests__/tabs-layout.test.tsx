@@ -57,7 +57,7 @@ describe("TabsLayout", () => {
   it("renders center add action and opens add-item flow", () => {
     render(<TabsLayout />);
 
-    const addTabButton = screen.getByTestId("tab-add");
+    const addTabButton = screen.getByTestId("tab-add-center");
     fireEvent.press(addTabButton);
 
     expect(mockPush).toHaveBeenCalledWith("/item/new");

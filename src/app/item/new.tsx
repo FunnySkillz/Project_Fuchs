@@ -1,5 +1,6 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useNavigation } from "@react-navigation/native";
+import { HeaderBackButton } from "@react-navigation/elements";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   BackHandler,
@@ -406,6 +407,19 @@ export default function NewItemRoute() {
     pendingNavigationActionRef.current = null;
     setIsDiscardModalOpen(false);
 
+    const routerWithBack = router as {
+      canGoBack?: () => boolean;
+      back?: () => void;
+    };
+    if (
+      typeof routerWithBack.canGoBack === "function" &&
+      routerWithBack.canGoBack() &&
+      typeof routerWithBack.back === "function"
+    ) {
+      routerWithBack.back();
+      return;
+    }
+
     const navigationWithBack = navigation as {
       canGoBack?: () => boolean;
       goBack?: () => void;
@@ -470,6 +484,30 @@ export default function NewItemRoute() {
   }, [draftId]);
 
   useEffect(() => {
+    const navigationWithOptions = navigation as {
+      setOptions?: (options: {
+        headerLeft?: (props: { canGoBack?: boolean; tintColor?: string }) => React.ReactNode;
+      }) => void;
+    };
+    if (typeof navigationWithOptions.setOptions !== "function") {
+      return;
+    }
+
+    navigationWithOptions.setOptions({
+      headerLeft: (props: { canGoBack?: boolean; tintColor?: string }) =>
+        props.canGoBack ? (
+          <HeaderBackButton
+            testID="additem-header-back"
+            tintColor={props.tintColor}
+            onPress={() => {
+              void handleExitRequest();
+            }}
+          />
+        ) : null,
+    });
+  }, [handleExitRequest, navigation]);
+
+  useEffect(() => {
     const unsubscribe = navigation.addListener("beforeRemove", (event: any) => {
       if (allowNavigationExitRef.current) {
         return;
@@ -479,11 +517,20 @@ export default function NewItemRoute() {
         event.preventDefault();
         pendingNavigationActionRef.current = event?.data?.action ?? null;
         setIsDiscardModalOpen(true);
+        return;
+      }
+
+      const canGoBack =
+        typeof (navigation as { canGoBack?: () => boolean }).canGoBack === "function" &&
+        (navigation as { canGoBack: () => boolean }).canGoBack();
+      if (!canGoBack) {
+        event.preventDefault();
+        goBackFromAddFlow();
       }
     });
 
     return unsubscribe;
-  }, [isDirty, navigation]);
+  }, [goBackFromAddFlow, isDirty, navigation]);
 
   useEffect(() => {
     const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
@@ -492,13 +539,14 @@ export default function NewItemRoute() {
         setIsDiscardModalOpen(true);
         return true;
       }
-      return false;
+      goBackFromAddFlow();
+      return true;
     });
 
     return () => {
       subscription.remove();
     };
-  }, [isDirty]);
+  }, [goBackFromAddFlow, isDirty]);
 
   useEffect(() => {
     const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
@@ -1349,10 +1397,10 @@ export default function NewItemRoute() {
                     action="secondary"
                     onPress={() => void handleExitRequest()}
                     disabled={isBusy || isSavingItem}
-                    testID="additem-cancel"
+                    testID="additem-btn-cancel"
                     accessibilityLabel="Cancel add item"
                   >
-                    <GButtonText testID="additem-btn-cancel">Cancel</GButtonText>
+                    <GButtonText testID="additem-cancel">Cancel</GButtonText>
                   </GButton>
 
                   <GButton
