@@ -36,6 +36,12 @@ const primaryEntries: SettingsEntry[] = [
     route: "/(tabs)/settings/backup-sync" as Href,
     testID: "settings-nav-backup-sync",
   },
+  {
+    title: "Legal & Privacy",
+    description: "Disclaimer, privacy statement, and permission usage.",
+    route: "/(tabs)/settings/legal" as Href,
+    testID: "settings-nav-legal",
+  },
 ];
 
 export default function TabSettingsRoute() {

@@ -27,8 +27,10 @@ import {
   Text as GText,
   VStack as GVStack,
 } from "@gluestack-ui/themed";
+import { Settings } from "lucide-react-native";
 
 import { estimateTaxImpact } from "@/domain/calculation-engine";
+import { useTheme } from "@/hooks/use-theme";
 import type { Attachment } from "@/models/attachment";
 import type { Category } from "@/models/category";
 import type { Item } from "@/models/item";
@@ -108,6 +110,7 @@ function InfoRow({ label, value }: InfoRowProps) {
 export default function ItemDetailRoute() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const theme = useTheme();
   const params = useLocalSearchParams<{ id?: string | string[] }>();
   const itemId = toSingleParam(params.id);
   const canGoBack =
@@ -316,14 +319,23 @@ export default function ItemDetailRoute() {
             >
               <GButtonText>{"\u2039 Back"}</GButtonText>
             </GButton>
-            <GButton
-              variant="outline"
-              action="secondary"
+            <GPressable
               onPress={() => router.push(`/item/${item.id}/edit`)}
-              testID="item-detail-edit"
+              testID="action-edit-item"
+              accessibilityLabel="Edit item"
+              style={{
+                width: 44,
+                height: 44,
+                borderRadius: 22,
+                alignItems: "center",
+                justifyContent: "center",
+                borderWidth: 1,
+                borderColor: theme.border,
+                backgroundColor: theme.backgroundElement,
+              }}
             >
-              <GButtonText>Edit</GButtonText>
-            </GButton>
+              <Settings size={18} color={theme.text} />
+            </GPressable>
           </GHStack>
 
           {!canGoBack && (
@@ -338,15 +350,19 @@ export default function ItemDetailRoute() {
             </GButton>
           )}
 
-          <GHStack justifyContent="space-between" alignItems="flex-start" space="md">
-            <GVStack space="xs" flex={1}>
-              <GHeading size="2xl">{item.title}</GHeading>
-              <GText size="sm">Purchase date: {item.purchaseDate}</GText>
-            </GVStack>
-            <GBadge size="sm" variant="outline" action="muted">
+          <GVStack space="xs" flex={1}>
+            <GHeading size="2xl">{item.title}</GHeading>
+            <GBadge
+              size="sm"
+              variant="outline"
+              action="muted"
+              alignSelf="flex-start"
+              testID="item-usage-badge"
+            >
               <GBadgeText>{item.usageType}</GBadgeText>
             </GBadge>
-          </GHStack>
+            <GText size="sm">Purchase date: {item.purchaseDate}</GText>
+          </GVStack>
 
           {loadError && (
             <GCard borderWidth="$1" borderColor="$error300">

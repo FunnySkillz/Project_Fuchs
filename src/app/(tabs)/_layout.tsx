@@ -54,12 +54,24 @@ export default function TabsLayout() {
       />
       <Tabs.Screen
         name="add"
+        listeners={{
+          tabPress: (event) => {
+            event.preventDefault();
+            router.push("/item/new");
+          },
+        }}
         options={{
           title: "Add",
           tabBarLabel: "",
-          tabBarButton: ({ style, onLongPress }) => (
+          tabBarButton: ({ style, onLongPress, onPress }) => (
             <Pressable
-              onPress={() => router.push("/item/new")}
+              onPress={(event) => {
+                if (typeof onPress === "function") {
+                  onPress(event);
+                  return;
+                }
+                router.push("/item/new");
+              }}
               onLongPress={onLongPress}
               testID="tab-add"
               accessibilityLabel="Add Item"

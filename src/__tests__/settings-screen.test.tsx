@@ -3,6 +3,7 @@ import { fireEvent, render, screen } from "@testing-library/react-native";
 
 import SettingsRoute from "@/app/(tabs)/settings";
 import SettingsAppearanceRoute from "@/app/(tabs)/settings/appearance";
+import SettingsLegalRoute from "@/app/(tabs)/settings/legal";
 
 const mockPush = jest.fn();
 const mockReplace = jest.fn();
@@ -64,10 +65,24 @@ describe("Settings navigation workflow", () => {
     expect(await screen.findByText("Settings")).toBeTruthy();
     fireEvent.press(screen.getByTestId("settings-nav-appearance"));
     expect(mockPush).toHaveBeenCalledWith("/(tabs)/settings/appearance");
+    fireEvent.press(screen.getByTestId("settings-nav-legal"));
+    expect(mockPush).toHaveBeenCalledWith("/(tabs)/settings/legal");
 
     mockCanGoBack = false;
     render(<SettingsAppearanceRoute />);
     expect(screen.getByTestId("settings-back-to-main-fallback")).toBeTruthy();
+
+    fireEvent.press(screen.getByTestId("settings-back-to-main-fallback"));
+    expect(mockReplace).toHaveBeenCalledWith("/(tabs)/settings");
+  });
+
+  it("renders legal disclaimer/privacy section and supports fallback navigation", async () => {
+    mockCanGoBack = false;
+    render(<SettingsLegalRoute />);
+
+    expect(await screen.findByText("Legal & Privacy")).toBeTruthy();
+    expect(screen.getByTestId("settings-legal-disclaimer")).toBeTruthy();
+    expect(screen.getByTestId("settings-legal-privacy")).toBeTruthy();
 
     fireEvent.press(screen.getByTestId("settings-back-to-main-fallback"));
     expect(mockReplace).toHaveBeenCalledWith("/(tabs)/settings");

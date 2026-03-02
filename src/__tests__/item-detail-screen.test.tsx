@@ -79,6 +79,19 @@ jest.mock("@/domain/calculation-engine", () => ({
   estimateTaxImpact: (...args: unknown[]) => mockEstimateTaxImpact(...args),
 }));
 
+jest.mock("@/hooks/use-theme", () => ({
+  useTheme: () => ({
+    background: "#ffffff",
+    backgroundElement: "#f3f4f6",
+    text: "#111827",
+    textSecondary: "#6b7280",
+    border: "#d1d5db",
+    primary: "#2563eb",
+    danger: "#dc2626",
+    textOnPrimary: "#ffffff",
+  }),
+}));
+
 jest.mock("@/repositories/create-core-repositories", () => ({
   getItemRepository: async () => ({
     getById: (id: string) => mockGetById(id),
@@ -210,6 +223,8 @@ describe("ItemDetailRoute", () => {
     render(<ItemDetailRoute />);
 
     expect((await screen.findAllByText("Work laptop")).length).toBeGreaterThan(0);
+    expect(screen.getByTestId("item-usage-badge")).toBeTruthy();
+    expect(screen.getByText("WORK")).toBeTruthy();
     expect(screen.getByText("Attachment gallery")).toBeTruthy();
     expect(screen.getByText("Info")).toBeTruthy();
     expect(screen.getByText("Calculation")).toBeTruthy();
@@ -221,6 +236,15 @@ describe("ItemDetailRoute", () => {
     expect(screen.getByText("Estimated refund impact")).toBeTruthy();
     expect(screen.getByText("Schedule by year")).toBeTruthy();
     expect(screen.getByText("2026")).toBeTruthy();
+  });
+
+  it("navigates to edit screen from header icon action", async () => {
+    render(<ItemDetailRoute />);
+
+    expect((await screen.findAllByText("Work laptop")).length).toBeGreaterThan(0);
+    fireEvent.press(screen.getByTestId("action-edit-item"));
+
+    expect(mockPush).toHaveBeenCalledWith("/item/item-1/edit");
   });
 
   it("deletes item after confirmation dialog", async () => {
