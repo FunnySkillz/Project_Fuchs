@@ -10,6 +10,7 @@ export default function TabsLayout() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const bottomInset = Math.max(insets.bottom, 8);
+  const tabBarHeight = 56 + bottomInset;
   const mutedForeground = theme.textSecondary;
 
   return (
@@ -23,7 +24,7 @@ export default function TabsLayout() {
           borderTopColor: theme.border,
           paddingTop: 6,
           paddingBottom: bottomInset,
-          height: 56 + bottomInset,
+          height: tabBarHeight,
         },
         tabBarLabelStyle: {
           fontSize: 12,
@@ -56,47 +57,43 @@ export default function TabsLayout() {
         options={{
           title: "Add",
           tabBarLabel: "",
-          tabBarButton: ({ accessibilityState, style, onLongPress }) => {
-            const selected = accessibilityState?.selected ?? false;
-            return (
-              <Pressable
-                onPress={() => router.push("/item/new")}
-                onLongPress={onLongPress}
-                testID="tab-add"
-                accessibilityLabel="Add Item"
-                accessibilityRole="button"
-                style={({ pressed }) => [
-                  style,
-                  {
-                    alignItems: "center",
-                    justifyContent: "center",
-                    opacity: pressed ? 0.9 : 1,
-                  },
-                ]}
+          tabBarButton: ({ style, onLongPress }) => (
+            <Pressable
+              onPress={() => router.push("/item/new")}
+              onLongPress={onLongPress}
+              testID="tab-add"
+              accessibilityLabel="Add Item"
+              accessibilityRole="button"
+              style={({ pressed }) => [
+                style,
+                {
+                  alignItems: "center",
+                  justifyContent: "center",
+                  opacity: pressed ? 0.9 : 1,
+                },
+              ]}
+            >
+              <View
+                style={{
+                  marginTop: -6,
+                  width: 54,
+                  height: 54,
+                  borderRadius: 27,
+                  justifyContent: "center",
+                  alignItems: "center",
+                  backgroundColor: theme.primary,
+                  shadowColor: theme.text,
+                  shadowOpacity: 0.14,
+                  shadowRadius: 10,
+                  shadowOffset: { width: 0, height: 4 },
+                  elevation: 4,
+                  transform: [{ translateX: 2 }],
+                }}
               >
-                <View
-                  style={{
-                    marginTop: -6,
-                    width: 54,
-                    height: 54,
-                    borderRadius: 27,
-                    justifyContent: "center",
-                    alignItems: "center",
-                    backgroundColor: theme.primary,
-                    shadowColor: theme.text,
-                    shadowOpacity: 0.14,
-                    shadowRadius: 10,
-                    shadowOffset: { width: 0, height: 4 },
-                    elevation: 4,
-                    borderWidth: selected ? 1 : 0,
-                    borderColor: theme.border,
-                  }}
-                >
-                  <Plus size={24} color={theme.textOnPrimary} strokeWidth={2.1} />
-                </View>
-              </Pressable>
-            );
-          },
+                <Plus size={24} color={theme.textOnPrimary} strokeWidth={2.1} />
+              </View>
+            </Pressable>
+          ),
         }}
       />
       <Tabs.Screen

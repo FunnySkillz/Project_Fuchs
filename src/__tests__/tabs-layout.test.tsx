@@ -39,13 +39,7 @@ jest.mock("expo-router", () => {
       if (typeof options?.tabBarButton !== "function") {
         return null;
       }
-      return (
-        <>
-          {options.tabBarButton({
-            accessibilityState: { selected: false },
-          })}
-        </>
-      );
+      return <>{options.tabBarButton({})}</>;
     },
   });
 

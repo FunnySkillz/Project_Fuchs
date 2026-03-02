@@ -1,6 +1,6 @@
 import { useFocusEffect } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { FlatList, ScrollView } from "react-native";
+import { ScrollView } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   Actionsheet,
@@ -51,6 +51,7 @@ import {
 } from "@/services/zip-export";
 
 type FilterSheetKind = "usageType" | "category" | null;
+type ExportFormat = "PDF" | "ZIP";
 
 const usageOptions: { label: string; value: ItemUsageType | null }[] = [
   { label: "All usage types", value: null },
@@ -156,16 +157,12 @@ export default function ExportRoute() {
     new Set(sessionDefaults.selectedItemIds)
   );
   const [includeDetailPages, setIncludeDetailPages] = useState(false);
-  const [latestPdfUri, setLatestPdfUri] = useState<string | null>(null);
-  const [latestPdfName, setLatestPdfName] = useState<string | null>(null);
-  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
-  const [isSharingPdf, setIsSharingPdf] = useState(false);
-  const [latestZipUri, setLatestZipUri] = useState<string | null>(null);
-  const [latestZipName, setLatestZipName] = useState<string | null>(null);
-  const [latestZipSizeBytes, setLatestZipSizeBytes] = useState<number | null>(null);
-  const [isGeneratingZip, setIsGeneratingZip] = useState(false);
-  const [isSharingZip, setIsSharingZip] = useState(false);
+  const [selectedFormat, setSelectedFormat] = useState<ExportFormat>("PDF");
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [latestGeneratedFileName, setLatestGeneratedFileName] = useState<string | null>(null);
   const [zipProgress, setZipProgress] = useState<ZipExportProgress | null>(null);
+  const [isSelectionOpen, setIsSelectionOpen] = useState(false);
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [activeSheet, setActiveSheet] = useState<FilterSheetKind>(null);
 
   const [yearItems, setYearItems] = useState<Item[]>([]);
@@ -181,7 +178,6 @@ export default function ExportRoute() {
     () => new Map(categories.map((category) => [category.id, category])),
     [categories]
   );
-  const yearChipLabel = parsedTaxYear ? `Year: ${parsedTaxYear}` : "Year: default";
   const usageChipLabel = usageType ? `Usage: ${usageType}` : "Usage: all";
   const categoryChipLabel = categoryId
     ? `Category: ${categoryMap.get(categoryId)?.name ?? "Unknown"}`
@@ -344,76 +340,46 @@ export default function ExportRoute() {
     });
   };
 
-  const clearFiltersAndSelection = () => {
+  const clearFilters = () => {
     setSearch("");
     setCategoryId(null);
     setUsageType(null);
     setMissingReceipt(false);
     setMissingNotes(false);
-    setSelectedItemIds(new Set());
   };
 
-  const handleGeneratePdf = async () => {
-    if (!settings || selectedItems.length === 0 || isGeneratingPdf) {
+  const handleGenerateExport = async () => {
+    if (!settings || selectedItems.length === 0 || isGenerating) {
       return;
     }
 
-    setIsGeneratingPdf(true);
-    setLoadError(null);
-    try {
-      const result = await generatePdfExport({
-        taxYear: targetYearForCalc,
-        selectedItems,
-        categories,
-        settings,
-        includeDetailPages,
-      });
-      setLatestPdfUri(result.fileUri);
-      setLatestPdfName(result.fileName);
-
-      const exportRunRepository = await getExportRunRepository();
-      const run = await exportRunRepository.create({
-        taxYear: targetYearForCalc,
-        itemCount: selectedItems.length,
-        totalDeductibleCents: totals.deductibleThisYearCents,
-        estimatedRefundCents: totals.estimatedRefundCents,
-        outputType: "PDF",
-        outputFilePath: result.fileUri,
-      });
-      setExportHistory((current) => [run, ...current]);
-    } catch (error) {
-      console.error("Failed to generate PDF export", error);
-      setLoadError(friendlyFileErrorMessage(error, "Could not generate PDF export."));
-    } finally {
-      setIsGeneratingPdf(false);
-    }
-  };
-
-  const handleSharePdf = async () => {
-    if (!latestPdfUri || isSharingPdf) {
-      return;
-    }
-    setIsSharingPdf(true);
-    setLoadError(null);
-    try {
-      await shareExportPdf(latestPdfUri);
-    } catch (error) {
-      console.error("Failed to share PDF export", error);
-      setLoadError(friendlyFileErrorMessage(error, "Could not share PDF export."));
-    } finally {
-      setIsSharingPdf(false);
-    }
-  };
-
-  const handleGenerateZip = async () => {
-    if (!settings || selectedItems.length === 0 || isGeneratingZip) {
-      return;
-    }
-
-    setIsGeneratingZip(true);
+    setIsGenerating(true);
     setZipProgress(null);
     setLoadError(null);
     try {
+      if (selectedFormat === "PDF") {
+        const result = await generatePdfExport({
+          taxYear: targetYearForCalc,
+          selectedItems,
+          categories,
+          settings,
+          includeDetailPages,
+        });
+        setLatestGeneratedFileName(result.fileName);
+
+        const exportRunRepository = await getExportRunRepository();
+        const run = await exportRunRepository.create({
+          taxYear: targetYearForCalc,
+          itemCount: selectedItems.length,
+          totalDeductibleCents: totals.deductibleThisYearCents,
+          estimatedRefundCents: totals.estimatedRefundCents,
+          outputType: "PDF",
+          outputFilePath: result.fileUri,
+        });
+        setExportHistory((current) => [run, ...current]);
+        return;
+      }
+
       const result = await generateZipExport({
         taxYear: targetYearForCalc,
         selectedItems,
@@ -422,9 +388,7 @@ export default function ExportRoute() {
         includeDetailPages,
         onProgress: (progress) => setZipProgress(progress),
       });
-      setLatestZipUri(result.fileUri);
-      setLatestZipName(result.fileName);
-      setLatestZipSizeBytes(result.sizeBytes);
+      setLatestGeneratedFileName(result.fileName);
 
       const exportRunRepository = await getExportRunRepository();
       const run = await exportRunRepository.create({
@@ -437,26 +401,15 @@ export default function ExportRoute() {
       });
       setExportHistory((current) => [run, ...current]);
     } catch (error) {
-      console.error("Failed to generate ZIP export", error);
-      setLoadError(friendlyFileErrorMessage(error, "Could not generate ZIP export."));
+      console.error("Failed to generate export", error);
+      setLoadError(
+        friendlyFileErrorMessage(
+          error,
+          selectedFormat === "PDF" ? "Could not generate PDF export." : "Could not generate ZIP export."
+        )
+      );
     } finally {
-      setIsGeneratingZip(false);
-    }
-  };
-
-  const handleShareZip = async () => {
-    if (!latestZipUri || isSharingZip) {
-      return;
-    }
-    setIsSharingZip(true);
-    setLoadError(null);
-    try {
-      await shareExportZip(latestZipUri);
-    } catch (error) {
-      console.error("Failed to share ZIP export", error);
-      setLoadError(friendlyFileErrorMessage(error, "Could not share ZIP export."));
-    } finally {
-      setIsSharingZip(false);
+      setIsGenerating(false);
     }
   };
 
@@ -477,256 +430,321 @@ export default function ExportRoute() {
     }
   };
 
-  const renderHeader = () => (
-    <VStack space="lg" maxWidth={900} width="$full" alignSelf="center" pb="$4">
-      <VStack space="xs">
-        <Heading size="2xl">Export</Heading>
-        <Text size="sm">
-          Select items, review totals, then generate PDF or ZIP for your tax year export.
-        </Text>
-      </VStack>
-
-      <Card borderWidth="$1" borderColor="$border200">
-        <VStack space="md">
-          <VStack space="xs">
-            <Text bold size="sm">
-              Tax year
-            </Text>
-            <Input variant="outline" size="md">
-              <InputField
-                value={taxYear}
-                onChangeText={setTaxYear}
-                keyboardType="number-pad"
-                maxLength={4}
-                placeholder={settings ? String(settings.taxYearDefault) : "e.g. 2026"}
-                testID="export-tax-year-input"
-              />
-            </Input>
-          </VStack>
-
-          <VStack space="xs">
-            <Text bold size="sm">
-              Search
-            </Text>
-            <Input variant="outline" size="md">
-              <InputField
-                value={search}
-                onChangeText={setSearch}
-                placeholder="Search by title or vendor"
-              />
-            </Input>
-          </VStack>
-
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            <HStack space="sm" alignItems="center" pr="$2">
-              <Button size="sm" variant="outline" action="secondary" disabled>
-                <ButtonText>{yearChipLabel}</ButtonText>
-              </Button>
-              <Button
-                size="sm"
-                variant={usageType ? "solid" : "outline"}
-                action={usageType ? "primary" : "secondary"}
-                onPress={() => setActiveSheet("usageType")}
-              >
-                <ButtonText>{usageChipLabel}</ButtonText>
-              </Button>
-              <Button
-                size="sm"
-                variant={categoryId ? "solid" : "outline"}
-                action={categoryId ? "primary" : "secondary"}
-                onPress={() => setActiveSheet("category")}
-              >
-                <ButtonText>{categoryChipLabel}</ButtonText>
-              </Button>
-              <Button
-                size="sm"
-                variant={missingReceipt ? "solid" : "outline"}
-                action={missingReceipt ? "primary" : "secondary"}
-                onPress={() => setMissingReceipt((current) => !current)}
-              >
-                <ButtonText>Missing receipt</ButtonText>
-              </Button>
-              <Button
-                size="sm"
-                variant={missingNotes ? "solid" : "outline"}
-                action={missingNotes ? "primary" : "secondary"}
-                onPress={() => setMissingNotes((current) => !current)}
-              >
-                <ButtonText>Missing notes</ButtonText>
-              </Button>
-            </HStack>
-          </ScrollView>
-
-          <HStack space="sm" flexWrap="wrap">
-            <Button
-              size="sm"
-              variant="outline"
-              action="secondary"
-              onPress={toggleSelectAllFiltered}
-              disabled={filteredItems.length === 0}
-            >
-              <ButtonText>{allFilteredSelected ? "Unselect filtered" : "Select all filtered"}</ButtonText>
-            </Button>
-            <Button size="sm" variant="outline" action="secondary" onPress={clearFiltersAndSelection}>
-              <ButtonText>Clear filters + selection</ButtonText>
-            </Button>
-          </HStack>
-        </VStack>
-      </Card>
-
-      <Card borderWidth="$1" borderColor="$border200">
-        <VStack space="sm">
-          <Heading size="md">Totals summary</Heading>
-          <Text size="sm">Selected items: {selectedItems.length}</Text>
-          <Text size="sm">Deductible this year: {formatCents(totals.deductibleThisYearCents)}</Text>
-          <Text size="sm">Estimated refund impact: {formatCents(totals.estimatedRefundCents)}</Text>
-
-          <HStack justifyContent="space-between" alignItems="center">
-            <Text size="sm">Include detail pages</Text>
-            <Switch value={includeDetailPages} onValueChange={setIncludeDetailPages} />
-          </HStack>
-
-          <HStack space="sm" flexWrap="wrap">
-            <Button
-              onPress={() => void handleGeneratePdf()}
-              disabled={selectedItems.length === 0 || isGeneratingPdf}
-              testID="export-generate-pdf"
-            >
-              <ButtonText>{isGeneratingPdf ? "Generating PDF..." : "Generate PDF"}</ButtonText>
-            </Button>
-            <Button
-              onPress={() => void handleGenerateZip()}
-              disabled={selectedItems.length === 0 || isGeneratingZip}
-              testID="export-generate-zip"
-            >
-              <ButtonText>{isGeneratingZip ? "Generating ZIP..." : "Generate ZIP"}</ButtonText>
-            </Button>
-            <Button
-              variant="outline"
-              action="secondary"
-              onPress={() => void handleSharePdf()}
-              disabled={!latestPdfUri || isSharingPdf}
-            >
-              <ButtonText>{isSharingPdf ? "Sharing PDF..." : "Share PDF"}</ButtonText>
-            </Button>
-            <Button
-              variant="outline"
-              action="secondary"
-              onPress={() => void handleShareZip()}
-              disabled={!latestZipUri || isSharingZip}
-            >
-              <ButtonText>{isSharingZip ? "Sharing ZIP..." : "Share ZIP"}</ButtonText>
-            </Button>
-          </HStack>
-
-          {latestPdfName && <Text size="sm">Last PDF: {latestPdfName}</Text>}
-          {latestZipName && (
-            <Text size="sm">
-              Last ZIP: {latestZipName}
-              {latestZipSizeBytes !== null ? ` (${(latestZipSizeBytes / 1024 / 1024).toFixed(2)} MB)` : ""}
-            </Text>
-          )}
-          {zipProgress && (
-            <Text size="sm">
-              ZIP progress: {zipProgress.percent}% - {zipProgress.message}
-            </Text>
-          )}
-        </VStack>
-      </Card>
-
-      <Card borderWidth="$1" borderColor="$border200">
-        <VStack space="sm">
-          <Heading size="md">Export history</Heading>
-          {exportHistory.length === 0 ? (
-            <Text size="sm">No exports recorded for this tax year yet.</Text>
-          ) : (
-            exportHistory.map((run) => (
-              <HStack key={run.id} justifyContent="space-between" alignItems="center" space="sm" flexWrap="wrap">
-                <VStack space="xs" flex={1}>
-                  <Text bold size="sm">
-                    {run.outputType}
-                  </Text>
-                  <Text size="sm">
-                    {run.createdAt} | Items: {run.itemCount}
-                  </Text>
-                  <Text size="sm">
-                    Deductible: {formatCents(run.totalDeductibleCents)} | Refund:{" "}
-                    {formatCents(run.estimatedRefundCents)}
-                  </Text>
-                </VStack>
-                <Button size="sm" variant="outline" action="secondary" onPress={() => void handleShareHistoryRun(run)}>
-                  <ButtonText>Share again</ButtonText>
-                </Button>
-              </HStack>
-            ))
-          )}
-        </VStack>
-      </Card>
-
-      {loadError && (
-        <Card borderWidth="$1" borderColor="$error300">
-          <HStack justifyContent="space-between" alignItems="center" space="md" flexWrap="wrap">
-            <Text size="sm">{loadError}</Text>
-            <Button size="sm" variant="outline" action="secondary" onPress={() => void loadData()}>
-              <ButtonText>Retry</ButtonText>
-            </Button>
-          </HStack>
-        </Card>
-      )}
-
-      <HStack justifyContent="space-between" alignItems="center">
-        <Badge size="sm" action="muted" variant="outline">
-          <BadgeText>{filteredItems.length} filtered item(s)</BadgeText>
-        </Badge>
-      </HStack>
-    </VStack>
-  );
-
   return (
     <SafeAreaView style={{ flex: 1 }} edges={["top"]}>
       <Box flex={1} px="$5" py="$6">
-        <FlatList
-          data={filteredItems}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
-          ListHeaderComponent={renderHeader}
-          ListEmptyComponent={
-            <VStack maxWidth={900} width="$full" alignSelf="center">
-              {isLoading ? (
-                <Card borderWidth="$1" borderColor="$border200">
-                  <HStack alignItems="center" space="sm">
-                    <Spinner size="small" />
-                    <Text>Loading export items...</Text>
-                  </HStack>
-                </Card>
-              ) : loadError ? (
-                <Card borderWidth="$1" borderColor="$error300">
-                  <Text>Could not load export items. Retry above.</Text>
-                </Card>
-              ) : (
-                <Card borderWidth="$1" borderColor="$border200" testID="export-empty-state">
-                  <Text>No items found. Adjust filters or add a new item.</Text>
-                </Card>
-              )}
+        <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}>
+          <VStack space="lg" maxWidth={900} width="$full" alignSelf="center">
+            <VStack space="xs">
+              <Heading size="2xl">Export</Heading>
+              <Text size="sm">Select, review, then generate a clean export package.</Text>
             </VStack>
-          }
-          renderItem={({ item }) => {
-            const categoryName = item.categoryId
-              ? categoryMap.get(item.categoryId)?.name ?? "Unknown"
-              : "No category";
-            return (
-              <ExportItemRow
-                item={item}
-                categoryName={categoryName}
-                deductibleThisYearCents={deductibleByItemId.get(item.id) ?? 0}
-                selected={selectedItemIds.has(item.id)}
-                missingReceipt={missingReceiptItemIds.has(item.id)}
-                missingNotes={missingNotesForItem(item)}
-                onToggle={toggleItemSelection}
-              />
-            );
-          }}
-        />
+
+            <Card borderWidth="$1" borderColor="$border200">
+              <VStack space="sm">
+                <Text bold size="sm">
+                  Tax year
+                </Text>
+                <Input variant="outline" size="md">
+                  <InputField
+                    value={taxYear}
+                    onChangeText={setTaxYear}
+                    keyboardType="number-pad"
+                    maxLength={4}
+                    placeholder={settings ? String(settings.taxYearDefault) : "e.g. 2026"}
+                    testID="export-tax-year-input"
+                  />
+                </Input>
+              </VStack>
+            </Card>
+
+            <Card borderWidth="$1" borderColor="$border200">
+              <VStack space="md">
+                <HStack justifyContent="space-between" alignItems="center" space="sm">
+                  <VStack space="xs" flex={1}>
+                    <Heading size="md">Select items</Heading>
+                    <Text size="sm">Selected items: {selectedItems.length}</Text>
+                  </VStack>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    action="secondary"
+                    onPress={() => setIsSelectionOpen((current) => !current)}
+                    testID="export-selection-toggle"
+                  >
+                    <ButtonText>{isSelectionOpen ? "Collapse" : "Expand"}</ButtonText>
+                  </Button>
+                </HStack>
+
+                {isSelectionOpen && (
+                  <VStack space="md">
+                    <VStack space="xs">
+                      <Text bold size="sm">
+                        Search
+                      </Text>
+                      <Input variant="outline" size="md">
+                        <InputField
+                          value={search}
+                          onChangeText={setSearch}
+                          placeholder="Search by title or vendor"
+                          testID="export-search-input"
+                        />
+                      </Input>
+                    </VStack>
+
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                      <HStack space="sm" alignItems="center" pr="$2">
+                        <Button
+                          size="sm"
+                          variant={usageType ? "solid" : "outline"}
+                          action={usageType ? "primary" : "secondary"}
+                          onPress={() => setActiveSheet("usageType")}
+                          testID="export-filter-usage"
+                        >
+                          <ButtonText>{usageChipLabel}</ButtonText>
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant={categoryId ? "solid" : "outline"}
+                          action={categoryId ? "primary" : "secondary"}
+                          onPress={() => setActiveSheet("category")}
+                          testID="export-filter-category"
+                        >
+                          <ButtonText>{categoryChipLabel}</ButtonText>
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant={missingReceipt ? "solid" : "outline"}
+                          action={missingReceipt ? "primary" : "secondary"}
+                          onPress={() => setMissingReceipt((current) => !current)}
+                          testID="export-filter-missing-receipt"
+                        >
+                          <ButtonText>Missing receipt</ButtonText>
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant={missingNotes ? "solid" : "outline"}
+                          action={missingNotes ? "primary" : "secondary"}
+                          onPress={() => setMissingNotes((current) => !current)}
+                          testID="export-filter-missing-notes"
+                        >
+                          <ButtonText>Missing notes</ButtonText>
+                        </Button>
+                      </HStack>
+                    </ScrollView>
+
+                    <HStack space="sm" flexWrap="wrap">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        action="secondary"
+                        onPress={toggleSelectAllFiltered}
+                        disabled={filteredItems.length === 0}
+                        testID="export-select-all-filtered"
+                      >
+                        <ButtonText>{allFilteredSelected ? "Unselect filtered" : "Select all filtered"}</ButtonText>
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        action="secondary"
+                        onPress={clearFilters}
+                        testID="export-clear-filters"
+                      >
+                        <ButtonText>Clear filters</ButtonText>
+                      </Button>
+                    </HStack>
+
+                    <Badge size="sm" action="muted" variant="outline" alignSelf="flex-start">
+                      <BadgeText>{filteredItems.length} filtered item(s)</BadgeText>
+                    </Badge>
+
+                    {isLoading ? (
+                      <Card borderWidth="$1" borderColor="$border200">
+                        <HStack alignItems="center" space="sm">
+                          <Spinner size="small" />
+                          <Text>Loading export items...</Text>
+                        </HStack>
+                      </Card>
+                    ) : filteredItems.length === 0 ? (
+                      <Card borderWidth="$1" borderColor="$border200" testID="export-empty-state">
+                        <Text>No items found. Adjust filters or add a new item.</Text>
+                      </Card>
+                    ) : (
+                      filteredItems.map((item) => {
+                        const categoryName = item.categoryId
+                          ? categoryMap.get(item.categoryId)?.name ?? "Unknown"
+                          : "No category";
+
+                        return (
+                          <ExportItemRow
+                            key={item.id}
+                            item={item}
+                            categoryName={categoryName}
+                            deductibleThisYearCents={deductibleByItemId.get(item.id) ?? 0}
+                            selected={selectedItemIds.has(item.id)}
+                            missingReceipt={missingReceiptItemIds.has(item.id)}
+                            missingNotes={missingNotesForItem(item)}
+                            onToggle={toggleItemSelection}
+                          />
+                        );
+                      })
+                    )}
+                  </VStack>
+                )}
+              </VStack>
+            </Card>
+
+            <Card borderWidth="$1" borderColor="$border200">
+              <VStack space="md">
+                <Heading size="lg">Totals summary</Heading>
+
+                <HStack justifyContent="space-between" alignItems="center" flexWrap="wrap" space="sm">
+                  <VStack space="xs" minWidth={140}>
+                    <Text size="sm">Selected items</Text>
+                    <Heading size="xl">{selectedItems.length}</Heading>
+                  </VStack>
+                  <VStack space="xs" minWidth={140}>
+                    <Text size="sm">Deductible this year</Text>
+                    <Heading size="xl">{formatCents(totals.deductibleThisYearCents)}</Heading>
+                  </VStack>
+                  <VStack space="xs" minWidth={140}>
+                    <Text size="sm">Estimated refund</Text>
+                    <Heading size="xl">{formatCents(totals.estimatedRefundCents)}</Heading>
+                  </VStack>
+                </HStack>
+
+                <HStack justifyContent="space-between" alignItems="center">
+                  <Text size="sm">Include detail pages</Text>
+                  <Switch
+                    value={includeDetailPages}
+                    onValueChange={setIncludeDetailPages}
+                    testID="export-include-detail-pages"
+                  />
+                </HStack>
+
+                <VStack space="xs">
+                  <Text bold size="sm">
+                    Format
+                  </Text>
+                  <HStack space="sm">
+                    <Button
+                      flex={1}
+                      variant={selectedFormat === "PDF" ? "solid" : "outline"}
+                      action={selectedFormat === "PDF" ? "primary" : "secondary"}
+                      onPress={() => setSelectedFormat("PDF")}
+                      testID="export-format-pdf"
+                    >
+                      <ButtonText>PDF</ButtonText>
+                    </Button>
+                    <Button
+                      flex={1}
+                      variant={selectedFormat === "ZIP" ? "solid" : "outline"}
+                      action={selectedFormat === "ZIP" ? "primary" : "secondary"}
+                      onPress={() => setSelectedFormat("ZIP")}
+                      testID="export-format-zip"
+                    >
+                      <ButtonText>ZIP</ButtonText>
+                    </Button>
+                  </HStack>
+                </VStack>
+
+                <Button
+                  onPress={() => void handleGenerateExport()}
+                  disabled={selectedItems.length === 0 || isGenerating}
+                  testID="export-generate"
+                >
+                  <ButtonText>
+                    {isGenerating ? `Generating ${selectedFormat}...` : "Generate Export"}
+                  </ButtonText>
+                </Button>
+
+                {latestGeneratedFileName && <Text size="sm">Last export: {latestGeneratedFileName}</Text>}
+                {zipProgress && (
+                  <Text size="sm">
+                    ZIP progress: {zipProgress.percent}% - {zipProgress.message}
+                  </Text>
+                )}
+              </VStack>
+            </Card>
+
+            <Card borderWidth="$1" borderColor="$border200">
+              <VStack space="md">
+                <HStack justifyContent="space-between" alignItems="center" space="sm">
+                  <VStack space="xs" flex={1}>
+                    <Heading size="md">Export history</Heading>
+                    <Text size="sm">{exportHistory.length} run(s) in selected tax year</Text>
+                  </VStack>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    action="secondary"
+                    onPress={() => setIsHistoryOpen((current) => !current)}
+                    testID="export-history-toggle"
+                  >
+                    <ButtonText>{isHistoryOpen ? "Hide" : "Show"}</ButtonText>
+                  </Button>
+                </HStack>
+
+                {isHistoryOpen && (
+                  <VStack space="sm">
+                    {exportHistory.length === 0 ? (
+                      <Text size="sm">No exports recorded for this tax year yet.</Text>
+                    ) : (
+                      exportHistory.map((run) => (
+                        <HStack
+                          key={run.id}
+                          justifyContent="space-between"
+                          alignItems="center"
+                          space="sm"
+                          flexWrap="wrap"
+                        >
+                          <VStack space="xs" flex={1}>
+                            <Text bold size="sm">
+                              {run.outputType}
+                            </Text>
+                            <Text size="sm">
+                              {run.createdAt} | Items: {run.itemCount}
+                            </Text>
+                            <Text size="sm">
+                              Deductible: {formatCents(run.totalDeductibleCents)} | Refund:{" "}
+                              {formatCents(run.estimatedRefundCents)}
+                            </Text>
+                          </VStack>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            action="secondary"
+                            onPress={() => void handleShareHistoryRun(run)}
+                          >
+                            <ButtonText>Share again</ButtonText>
+                          </Button>
+                        </HStack>
+                      ))
+                    )}
+                  </VStack>
+                )}
+              </VStack>
+            </Card>
+
+            {loadError && (
+              <Card borderWidth="$1" borderColor="$error300">
+                <HStack justifyContent="space-between" alignItems="center" space="md" flexWrap="wrap">
+                  <Text size="sm">{loadError}</Text>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    action="secondary"
+                    onPress={() => void loadData()}
+                    testID="export-retry"
+                  >
+                    <ButtonText>Retry</ButtonText>
+                  </Button>
+                </HStack>
+              </Card>
+            )}
+          </VStack>
+        </ScrollView>
 
         <Actionsheet isOpen={activeSheet !== null} onClose={() => setActiveSheet(null)}>
           <ActionsheetBackdrop />

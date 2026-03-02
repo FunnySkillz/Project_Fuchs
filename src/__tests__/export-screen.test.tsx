@@ -58,6 +58,7 @@ jest.mock("@gluestack-ui/themed", () => {
     Switch: (props: any) => <MockSwitch {...props} />,
     Text: ({ children, ...props }: any) => <MockText {...props}>{children}</MockText>,
     VStack: Block,
+    Pressable: ({ children, ...props }: any) => <MockPressable {...props}>{children}</MockPressable>,
   };
 });
 
@@ -214,18 +215,23 @@ describe("ExportRoute", () => {
     mockShareExportZip.mockResolvedValue(undefined);
   });
 
-  it("renders contract sections and generates PDF/ZIP for selected items", async () => {
+  it("uses a staged flow and generates selected format with one primary action", async () => {
     render(<ExportRoute />);
 
     expect(await screen.findByText("Export")).toBeTruthy();
+    expect(screen.getByText("Select items")).toBeTruthy();
     expect(screen.getByText("Totals summary")).toBeTruthy();
     expect(screen.getByText("Export history")).toBeTruthy();
-    expect(screen.getByText("Work laptop")).toBeTruthy();
+    expect(screen.getByText("Selected items: 0")).toBeTruthy();
+    expect(screen.queryByText("Work laptop")).toBeNull();
+
+    fireEvent.press(screen.getByTestId("export-selection-toggle"));
+    expect(await screen.findByText("Work laptop")).toBeTruthy();
 
     fireEvent.press(screen.getByTestId("export-row-toggle-item-1"));
     expect(screen.getByText("Selected items: 1")).toBeTruthy();
 
-    fireEvent.press(screen.getByTestId("export-generate-pdf"));
+    fireEvent.press(screen.getByTestId("export-generate"));
     await waitFor(() => {
       expect(mockGeneratePdfExport).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -241,7 +247,8 @@ describe("ExportRoute", () => {
       );
     });
 
-    fireEvent.press(screen.getByTestId("export-generate-zip"));
+    fireEvent.press(screen.getByTestId("export-format-zip"));
+    fireEvent.press(screen.getByTestId("export-generate"));
     await waitFor(() => {
       expect(mockGenerateZipExport).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -258,16 +265,18 @@ describe("ExportRoute", () => {
     });
 
     expect(screen.getByText("ZIP progress: 60% - Building archive")).toBeTruthy();
-    expect(screen.getByText("Last PDF: export-2026.pdf")).toBeTruthy();
-    expect(screen.getByText(/Last ZIP: export-2026.zip/)).toBeTruthy();
+    expect(screen.getByText("Last export: export-2026.zip")).toBeTruthy();
+    expect(screen.getByText("2 run(s) in selected tax year")).toBeTruthy();
   });
 
-  it("shows empty-state copy when no items match", async () => {
+  it("shows empty-state copy when no items match once selection is expanded", async () => {
     mockListItems.mockResolvedValue([]);
     mockListMissingReceiptItemIds.mockResolvedValue([]);
 
     render(<ExportRoute />);
+    expect(await screen.findByText("Export")).toBeTruthy();
 
+    fireEvent.press(screen.getByTestId("export-selection-toggle"));
     expect(await screen.findByText("No items found. Adjust filters or add a new item.")).toBeTruthy();
   });
 
@@ -280,7 +289,7 @@ describe("ExportRoute", () => {
 
     expect(await screen.findByText("Could not load export selection data.")).toBeTruthy();
 
-    fireEvent.press(screen.getByText("Retry"));
+    fireEvent.press(screen.getByTestId("export-retry"));
 
     await waitFor(() => {
       expect(mockListItems).toHaveBeenCalledTimes(2);
@@ -293,8 +302,9 @@ describe("ExportRoute", () => {
     render(<ExportRoute />);
     expect(await screen.findByText("Export")).toBeTruthy();
 
+    fireEvent.press(screen.getByTestId("export-selection-toggle"));
     fireEvent.press(screen.getByTestId("export-row-toggle-item-1"));
-    fireEvent.press(screen.getByTestId("export-generate-pdf"));
+    fireEvent.press(screen.getByTestId("export-generate"));
 
     expect(await screen.findByText("Could not generate PDF export.")).toBeTruthy();
     expect(mockCreateExportRun).not.toHaveBeenCalled();
@@ -306,8 +316,10 @@ describe("ExportRoute", () => {
     render(<ExportRoute />);
     expect(await screen.findByText("Export")).toBeTruthy();
 
+    fireEvent.press(screen.getByTestId("export-selection-toggle"));
     fireEvent.press(screen.getByTestId("export-row-toggle-item-1"));
-    fireEvent.press(screen.getByTestId("export-generate-zip"));
+    fireEvent.press(screen.getByTestId("export-format-zip"));
+    fireEvent.press(screen.getByTestId("export-generate"));
 
     expect(await screen.findByText("Could not generate ZIP export.")).toBeTruthy();
     expect(mockCreateExportRun).not.toHaveBeenCalled();
