@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   BackHandler,
   Image,
+  Keyboard,
   KeyboardAvoidingView,
   Linking,
   Modal,
@@ -151,6 +152,7 @@ export default function NewItemRoute() {
   const [attachments, setAttachments] = useState<StoredAttachmentFile[]>([]);
   const [isDiscardModalOpen, setIsDiscardModalOpen] = useState(false);
   const [previewAttachment, setPreviewAttachment] = useState<StoredAttachmentFile | null>(null);
+  const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
 
   const [title, setTitle] = useState("");
   const [purchaseDate, setPurchaseDate] = useState(formatYmdFromDateLocal(new Date()));
@@ -430,6 +432,23 @@ export default function NewItemRoute() {
       subscription.remove();
     };
   }, [isDirty]);
+
+  useEffect(() => {
+    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+
+    const showSubscription = Keyboard.addListener(showEvent, () => {
+      setIsKeyboardOpen(true);
+    });
+    const hideSubscription = Keyboard.addListener(hideEvent, () => {
+      setIsKeyboardOpen(false);
+    });
+
+    return () => {
+      showSubscription.remove();
+      hideSubscription.remove();
+    };
+  }, []);
 
   const clearError = useCallback(() => {
     setErrorMessage(null);
@@ -972,7 +991,6 @@ export default function NewItemRoute() {
                           onChangeText={setTitle}
                           placeholder="e.g. Laptop for work"
                           onBlur={() => setFieldTouched("title")}
-                          onFocus={() => scrollToField("title")}
                           testID="additem-input-title"
                           accessibilityLabel="Item title"
                         />
@@ -1013,7 +1031,6 @@ export default function NewItemRoute() {
                           placeholder="YYYY-MM-DD"
                           autoCapitalize="none"
                           onBlur={() => setFieldTouched("purchaseDate")}
-                          onFocus={() => scrollToField("purchaseDate")}
                           testID="additem-input-date"
                           accessibilityLabel="Purchase date"
                         />
@@ -1042,7 +1059,6 @@ export default function NewItemRoute() {
                           keyboardType="decimal-pad"
                           placeholder="e.g. 1299.90"
                           onBlur={() => setFieldTouched("totalCents")}
-                          onFocus={() => scrollToField("totalCents")}
                           testID="additem-input-price"
                           accessibilityLabel="Price in euros"
                         />
@@ -1143,7 +1159,6 @@ export default function NewItemRoute() {
                             keyboardType="number-pad"
                             placeholder="0-100"
                             onBlur={() => setFieldTouched("workPercent")}
-                            onFocus={() => scrollToField("workPercent")}
                             testID="additem-input-workpercent"
                             accessibilityLabel="Work percent"
                           />
@@ -1204,7 +1219,6 @@ export default function NewItemRoute() {
                           keyboardType="number-pad"
                           placeholder="Optional"
                           onBlur={() => setFieldTouched("warrantyMonths")}
-                          onFocus={() => scrollToField("warrantyMonths")}
                           testID="additem-input-warrantymonths"
                           accessibilityLabel="Warranty months"
                         />
@@ -1274,7 +1288,6 @@ export default function NewItemRoute() {
                             keyboardType="number-pad"
                             placeholder="Optional, e.g. 36"
                             onBlur={() => setFieldTouched("usefulLifeMonthsOverride")}
-                            onFocus={() => scrollToField("usefulLifeMonthsOverride")}
                             testID="additem-input-usefullife"
                             accessibilityLabel="Useful life override in months"
                           />
@@ -1295,48 +1308,55 @@ export default function NewItemRoute() {
             </GVStack>
           </ScrollView>
 
-          <GBox
-            borderTopWidth="$1"
-            borderColor="$border200"
-            bg="$background0"
-            style={{ paddingTop: 12, paddingBottom: actionBarBottomInset, paddingHorizontal: 20 }}
-          >
-            <GVStack space="xs">
-              {saveFeedbackMessage && (
-                <GText
-                  size="xs"
-                  textAlign="center"
-                  style={{ color: theme.primary }}
-                  accessibilityLiveRegion="polite"
-                >
-                  {saveFeedbackMessage}
-                </GText>
-              )}
-              <GHStack justifyContent="space-between" alignItems="center" space="sm">
-                <GButton
-                  flex={1}
-                  variant="outline"
-                  action="secondary"
-                  onPress={() => void handleExitRequest()}
-                  disabled={isBusy || isSavingItem}
-                  testID="additem-btn-cancel"
-                  accessibilityLabel="Cancel add item"
-                >
-                  <GButtonText testID="new-item-cancel">Cancel</GButtonText>
-                </GButton>
+          <GText testID="additem-keyboard-open-state" style={{ position: "absolute", opacity: 0 }}>
+            {isKeyboardOpen ? "open" : "closed"}
+          </GText>
 
-                <GButton
-                  flex={1}
-                  onPress={() => void submitAndSave()}
-                  disabled={!canSave}
-                  testID="additem-btn-save"
-                  accessibilityLabel="Save item"
-                >
-                  <GButtonText testID="action-add-item">{isSavingItem ? "Saving..." : "Save Item"}</GButtonText>
-                </GButton>
-              </GHStack>
-            </GVStack>
-          </GBox>
+          {!isKeyboardOpen && (
+            <GBox
+              borderTopWidth="$1"
+              borderColor="$border200"
+              bg="$background0"
+              testID="additem-bottom-bar"
+              style={{ paddingTop: 12, paddingBottom: actionBarBottomInset, paddingHorizontal: 20 }}
+            >
+              <GVStack space="xs">
+                {saveFeedbackMessage && (
+                  <GText
+                    size="xs"
+                    textAlign="center"
+                    style={{ color: theme.primary }}
+                    accessibilityLiveRegion="polite"
+                  >
+                    {saveFeedbackMessage}
+                  </GText>
+                )}
+                <GHStack justifyContent="space-between" alignItems="center" space="sm">
+                  <GButton
+                    flex={1}
+                    variant="outline"
+                    action="secondary"
+                    onPress={() => void handleExitRequest()}
+                    disabled={isBusy || isSavingItem}
+                    testID="additem-btn-cancel"
+                    accessibilityLabel="Cancel add item"
+                  >
+                    <GButtonText testID="new-item-cancel">Cancel</GButtonText>
+                  </GButton>
+
+                  <GButton
+                    flex={1}
+                    onPress={() => void submitAndSave()}
+                    disabled={!canSave}
+                    testID="additem-btn-save"
+                    accessibilityLabel="Save item"
+                  >
+                    <GButtonText testID="action-add-item">{isSavingItem ? "Saving..." : "Save Item"}</GButtonText>
+                  </GButton>
+                </GHStack>
+              </GVStack>
+            </GBox>
+          )}
 
           <GActionsheet isOpen={isCategorySheetOpen} onClose={() => setIsCategorySheetOpen(false)}>
             <GActionsheetBackdrop />

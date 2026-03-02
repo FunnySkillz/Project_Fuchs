@@ -1,5 +1,6 @@
 import React from "react";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react-native";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react-native";
+import { Keyboard, Platform, ScrollView } from "react-native";
 
 import NewItemRoute from "@/app/item/new";
 
@@ -249,5 +250,68 @@ describe("NewItemRoute save and validation", () => {
       expect(mockCreateItem).not.toHaveBeenCalled();
       expect(mockLinkDraftAttachmentsToItem).not.toHaveBeenCalled();
     });
+  });
+
+  it("hides the bottom action bar while keyboard is open and does not scroll to top on warranty focus", async () => {
+    const keyboardListeners = new Map<string, Set<() => void>>();
+    const addListenerSpy = jest.spyOn(Keyboard, "addListener").mockImplementation((eventName: any, callback: any) => {
+      const listeners = keyboardListeners.get(eventName) ?? new Set<() => void>();
+      listeners.add(callback);
+      keyboardListeners.set(eventName, listeners);
+
+      return {
+        remove: () => {
+          const current = keyboardListeners.get(eventName);
+          if (!current) {
+            return;
+          }
+          current.delete(callback);
+          if (current.size === 0) {
+            keyboardListeners.delete(eventName);
+          }
+        },
+      } as any;
+    });
+
+    const scrollViewProto = ScrollView.prototype as ScrollView & { scrollTo?: (...args: unknown[]) => void };
+    const originalScrollTo = scrollViewProto.scrollTo;
+    const scrollToMock = jest.fn();
+    scrollViewProto.scrollTo = scrollToMock;
+
+    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+    const emitKeyboard = (eventName: string) => {
+      keyboardListeners.get(eventName)?.forEach((listener) => listener());
+    };
+
+    try {
+      render(<NewItemRoute />);
+      expect(await screen.findByText("Add Item")).toBeTruthy();
+      expect(screen.getByTestId("additem-bottom-bar")).toBeTruthy();
+
+      fireEvent(screen.getByTestId("additem-input-warrantymonths"), "focus");
+      expect(scrollToMock).not.toHaveBeenCalled();
+
+      act(() => {
+        emitKeyboard(showEvent);
+      });
+
+      await waitFor(() => {
+        expect(screen.queryByTestId("additem-bottom-bar")).toBeNull();
+        expect(screen.getByTestId("additem-keyboard-open-state").props.children).toBe("open");
+      });
+
+      act(() => {
+        emitKeyboard(hideEvent);
+      });
+
+      await waitFor(() => {
+        expect(screen.getByTestId("additem-bottom-bar")).toBeTruthy();
+        expect(screen.getByTestId("additem-keyboard-open-state").props.children).toBe("closed");
+      });
+    } finally {
+      scrollViewProto.scrollTo = originalScrollTo;
+      addListenerSpy.mockRestore();
+    }
   });
 });
