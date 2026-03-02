@@ -247,6 +247,19 @@ describe("ItemDetailRoute", () => {
     expect(mockPush).toHaveBeenCalledWith("/item/item-1/edit");
   });
 
+  it("uses safe replace for back action even when history exists", async () => {
+    mockCanGoBack = true;
+    render(<ItemDetailRoute />);
+
+    expect((await screen.findAllByText("Work laptop")).length).toBeGreaterThan(0);
+    fireEvent.press(screen.getByTestId("item-detail-back"));
+
+    await waitFor(() => {
+      expect(mockReplace).toHaveBeenCalledWith("/(tabs)/items");
+      expect(mockBack).not.toHaveBeenCalled();
+    });
+  });
+
   it("deletes item after confirmation dialog", async () => {
     render(<ItemDetailRoute />);
 

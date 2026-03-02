@@ -252,13 +252,6 @@ export default function ItemDetailRoute() {
   };
 
   const handleBackNavigation = () => {
-    if (
-      canGoBack &&
-      typeof (router as { back?: () => void }).back === "function"
-    ) {
-      (router as { back: () => void }).back();
-      return;
-    }
     router.replace("/(tabs)/items");
   };
 
