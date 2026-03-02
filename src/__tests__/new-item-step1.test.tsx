@@ -197,7 +197,7 @@ describe("NewItemRoute attachments and cancel behavior", () => {
       expect(screen.getByText("receipt-a.jpg")).toBeTruthy();
     });
 
-    fireEvent.press(screen.getByTestId("additem-cancel"));
+    fireEvent.press(screen.getByTestId("additem-btn-cancel"));
     expect(screen.getByTestId("discard-modal")).toBeTruthy();
     fireEvent.press(screen.getByTestId("discard-confirm"));
 
@@ -332,7 +332,7 @@ describe("NewItemRoute attachments and cancel behavior", () => {
       expect(mockAddAttachmentToDraft).toHaveBeenCalled();
     });
 
-    fireEvent.press(screen.getByTestId("additem-cancel"));
+    fireEvent.press(screen.getByTestId("additem-btn-cancel"));
     expect(screen.getByTestId("discard-modal")).toBeTruthy();
     fireEvent.press(screen.getByTestId("discard-confirm"));
 
@@ -345,6 +345,8 @@ describe("NewItemRoute attachments and cancel behavior", () => {
   });
 
   it("allows clean navigation back without opening discard modal", async () => {
+    mockRouterCanGoBack = false;
+    mockNavigationCanGoBack = false;
     render(<NewItemRoute />);
     expect(await screen.findByText("Attachments")).toBeTruthy();
 
@@ -359,7 +361,8 @@ describe("NewItemRoute attachments and cancel behavior", () => {
       });
     });
 
-    expect(preventDefault).not.toHaveBeenCalled();
+    expect(preventDefault).toHaveBeenCalledTimes(1);
+    expect(mockRouterReplace).toHaveBeenCalledWith("/(tabs)/items");
     expect(screen.queryByTestId("discard-modal")).toBeNull();
   });
 });
