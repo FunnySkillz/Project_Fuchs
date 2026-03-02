@@ -591,8 +591,8 @@ describe("App first-user UI journey", () => {
     const homeBeforeItems = render(<HomeRoute />);
     expect(await screen.findByText("No items added yet.")).toBeTruthy();
     expect(screen.getByText("Use the center + button to add your first item.")).toBeTruthy();
-    fireEvent.press(screen.getByTestId("home-go-items-empty-cta"));
-    expect(mockPush).toHaveBeenCalledWith("/(tabs)/items");
+    expect(screen.queryByText("Go to Items")).toBeNull();
+    expect(screen.queryByText("Add Item")).toBeNull();
     homeBeforeItems.unmount();
 
     mockCameraAttachmentQueue.push(

@@ -175,10 +175,8 @@ describe("HomeRoute", () => {
     expect(screen.getByText("Use the center + button to add your first item.")).toBeTruthy();
     expect(screen.queryByTestId("home-missing-receipts-card")).toBeNull();
     expect(screen.queryByTestId("home-missing-notes-card")).toBeNull();
-    expect(screen.getByTestId("home-go-items-empty-cta")).toBeTruthy();
-
-    fireEvent.press(screen.getByTestId("home-go-items-empty-cta"));
-    expect(mockPush).toHaveBeenCalledWith("/(tabs)/items");
+    expect(screen.queryByText("Go to Items")).toBeNull();
+    expect(screen.queryByText("Add Item")).toBeNull();
   });
 
   it("shows error state and retries loading", async () => {

@@ -203,17 +203,6 @@ export default function HomeRoute() {
                 No items added yet.
               </Text>
               <Text size="sm">Use the center + button to add your first item.</Text>
-              <HStack space="md" flexWrap="wrap">
-                <Button
-                  variant="outline"
-                  action="secondary"
-                  alignSelf="flex-start"
-                  onPress={() => router.push("/(tabs)/items")}
-                  testID="home-go-items-empty-cta"
-                >
-                  <ButtonText>Go to Items</ButtonText>
-                </Button>
-              </HStack>
             </VStack>
           )}
         </VStack>
