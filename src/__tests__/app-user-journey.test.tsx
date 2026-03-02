@@ -1,5 +1,10 @@
 import React from "react";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react-native";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react-native";
 
 import HomeRoute from "@/app/(tabs)/home";
 import ItemsRoute from "@/app/(tabs)/items";
@@ -57,8 +62,11 @@ function mockApplyRouteTarget(target: unknown) {
     (target as { pathname?: unknown }).pathname === "/item/new"
   ) {
     const params =
-      "params" in target && typeof (target as { params?: unknown }).params === "object"
-        ? ((target as { params?: Record<string, string | string[] | undefined> }).params ?? {})
+      "params" in target &&
+      typeof (target as { params?: unknown }).params === "object"
+        ? ((
+            target as { params?: Record<string, string | string[] | undefined> }
+          ).params ?? {})
         : {};
     mockLocalSearchParams = {
       draftId: params.draftId,
@@ -91,19 +99,28 @@ jest.mock("expo-router", () => {
 jest.mock("@/components/themed-text", () => {
   const { Text } = require("react-native");
   return {
-    ThemedText: ({ children, ...props }: any) => <Text {...props}>{children}</Text>,
+    ThemedText: ({ children, ...props }: any) => (
+      <Text {...props}>{children}</Text>
+    ),
   };
 });
 
 jest.mock("@/components/themed-view", () => {
   const { View } = require("react-native");
   return {
-    ThemedView: ({ children, ...props }: any) => <View {...props}>{children}</View>,
+    ThemedView: ({ children, ...props }: any) => (
+      <View {...props}>{children}</View>
+    ),
   };
 });
 
 jest.mock("@/components/ui", () => {
-  const { Text: MockText, TextInput: MockTextInput, TouchableOpacity, View } = require("react-native");
+  const {
+    Text: MockText,
+    TextInput: MockTextInput,
+    TouchableOpacity,
+    View,
+  } = require("react-native");
   return {
     Button: ({ label, onPress, disabled }: any) => (
       <TouchableOpacity onPress={onPress} disabled={disabled}>
@@ -139,7 +156,8 @@ jest.mock("@gluestack-ui/themed", () => {
   );
 
   return {
-    Actionsheet: ({ isOpen, children }: any) => (isOpen ? <MockView>{children}</MockView> : null),
+    Actionsheet: ({ isOpen, children }: any) =>
+      isOpen ? <MockView>{children}</MockView> : null,
     ActionsheetBackdrop: Block,
     ActionsheetContent: Block,
     ActionsheetDragIndicator: Block,
@@ -147,35 +165,51 @@ jest.mock("@gluestack-ui/themed", () => {
     ActionsheetItem: ({ children, ...props }: any) => (
       <MockTouchableOpacity {...props}>{children}</MockTouchableOpacity>
     ),
-    ActionsheetItemText: ({ children, ...props }: any) => <MockText {...props}>{children}</MockText>,
-    AlertDialog: ({ isOpen, children }: any) => (isOpen ? <MockView>{children}</MockView> : null),
+    ActionsheetItemText: ({ children, ...props }: any) => (
+      <MockText {...props}>{children}</MockText>
+    ),
+    AlertDialog: ({ isOpen, children }: any) =>
+      isOpen ? <MockView>{children}</MockView> : null,
     AlertDialogBackdrop: Block,
     AlertDialogBody: Block,
     AlertDialogContent: Block,
     AlertDialogFooter: Block,
     AlertDialogHeader: Block,
     Badge: Block,
-    BadgeText: ({ children, ...props }: any) => <MockText {...props}>{children}</MockText>,
+    BadgeText: ({ children, ...props }: any) => (
+      <MockText {...props}>{children}</MockText>
+    ),
     Box: Block,
-    Button: ({ children, ...props }: any) => <MockTouchableOpacity {...props}>{children}</MockTouchableOpacity>,
-    ButtonText: ({ children, ...props }: any) => <MockText {...props}>{children}</MockText>,
+    Button: ({ children, ...props }: any) => (
+      <MockTouchableOpacity {...props}>{children}</MockTouchableOpacity>
+    ),
+    ButtonText: ({ children, ...props }: any) => (
+      <MockText {...props}>{children}</MockText>
+    ),
     Card: Block,
-    Heading: ({ children, ...props }: any) => <MockText {...props}>{children}</MockText>,
+    Heading: ({ children, ...props }: any) => (
+      <MockText {...props}>{children}</MockText>
+    ),
     HStack: Block,
     Input: Block,
     InputField: (props: any) => <MockTextInput {...props} />,
-    Modal: ({ isOpen, children }: any) => (isOpen ? <MockView>{children}</MockView> : null),
+    Modal: ({ isOpen, children }: any) =>
+      isOpen ? <MockView>{children}</MockView> : null,
     ModalBackdrop: Block,
     ModalBody: Block,
     ModalContent: Block,
-    Pressable: ({ children, ...props }: any) => <MockPressable {...props}>{children}</MockPressable>,
+    Pressable: ({ children, ...props }: any) => (
+      <MockPressable {...props}>{children}</MockPressable>
+    ),
     Slider: Block,
     SliderFilledTrack: Block,
     SliderThumb: Block,
     SliderTrack: Block,
     Spinner: (props: any) => <MockActivityIndicator {...props} />,
     Switch: (props: any) => <MockSwitch {...props} />,
-    Text: ({ children, ...props }: any) => <MockText {...props}>{children}</MockText>,
+    Text: ({ children, ...props }: any) => (
+      <MockText {...props}>{children}</MockText>
+    ),
     Textarea: Block,
     TextareaInput: (props: any) => <MockTextInput {...props} />,
     VStack: Block,
@@ -196,7 +230,7 @@ jest.mock("@/domain/deductible-impact", () => ({
     item: unknown,
     settings: unknown,
     categoryMap: unknown,
-    year: unknown
+    year: unknown,
   ) => mockComputeDeductibleImpactCents(item, settings, categoryMap, year),
 }));
 
@@ -249,11 +283,16 @@ let mockDraftCounter = 0;
 const mockCameraAttachmentQueue: StoredAttachmentFile[] = [];
 
 function mockItemHasReceipt(itemId: string): boolean {
-  return (mockItemReceiptsById.get(itemId) ?? []).some((attachment) => attachment.type === "RECEIPT");
+  return (mockItemReceiptsById.get(itemId) ?? []).some(
+    (attachment) => attachment.type === "RECEIPT",
+  );
 }
 
 function mockNotesMissing(item: Item): boolean {
-  return (item.usageType === "WORK" || item.usageType === "MIXED") && !item.notes?.trim();
+  return (
+    (item.usageType === "WORK" || item.usageType === "MIXED") &&
+    !item.notes?.trim()
+  );
 }
 
 jest.mock("@/repositories/create-profile-settings-repository", () => ({
@@ -349,10 +388,16 @@ jest.mock("@/repositories/create-core-repositories", () => ({
             return false;
           }
         }
-        if (filters?.usageType !== undefined && item.usageType !== filters.usageType) {
+        if (
+          filters?.usageType !== undefined &&
+          item.usageType !== filters.usageType
+        ) {
           return false;
         }
-        if (filters?.categoryId !== undefined && item.categoryId !== filters.categoryId) {
+        if (
+          filters?.categoryId !== undefined &&
+          item.categoryId !== filters.categoryId
+        ) {
           return false;
         }
         if (filters?.missingReceipt && mockItemHasReceipt(item.id)) {
@@ -381,10 +426,16 @@ jest.mock("@/repositories/create-core-repositories", () => ({
               return false;
             }
           }
-          if (filters?.usageType !== undefined && item.usageType !== filters.usageType) {
+          if (
+            filters?.usageType !== undefined &&
+            item.usageType !== filters.usageType
+          ) {
             return false;
           }
-          if (filters?.categoryId !== undefined && item.categoryId !== filters.categoryId) {
+          if (
+            filters?.categoryId !== undefined &&
+            item.categoryId !== filters.categoryId
+          ) {
             return false;
           }
           if (filters?.missingNotes && !mockNotesMissing(item)) {
@@ -394,7 +445,9 @@ jest.mock("@/repositories/create-core-repositories", () => ({
         })
         .map((item) => item.id);
     },
-    getById: async (id: string) => mockItemStore.find((item) => item.id === id && item.deletedAt === null) ?? null,
+    getById: async (id: string) =>
+      mockItemStore.find((item) => item.id === id && item.deletedAt === null) ??
+      null,
     softDelete: async (id: string) => {
       const index = mockItemStore.findIndex((item) => item.id === id);
       if (index >= 0) {
@@ -432,7 +485,8 @@ jest.mock("@/services/attachment-storage", () => ({
 }));
 
 jest.mock("@/services/item-service", () => ({
-  deleteItemWithAttachments: (itemId: string) => mockDeleteItemWithAttachments(itemId),
+  deleteItemWithAttachments: (itemId: string) =>
+    mockDeleteItemWithAttachments(itemId),
 }));
 
 jest.mock("@/services/item-draft-store", () => ({
@@ -441,7 +495,9 @@ jest.mock("@/services/item-draft-store", () => ({
     mockDraftStore.set(id, []);
     return id;
   },
-  getItemDraftAttachments: (draftId: string) => [...(mockDraftStore.get(draftId) ?? [])],
+  getItemDraftAttachments: (draftId: string) => [
+    ...(mockDraftStore.get(draftId) ?? []),
+  ],
   addAttachmentToDraft: (draftId: string, attachment: StoredAttachmentFile) => {
     const current = mockDraftStore.get(draftId) ?? [];
     mockDraftStore.set(draftId, [...current, attachment]);
@@ -450,7 +506,7 @@ jest.mock("@/services/item-draft-store", () => ({
     const current = mockDraftStore.get(draftId) ?? [];
     mockDraftStore.set(
       draftId,
-      current.filter((attachment) => attachment.filePath !== filePath)
+      current.filter((attachment) => attachment.filePath !== filePath),
     );
   },
   clearItemDraft: async (draftId: string) => {
@@ -474,7 +530,9 @@ interface PurchaseFlowInput {
   receiptFileName: string;
 }
 
-async function createPurchaseViaUiFlow(input: PurchaseFlowInput): Promise<void> {
+async function createPurchaseViaUiFlow(
+  input: PurchaseFlowInput,
+): Promise<void> {
   mockLocalSearchParams = {};
   const view = render(<NewItemRoute />);
 
@@ -489,16 +547,30 @@ async function createPurchaseViaUiFlow(input: PurchaseFlowInput): Promise<void> 
   expect(await screen.findByText(input.receiptFileName)).toBeTruthy();
 
   fireEvent.changeText(screen.getByTestId("new-item-title-input"), input.title);
-  fireEvent.changeText(screen.getByTestId("new-item-purchase-date-input"), input.purchaseDate);
-  fireEvent.changeText(screen.getByTestId("new-item-total-price-input"), input.price);
-  fireEvent.changeText(screen.getByTestId("new-item-vendor-input"), input.vendor);
+  fireEvent.changeText(
+    screen.getByTestId("new-item-purchase-date-input"),
+    input.purchaseDate,
+  );
+  fireEvent.changeText(
+    screen.getByTestId("new-item-total-price-input"),
+    input.price,
+  );
+  fireEvent.changeText(
+    screen.getByTestId("new-item-vendor-input"),
+    input.vendor,
+  );
   fireEvent.changeText(screen.getByTestId("new-item-notes-input"), input.notes);
 
   if (input.usage !== "WORK") {
-    fireEvent.press(screen.getByTestId(`new-item-usage-${input.usage.toLowerCase()}`));
+    fireEvent.press(
+      screen.getByTestId(`new-item-usage-${input.usage.toLowerCase()}`),
+    );
   }
   if (input.usage === "MIXED" && input.workPercent) {
-    fireEvent.changeText(screen.getByTestId("new-item-work-percent-input"), input.workPercent);
+    fireEvent.changeText(
+      screen.getByTestId("new-item-work-percent-input"),
+      input.workPercent,
+    );
   }
 
   fireEvent.press(screen.getByTestId("new-item-category-open"));
@@ -590,7 +662,9 @@ describe("App first-user UI journey", () => {
 
     const homeBeforeItems = render(<HomeRoute />);
     expect(await screen.findByText("No items added yet.")).toBeTruthy();
-    expect(screen.getByText("Use the center + button to add your first item.")).toBeTruthy();
+    expect(
+      screen.getByText("Use the center + button to add your first item."),
+    ).toBeTruthy();
     expect(screen.queryByText("Go to Items")).toBeNull();
     expect(screen.queryByText("Add Item")).toBeNull();
     homeBeforeItems.unmount();
@@ -609,7 +683,7 @@ describe("App first-user UI journey", () => {
         originalFileName: "laptop-rechnung.jpg",
         fileSizeBytes: 180_000,
         type: "PHOTO",
-      }
+      },
     );
 
     await createPurchaseViaUiFlow({
@@ -634,8 +708,12 @@ describe("App first-user UI journey", () => {
     });
 
     expect(mockItemStore).toHaveLength(2);
-    expect(mockItemReceiptsById.get("item-1")?.[0]?.originalFileName).toBe("tv-rechnung.jpg");
-    expect(mockItemReceiptsById.get("item-2")?.[0]?.originalFileName).toBe("laptop-rechnung.jpg");
+    expect(mockItemReceiptsById.get("item-1")?.[0]?.originalFileName).toBe(
+      "tv-rechnung.jpg",
+    );
+    expect(mockItemReceiptsById.get("item-2")?.[0]?.originalFileName).toBe(
+      "laptop-rechnung.jpg",
+    );
 
     mockLocalSearchParams = {};
     const itemsView = render(<ItemsRoute />);
@@ -679,7 +757,9 @@ describe("App first-user UI journey", () => {
 
     mockLocalSearchParams = { id: mockItemStore[0].id };
     const detailView = render(<ItemDetailRoute />);
-    expect((await screen.findAllByText("Office Printer")).length).toBeGreaterThan(0);
+    expect(
+      (await screen.findAllByText("Office Printer")).length,
+    ).toBeGreaterThan(0);
 
     fireEvent.press(screen.getByTestId("item-detail-delete"));
     fireEvent.press(screen.getByTestId("item-detail-delete-confirm"));
@@ -693,7 +773,11 @@ describe("App first-user UI journey", () => {
 
     mockLocalSearchParams = {};
     const itemsView = render(<ItemsRoute />);
-    expect(await screen.findByText("No items found. Adjust filters or add a new item.")).toBeTruthy();
+    expect(
+      await screen.findByText(
+        "No items found. Adjust filters or add a new item.",
+      ),
+    ).toBeTruthy();
     expect(screen.queryByText("Office Printer")).toBeNull();
     itemsView.unmount();
   });
