@@ -225,6 +225,29 @@ jest.mock("@gluestack-ui/themed", () => {
   };
 });
 
+jest.mock("react-native-gesture-handler", () => {
+  const ReactModule = require("react");
+  const { View } = require("react-native");
+
+  const Swipeable = ReactModule.forwardRef(({ children, renderRightActions }: any, ref: any) => {
+    ReactModule.useImperativeHandle(ref, () => ({
+      close: jest.fn(),
+    }));
+
+    return (
+      <View>
+        {typeof renderRightActions === "function" ? renderRightActions() : null}
+        {children}
+      </View>
+    );
+  });
+
+  return {
+    GestureHandlerRootView: ({ children }: any) => <View>{children}</View>,
+    Swipeable,
+  };
+});
+
 jest.mock("expo-image", () => {
   const { View: MockView } = require("react-native");
   return {
