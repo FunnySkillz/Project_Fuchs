@@ -6,6 +6,8 @@ import ItemEditRoute from "@/app/item/[id]/edit";
 const mockRouterReplace = jest.fn();
 const mockRouterBack = jest.fn();
 let mockRouterCanGoBack = false;
+const mockNavigationGoBack = jest.fn();
+let mockNavigationCanGoBack = true;
 
 const mockNavigationAddListener = jest.fn();
 const mockNavigationDispatch = jest.fn();
@@ -82,6 +84,8 @@ jest.mock("expo-router", () => ({
 jest.mock("@react-navigation/native", () => ({
   useNavigation: () => ({
     addListener: mockNavigationAddListener,
+    canGoBack: () => mockNavigationCanGoBack,
+    goBack: mockNavigationGoBack,
     dispatch: mockNavigationDispatch,
   }),
 }));
@@ -119,6 +123,8 @@ describe("ItemEditRoute", () => {
     mockRouterReplace.mockReset();
     mockRouterBack.mockReset();
     mockRouterCanGoBack = false;
+    mockNavigationGoBack.mockReset();
+    mockNavigationCanGoBack = true;
 
     mockNavigationAddListener.mockReset();
     mockNavigationDispatch.mockReset();
@@ -231,13 +237,14 @@ describe("ItemEditRoute", () => {
     expect(await screen.findByText("Edit Item")).toBeTruthy();
 
     fireEvent.changeText(screen.getByTestId("item-edit-title-input"), "Updated title");
-    fireEvent.press(screen.getByTestId("item-edit-cancel"));
+    fireEvent.press(screen.getByTestId("edititem-cancel"));
 
-    expect(screen.getByTestId("item-edit-discard-modal")).toBeTruthy();
-    fireEvent.press(screen.getByTestId("item-edit-discard-confirm"));
+    expect(screen.getByTestId("discard-modal")).toBeTruthy();
+    fireEvent.press(screen.getByTestId("discard-confirm"));
 
     await waitFor(() => {
-      expect(mockRouterReplace).toHaveBeenCalledWith("/item/item-1");
+      expect(mockNavigationGoBack).toHaveBeenCalledTimes(1);
+      expect(mockRouterReplace).not.toHaveBeenCalledWith("/item/item-1");
     });
   });
 
@@ -245,15 +252,32 @@ describe("ItemEditRoute", () => {
     render(<ItemEditRoute />);
 
     expect(await screen.findByText("Edit Item")).toBeTruthy();
-    fireEvent.press(screen.getByTestId("item-edit-cancel"));
+    fireEvent.press(screen.getByTestId("edititem-cancel"));
 
     await waitFor(() => {
-      expect(mockRouterReplace).toHaveBeenCalledWith("/item/item-1");
+      expect(mockNavigationGoBack).toHaveBeenCalledTimes(1);
+      expect(mockRouterReplace).not.toHaveBeenCalledWith("/item/item-1");
       expect(mockRouterBack).not.toHaveBeenCalled();
     });
   });
 
+  it("keeps edits when discard modal is dismissed with keep editing", async () => {
+    render(<ItemEditRoute />);
+
+    expect(await screen.findByText("Edit Item")).toBeTruthy();
+    fireEvent.changeText(screen.getByTestId("item-edit-title-input"), "Updated title");
+    fireEvent.press(screen.getByTestId("edititem-cancel"));
+
+    expect(screen.getByTestId("discard-modal")).toBeTruthy();
+    fireEvent.press(screen.getByTestId("keep-editing"));
+
+    expect(screen.queryByTestId("discard-modal")).toBeNull();
+    expect(screen.getByDisplayValue("Updated title")).toBeTruthy();
+    expect(mockNavigationGoBack).not.toHaveBeenCalled();
+  });
+
   it("intercepts navigation back and exits safely after discard", async () => {
+    const consoleErrorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
     render(<ItemEditRoute />);
 
     expect(await screen.findByText("Edit Item")).toBeTruthy();
@@ -271,16 +295,18 @@ describe("ItemEditRoute", () => {
     });
 
     expect(preventDefault).toHaveBeenCalled();
-    expect(screen.getByTestId("item-edit-discard-modal")).toBeTruthy();
+    expect(screen.getByTestId("discard-modal")).toBeTruthy();
 
-    fireEvent.press(screen.getByTestId("item-edit-discard-confirm"));
+    fireEvent.press(screen.getByTestId("discard-confirm"));
 
     await waitFor(() => {
-      expect(mockRouterReplace).toHaveBeenCalledWith("/item/item-1");
+      expect(mockNavigationGoBack).toHaveBeenCalledTimes(1);
+      expect(consoleErrorSpy).not.toHaveBeenCalled();
     });
+    consoleErrorSpy.mockRestore();
   });
 
-  it("intercepts clean navigation back and exits via safe replace", async () => {
+  it("allows clean navigation back without showing discard modal", async () => {
     render(<ItemEditRoute />);
 
     expect(await screen.findByText("Edit Item")).toBeTruthy();
@@ -296,10 +322,8 @@ describe("ItemEditRoute", () => {
       });
     });
 
-    expect(preventDefault).toHaveBeenCalled();
-    await waitFor(() => {
-      expect(mockRouterReplace).toHaveBeenCalledWith("/item/item-1");
-      expect(mockRouterBack).not.toHaveBeenCalled();
-    });
+    expect(preventDefault).not.toHaveBeenCalled();
+    expect(screen.queryByTestId("discard-modal")).toBeNull();
+    expect(mockNavigationGoBack).not.toHaveBeenCalled();
   });
 });

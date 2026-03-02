@@ -7,6 +7,8 @@ import NewItemRoute from "@/app/item/new";
 const mockRouterReplace = jest.fn();
 const mockRouterBack = jest.fn();
 let mockRouterCanGoBack = false;
+const mockNavigationGoBack = jest.fn();
+let mockNavigationCanGoBack = false;
 const mockRouter = {
   replace: mockRouterReplace,
   back: mockRouterBack,
@@ -96,6 +98,8 @@ jest.mock("@/hooks/use-theme", () => ({
 jest.mock("@react-navigation/native", () => ({
   useNavigation: () => ({
     addListener: mockNavigationAddListener,
+    canGoBack: () => mockNavigationCanGoBack,
+    goBack: mockNavigationGoBack,
     dispatch: mockNavigationDispatch,
   }),
 }));
@@ -127,6 +131,8 @@ describe("NewItemRoute attachments and cancel behavior", () => {
     mockRouterReplace.mockReset();
     mockRouterBack.mockReset();
     mockRouterCanGoBack = false;
+    mockNavigationGoBack.mockReset();
+    mockNavigationCanGoBack = false;
     mockGetCategoryRepository.mockReset();
     mockCreateItem.mockReset();
     mockSaveFromCamera.mockReset();
@@ -191,14 +197,15 @@ describe("NewItemRoute attachments and cancel behavior", () => {
       expect(screen.getByText("receipt-a.jpg")).toBeTruthy();
     });
 
-    fireEvent.press(screen.getByTestId("additem-btn-cancel"));
-    expect(screen.getByTestId("additem-discard-modal")).toBeTruthy();
-    fireEvent.press(screen.getByTestId("additem-discard-confirm"));
+    fireEvent.press(screen.getByTestId("additem-cancel"));
+    expect(screen.getByTestId("discard-modal")).toBeTruthy();
+    fireEvent.press(screen.getByTestId("discard-confirm"));
 
     await waitFor(() => {
       expect(mockClearItemDraft).toHaveBeenCalledWith("draft-1");
       expect(mockDeleteLocalAttachmentFile).toHaveBeenCalledWith("/tmp/receipt-a.jpg");
       expect(mockCreateItem).not.toHaveBeenCalled();
+      expect(mockNavigationGoBack).not.toHaveBeenCalled();
       expect(mockRouterReplace).toHaveBeenCalledWith("/(tabs)/items");
     });
   });
@@ -296,10 +303,10 @@ describe("NewItemRoute attachments and cancel behavior", () => {
 
     expect(preventDefault).toHaveBeenCalled();
     await waitFor(() => {
-      expect(screen.getByTestId("additem-discard-modal")).toBeTruthy();
+      expect(screen.getByTestId("discard-modal")).toBeTruthy();
     });
 
-    fireEvent.press(screen.getByTestId("additem-discard-confirm"));
+    fireEvent.press(screen.getByTestId("discard-confirm"));
 
     await waitFor(() => {
       expect(mockClearItemDraft).toHaveBeenCalledWith("draft-1");
@@ -308,7 +315,7 @@ describe("NewItemRoute attachments and cancel behavior", () => {
   });
 
   it("uses safe replace on cancel-discard even when history exists", async () => {
-    mockRouterCanGoBack = true;
+    mockNavigationCanGoBack = true;
     mockSaveFromCamera.mockResolvedValue({
       filePath: "/tmp/receipt-backstack.jpg",
       mimeType: "image/jpeg",
@@ -325,18 +332,19 @@ describe("NewItemRoute attachments and cancel behavior", () => {
       expect(mockAddAttachmentToDraft).toHaveBeenCalled();
     });
 
-    fireEvent.press(screen.getByTestId("additem-btn-cancel"));
-    expect(screen.getByTestId("additem-discard-modal")).toBeTruthy();
-    fireEvent.press(screen.getByTestId("additem-discard-confirm"));
+    fireEvent.press(screen.getByTestId("additem-cancel"));
+    expect(screen.getByTestId("discard-modal")).toBeTruthy();
+    fireEvent.press(screen.getByTestId("discard-confirm"));
 
     await waitFor(() => {
       expect(mockClearItemDraft).toHaveBeenCalledWith("draft-1");
+      expect(mockNavigationGoBack).toHaveBeenCalledTimes(1);
+      expect(mockRouterReplace).not.toHaveBeenCalledWith("/(tabs)/items");
       expect(mockRouterBack).not.toHaveBeenCalled();
-      expect(mockRouterReplace).toHaveBeenCalledWith("/(tabs)/items");
     });
   });
 
-  it("intercepts clean navigation back and exits safely", async () => {
+  it("allows clean navigation back without opening discard modal", async () => {
     render(<NewItemRoute />);
     expect(await screen.findByText("Attachments")).toBeTruthy();
 
@@ -351,11 +359,7 @@ describe("NewItemRoute attachments and cancel behavior", () => {
       });
     });
 
-    expect(preventDefault).toHaveBeenCalled();
-    await waitFor(() => {
-      expect(mockClearItemDraft).toHaveBeenCalledWith("draft-1");
-      expect(mockRouterReplace).toHaveBeenCalledWith("/(tabs)/items");
-      expect(mockRouterBack).not.toHaveBeenCalled();
-    });
+    expect(preventDefault).not.toHaveBeenCalled();
+    expect(screen.queryByTestId("discard-modal")).toBeNull();
   });
 });

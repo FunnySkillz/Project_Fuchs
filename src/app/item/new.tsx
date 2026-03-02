@@ -401,11 +401,30 @@ export default function NewItemRoute() {
     setShowOpenSettingsAction(shouldOfferOpenSettingsForError(error));
   }, []);
 
+  const goBackFromAddFlow = useCallback(() => {
+    allowNavigationExitRef.current = true;
+    pendingNavigationActionRef.current = null;
+    setIsDiscardModalOpen(false);
+
+    const navigationWithBack = navigation as {
+      canGoBack?: () => boolean;
+      goBack?: () => void;
+    };
+    if (
+      typeof navigationWithBack.canGoBack === "function" &&
+      navigationWithBack.canGoBack() &&
+      typeof navigationWithBack.goBack === "function"
+    ) {
+      navigationWithBack.goBack();
+      return;
+    }
+
+    router.replace("/(tabs)/items");
+  }, [navigation, router]);
+
   const exitAfterDiscard = useCallback(async () => {
     if (!draftId) {
-      allowNavigationExitRef.current = true;
-      pendingNavigationActionRef.current = null;
-      router.replace("/(tabs)/items");
+      goBackFromAddFlow();
       return;
     }
 
@@ -414,9 +433,7 @@ export default function NewItemRoute() {
     try {
       await clearItemDraft(draftId);
       shouldCleanupDraftOnExitRef.current = false;
-      allowNavigationExitRef.current = true;
-      pendingNavigationActionRef.current = null;
-      router.replace("/(tabs)/items");
+      goBackFromAddFlow();
     } catch (error) {
       console.error("Failed to clear item draft", error);
       setActionableError(error, "Could not cancel draft safely. Please retry.");
@@ -424,16 +441,16 @@ export default function NewItemRoute() {
       setIsBusy(false);
       setIsDiscardModalOpen(false);
     }
-  }, [clearError, draftId, router, setActionableError]);
+  }, [clearError, draftId, goBackFromAddFlow, setActionableError]);
 
   const handleExitRequest = useCallback(async () => {
     pendingNavigationActionRef.current = null;
     if (!isDirty) {
-      await exitAfterDiscard();
+      goBackFromAddFlow();
       return;
     }
     setIsDiscardModalOpen(true);
-  }, [exitAfterDiscard, isDirty]);
+  }, [goBackFromAddFlow, isDirty]);
 
   const closeDiscardModal = () => {
     pendingNavigationActionRef.current = null;
@@ -458,33 +475,30 @@ export default function NewItemRoute() {
         return;
       }
 
-      event.preventDefault();
-      pendingNavigationActionRef.current = event?.data?.action ?? null;
       if (isDirty) {
+        event.preventDefault();
+        pendingNavigationActionRef.current = event?.data?.action ?? null;
         setIsDiscardModalOpen(true);
-        return;
       }
-      void exitAfterDiscard();
     });
 
     return unsubscribe;
-  }, [exitAfterDiscard, isDirty, navigation]);
+  }, [isDirty, navigation]);
 
   useEffect(() => {
     const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
       pendingNavigationActionRef.current = null;
       if (isDirty) {
         setIsDiscardModalOpen(true);
-      } else {
-        void exitAfterDiscard();
+        return true;
       }
-      return true;
+      return false;
     });
 
     return () => {
       subscription.remove();
     };
-  }, [exitAfterDiscard, isDirty]);
+  }, [isDirty]);
 
   useEffect(() => {
     const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
@@ -746,7 +760,7 @@ export default function NewItemRoute() {
 
   if (isInitializing) {
     return (
-      <SafeAreaView style={{ flex: 1 }} edges={["top"]}>
+      <SafeAreaView style={{ flex: 1 }} edges={["bottom"]}>
         <GBox flex={1} alignItems="center" justifyContent="center" px="$5" py="$6">
           <GVStack space="md" alignItems="center">
             <GSpinner size="large" />
@@ -761,7 +775,7 @@ export default function NewItemRoute() {
   const actionBarEstimatedHeight = 80 + actionBarBottomInset;
 
   return (
-    <SafeAreaView style={{ flex: 1 }} edges={["top"]}>
+    <SafeAreaView style={{ flex: 1 }} edges={["bottom"]}>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -1335,10 +1349,10 @@ export default function NewItemRoute() {
                     action="secondary"
                     onPress={() => void handleExitRequest()}
                     disabled={isBusy || isSavingItem}
-                    testID="additem-btn-cancel"
+                    testID="additem-cancel"
                     accessibilityLabel="Cancel add item"
                   >
-                    <GButtonText testID="new-item-cancel">Cancel</GButtonText>
+                    <GButtonText testID="additem-btn-cancel">Cancel</GButtonText>
                   </GButton>
 
                   <GButton
@@ -1455,7 +1469,7 @@ export default function NewItemRoute() {
           justifyContent="center"
           px="$5"
           style={{ backgroundColor: "rgba(0,0,0,0.45)" }}
-          testID="additem-discard-modal"
+          testID="discard-modal"
         >
           <GCard
             borderWidth="$1"
@@ -1475,19 +1489,19 @@ export default function NewItemRoute() {
                   variant="outline"
                   action="secondary"
                   onPress={closeDiscardModal}
-                  testID="additem-discard-keepediting"
+                  testID="keep-editing"
                   accessibilityLabel="Keep editing"
                 >
-                  <GButtonText>Keep editing</GButtonText>
+                  <GButtonText testID="additem-discard-keepediting">Keep editing</GButtonText>
                 </GButton>
                 <GButton
                   size="sm"
                   action="negative"
                   onPress={() => void exitAfterDiscard()}
-                  testID="additem-discard-confirm"
+                  testID="discard-confirm"
                   accessibilityLabel="Discard changes"
                 >
-                  <GButtonText>Discard</GButtonText>
+                  <GButtonText testID="additem-discard-confirm">Discard</GButtonText>
                 </GButton>
               </GHStack>
             </GVStack>
