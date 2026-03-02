@@ -8,7 +8,7 @@
     "scheme": "steuerfuchs",
     "userInterfaceStyle": "automatic",
     "splash": {
-      "image": "./assets/images/splash-icon.png",
+      "image": "./assets/images/SteuerFuchs_Icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#208AEF"
     },
@@ -16,9 +16,9 @@
       "bundleIdentifier": "com.funnyskillz.steuerfuchs",
       "icon": "./assets/images/SteuerFuchs_Icon.png",
       "infoPlist": {
-        "NSCameraUsageDescription": "SteuerFuchs uses the camera to capture receipt photos.",
-        "NSPhotoLibraryUsageDescription": "SteuerFuchs lets you choose receipt images and files from your library.",
-        "NSPhotoLibraryAddUsageDescription": "SteuerFuchs may save processed receipt images for export preparation.",
+        "NSCameraUsageDescription": "Use your camera to capture receipt photos for tax documentation.",
+        "NSPhotoLibraryUsageDescription": "Allow access to photos/files so you can attach receipt images and PDFs.",
+        "NSPhotoLibraryAddUsageDescription": "SteuerFuchs may save processed receipt images you choose to keep for exports.",
         "ITSAppUsesNonExemptEncryption": false
       }
     },
@@ -52,7 +52,7 @@
         {
           "backgroundColor": "#208AEF",
           "android": {
-            "image": "./assets/images/splash-icon.png",
+            "image": "./assets/images/SteuerFuchs_Icon.png",
             "imageWidth": 76
           }
         }
@@ -61,8 +61,8 @@
       [
         "expo-image-picker",
         {
-          "cameraPermission": "SteuerFuchs uses the camera to capture receipt photos.",
-          "photosPermission": "SteuerFuchs needs access to your photos to attach receipt images."
+          "cameraPermission": "Use your camera to capture receipt photos for your tax records.",
+          "photosPermission": "Allow access to photos/files so you can attach receipt images or PDFs."
         }
       ],
       "expo-sqlite"

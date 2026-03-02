@@ -25,6 +25,7 @@ export default function TabSettingsStackLayout() {
       <Stack.Screen name="tax-calculation" options={{ title: "Tax & Calculation" }} />
       <Stack.Screen name="security" options={{ title: "Security" }} />
       <Stack.Screen name="backup-sync" options={{ title: "Backup & Sync" }} />
+      <Stack.Screen name="legal" options={{ title: "Legal & Privacy" }} />
       <Stack.Screen name="danger-zone" options={{ title: "Danger Zone" }} />
     </Stack>
   );

@@ -56,6 +56,10 @@ Define a binary release gate for V1. V1 ships only when all must-have checks are
   Exit criteria:
   - Core app flows work fully offline/local.
   - OneDrive is optional and never blocks local export.
+- [ ] PASS: Disclaimer and privacy statement are visible in-app.
+  Exit criteria:
+  - Legal copy is accessible from Settings.
+  - Disclaimer explicitly states "No tax advice, estimates only."
 - [ ] PASS: Security controls match platform capability.
   Exit criteria:
   - PIN/lock behavior is implemented only where support is real (no fake security claims).
@@ -107,6 +111,7 @@ Define a binary release gate for V1. V1 ships only when all must-have checks are
 | #76 | UX Resilience 2.3 (startup failure recovery screen + safe reset) |
 | #77 | Build and CI 3.1 (core logic unit tests) |
 | #78 | Build and CI 3.1 (DB migration/seed/repository integration tests) |
+| #85 | Privacy/Local-First 4.2 (in-app disclaimer + privacy statement + metadata checks) |
 
 ## Release Decision Rule
 V1 is releasable only when:

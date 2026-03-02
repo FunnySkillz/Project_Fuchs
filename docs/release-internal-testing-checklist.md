@@ -14,12 +14,16 @@
   - `NSCameraUsageDescription`
   - `NSPhotoLibraryUsageDescription`
   - `NSPhotoLibraryAddUsageDescription`
+- [ ] Permission copy clearly explains why camera/photos/files access is requested.
 - [ ] Android permissions are minimal and expected:
   - `CAMERA`
   - `READ_MEDIA_IMAGES`
   - `READ_EXTERNAL_STORAGE`
 - [ ] `RECORD_AUDIO` remains blocked.
 - [ ] `expo-image-picker` plugin permission text is user-friendly.
+- [ ] Settings contains visible `Legal & Privacy` content:
+  - Disclaimer: `No tax advice, estimates only`
+  - Privacy statement: local-first handling and export-by-user only
 
 ## 3. EAS Profiles
 
