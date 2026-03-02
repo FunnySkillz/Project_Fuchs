@@ -391,6 +391,55 @@ export default function NewItemRoute() {
     workPercent,
   ]);
 
+  const clearError = useCallback(() => {
+    setErrorMessage(null);
+    setShowOpenSettingsAction(false);
+  }, []);
+
+  const setActionableError = useCallback((error: unknown, fallback: string) => {
+    setErrorMessage(friendlyFileErrorMessage(error, fallback));
+    setShowOpenSettingsAction(shouldOfferOpenSettingsForError(error));
+  }, []);
+
+  const exitAfterDiscard = useCallback(async () => {
+    if (!draftId) {
+      allowNavigationExitRef.current = true;
+      pendingNavigationActionRef.current = null;
+      router.replace("/(tabs)/items");
+      return;
+    }
+
+    setIsBusy(true);
+    clearError();
+    try {
+      await clearItemDraft(draftId);
+      shouldCleanupDraftOnExitRef.current = false;
+      allowNavigationExitRef.current = true;
+      pendingNavigationActionRef.current = null;
+      router.replace("/(tabs)/items");
+    } catch (error) {
+      console.error("Failed to clear item draft", error);
+      setActionableError(error, "Could not cancel draft safely. Please retry.");
+    } finally {
+      setIsBusy(false);
+      setIsDiscardModalOpen(false);
+    }
+  }, [clearError, draftId, router, setActionableError]);
+
+  const handleExitRequest = useCallback(async () => {
+    pendingNavigationActionRef.current = null;
+    if (!isDirty) {
+      await exitAfterDiscard();
+      return;
+    }
+    setIsDiscardModalOpen(true);
+  }, [exitAfterDiscard, isDirty]);
+
+  const closeDiscardModal = () => {
+    pendingNavigationActionRef.current = null;
+    setIsDiscardModalOpen(false);
+  };
+
   useEffect(() => {
     return () => {
       if (!draftId || !shouldCleanupDraftOnExitRef.current) {
@@ -405,33 +454,37 @@ export default function NewItemRoute() {
 
   useEffect(() => {
     const unsubscribe = navigation.addListener("beforeRemove", (event: any) => {
-      if (allowNavigationExitRef.current || !isDirty) {
+      if (allowNavigationExitRef.current) {
         return;
       }
 
       event.preventDefault();
       pendingNavigationActionRef.current = event?.data?.action ?? null;
-      setIsDiscardModalOpen(true);
+      if (isDirty) {
+        setIsDiscardModalOpen(true);
+        return;
+      }
+      void exitAfterDiscard();
     });
 
     return unsubscribe;
-  }, [isDirty, navigation]);
+  }, [exitAfterDiscard, isDirty, navigation]);
 
   useEffect(() => {
     const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
-      if (!isDirty) {
-        return false;
-      }
-
       pendingNavigationActionRef.current = null;
-      setIsDiscardModalOpen(true);
+      if (isDirty) {
+        setIsDiscardModalOpen(true);
+      } else {
+        void exitAfterDiscard();
+      }
       return true;
     });
 
     return () => {
       subscription.remove();
     };
-  }, [isDirty]);
+  }, [exitAfterDiscard, isDirty]);
 
   useEffect(() => {
     const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
@@ -448,16 +501,6 @@ export default function NewItemRoute() {
       showSubscription.remove();
       hideSubscription.remove();
     };
-  }, []);
-
-  const clearError = useCallback(() => {
-    setErrorMessage(null);
-    setShowOpenSettingsAction(false);
-  }, []);
-
-  const setActionableError = useCallback((error: unknown, fallback: string) => {
-    setErrorMessage(friendlyFileErrorMessage(error, fallback));
-    setShowOpenSettingsAction(shouldOfferOpenSettingsForError(error));
   }, []);
 
   const openDeviceSettings = useCallback(async () => {
@@ -616,52 +659,6 @@ export default function NewItemRoute() {
     } finally {
       setIsCreatingCategory(false);
     }
-  };
-
-  const exitAfterDiscard = useCallback(async () => {
-    if (!draftId) {
-      if (typeof router.canGoBack === "function" && router.canGoBack()) {
-        router.back();
-      } else {
-        router.replace("/(tabs)/items");
-      }
-      return;
-    }
-
-    setIsBusy(true);
-    clearError();
-    try {
-      await clearItemDraft(draftId);
-      shouldCleanupDraftOnExitRef.current = false;
-      allowNavigationExitRef.current = true;
-      pendingNavigationActionRef.current = null;
-
-      if (typeof router.canGoBack === "function" && router.canGoBack()) {
-        router.back();
-      } else {
-        router.replace("/(tabs)/items");
-      }
-    } catch (error) {
-      console.error("Failed to clear item draft", error);
-      setActionableError(error, "Could not cancel draft safely. Please retry.");
-    } finally {
-      setIsBusy(false);
-      setIsDiscardModalOpen(false);
-    }
-  }, [clearError, draftId, navigation, router, setActionableError]);
-
-  const handleExitRequest = useCallback(async () => {
-    pendingNavigationActionRef.current = null;
-    if (!isDirty) {
-      await exitAfterDiscard();
-      return;
-    }
-    setIsDiscardModalOpen(true);
-  }, [exitAfterDiscard, isDirty]);
-
-  const closeDiscardModal = () => {
-    pendingNavigationActionRef.current = null;
-    setIsDiscardModalOpen(false);
   };
 
   const scrollToField = useCallback((field: FieldKey) => {

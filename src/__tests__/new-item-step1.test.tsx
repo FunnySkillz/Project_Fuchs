@@ -307,7 +307,7 @@ describe("NewItemRoute attachments and cancel behavior", () => {
     });
   });
 
-  it("uses router.back on cancel-discard when history exists", async () => {
+  it("uses safe replace on cancel-discard even when history exists", async () => {
     mockRouterCanGoBack = true;
     mockSaveFromCamera.mockResolvedValue({
       filePath: "/tmp/receipt-backstack.jpg",
@@ -331,8 +331,31 @@ describe("NewItemRoute attachments and cancel behavior", () => {
 
     await waitFor(() => {
       expect(mockClearItemDraft).toHaveBeenCalledWith("draft-1");
-      expect(mockRouterBack).toHaveBeenCalled();
-      expect(mockRouterReplace).not.toHaveBeenCalledWith("/(tabs)/items");
+      expect(mockRouterBack).not.toHaveBeenCalled();
+      expect(mockRouterReplace).toHaveBeenCalledWith("/(tabs)/items");
+    });
+  });
+
+  it("intercepts clean navigation back and exits safely", async () => {
+    render(<NewItemRoute />);
+    expect(await screen.findByText("Attachments")).toBeTruthy();
+
+    expect(beforeRemoveHandler).not.toBeNull();
+    const preventDefault = jest.fn();
+    await act(async () => {
+      beforeRemoveHandler?.({
+        preventDefault,
+        data: {
+          action: { type: "GO_BACK" },
+        },
+      });
+    });
+
+    expect(preventDefault).toHaveBeenCalled();
+    await waitFor(() => {
+      expect(mockClearItemDraft).toHaveBeenCalledWith("draft-1");
+      expect(mockRouterReplace).toHaveBeenCalledWith("/(tabs)/items");
+      expect(mockRouterBack).not.toHaveBeenCalled();
     });
   });
 });
