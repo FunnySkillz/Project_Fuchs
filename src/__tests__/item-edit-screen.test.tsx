@@ -241,6 +241,18 @@ describe("ItemEditRoute", () => {
     });
   });
 
+  it("exits safely on cancel when form is clean", async () => {
+    render(<ItemEditRoute />);
+
+    expect(await screen.findByText("Edit Item")).toBeTruthy();
+    fireEvent.press(screen.getByTestId("item-edit-cancel"));
+
+    await waitFor(() => {
+      expect(mockRouterReplace).toHaveBeenCalledWith("/item/item-1");
+      expect(mockRouterBack).not.toHaveBeenCalled();
+    });
+  });
+
   it("intercepts navigation back and exits safely after discard", async () => {
     render(<ItemEditRoute />);
 
@@ -265,6 +277,29 @@ describe("ItemEditRoute", () => {
 
     await waitFor(() => {
       expect(mockRouterReplace).toHaveBeenCalledWith("/item/item-1");
+    });
+  });
+
+  it("intercepts clean navigation back and exits via safe replace", async () => {
+    render(<ItemEditRoute />);
+
+    expect(await screen.findByText("Edit Item")).toBeTruthy();
+    expect(beforeRemoveHandler).not.toBeNull();
+
+    const preventDefault = jest.fn();
+    await act(async () => {
+      beforeRemoveHandler?.({
+        preventDefault,
+        data: {
+          action: { type: "GO_BACK" },
+        },
+      });
+    });
+
+    expect(preventDefault).toHaveBeenCalled();
+    await waitFor(() => {
+      expect(mockRouterReplace).toHaveBeenCalledWith("/item/item-1");
+      expect(mockRouterBack).not.toHaveBeenCalled();
     });
   });
 });

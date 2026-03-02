@@ -109,10 +109,6 @@ export default function ItemEditRoute() {
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ id?: string | string[] }>();
   const itemId = toSingleParam(params.id);
-  const canGoBack =
-    typeof (router as { canGoBack?: () => boolean }).canGoBack === "function"
-      ? (router as { canGoBack: () => boolean }).canGoBack()
-      : false;
   const allowNavigationExitRef = useRef(false);
   const pendingNavigationActionRef = useRef<any | null>(null);
   const initialSnapshotRef = useRef<InitialSnapshot | null>(null);
@@ -367,48 +363,10 @@ export default function ItemEditRoute() {
     workPercent,
   ]);
 
-  useEffect(() => {
-    const unsubscribe = navigation.addListener("beforeRemove", (event: any) => {
-      if (allowNavigationExitRef.current || !isDirty) {
-        return;
-      }
-
-      event.preventDefault();
-      pendingNavigationActionRef.current = event?.data?.action ?? null;
-      setIsDiscardModalOpen(true);
-    });
-
-    return unsubscribe;
-  }, [isDirty, navigation]);
-
-  useEffect(() => {
-    const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
-      if (!isDirty) {
-        return false;
-      }
-
-      pendingNavigationActionRef.current = null;
-      setIsDiscardModalOpen(true);
-      return true;
-    });
-
-    return () => {
-      subscription.remove();
-    };
-  }, [isDirty]);
-
   const exitEditFlow = useCallback(() => {
     allowNavigationExitRef.current = true;
     pendingNavigationActionRef.current = null;
     setIsDiscardModalOpen(false);
-
-    if (
-      canGoBack &&
-      typeof (router as { back?: () => void }).back === "function"
-    ) {
-      (router as { back: () => void }).back();
-      return;
-    }
 
     if (itemId) {
       router.replace(`/item/${itemId}`);
@@ -416,7 +374,41 @@ export default function ItemEditRoute() {
     }
 
     router.replace("/(tabs)/items");
-  }, [canGoBack, itemId, navigation, router]);
+  }, [itemId, router]);
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener("beforeRemove", (event: any) => {
+      if (allowNavigationExitRef.current) {
+        return;
+      }
+
+      event.preventDefault();
+      pendingNavigationActionRef.current = event?.data?.action ?? null;
+      if (isDirty) {
+        setIsDiscardModalOpen(true);
+        return;
+      }
+      exitEditFlow();
+    });
+
+    return unsubscribe;
+  }, [exitEditFlow, isDirty, navigation]);
+
+  useEffect(() => {
+    const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
+      pendingNavigationActionRef.current = null;
+      if (isDirty) {
+        setIsDiscardModalOpen(true);
+      } else {
+        exitEditFlow();
+      }
+      return true;
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [exitEditFlow, isDirty]);
 
   const handleExitRequest = useCallback(() => {
     pendingNavigationActionRef.current = null;
