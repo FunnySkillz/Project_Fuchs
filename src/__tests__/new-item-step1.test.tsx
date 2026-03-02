@@ -5,7 +5,13 @@ import { Linking } from "react-native";
 import NewItemRoute from "@/app/item/new";
 
 const mockRouterReplace = jest.fn();
-const mockRouter = { replace: mockRouterReplace };
+const mockRouterBack = jest.fn();
+let mockRouterCanGoBack = false;
+const mockRouter = {
+  replace: mockRouterReplace,
+  back: mockRouterBack,
+  canGoBack: () => mockRouterCanGoBack,
+};
 const mockGetCategoryRepository = jest.fn();
 const mockCreateItem = jest.fn();
 const mockSaveFromCamera = jest.fn();
@@ -119,6 +125,8 @@ jest.mock("@/services/item-draft-store", () => ({
 describe("NewItemRoute attachments and cancel behavior", () => {
   beforeEach(() => {
     mockRouterReplace.mockReset();
+    mockRouterBack.mockReset();
+    mockRouterCanGoBack = false;
     mockGetCategoryRepository.mockReset();
     mockCreateItem.mockReset();
     mockSaveFromCamera.mockReset();
@@ -296,6 +304,35 @@ describe("NewItemRoute attachments and cancel behavior", () => {
     await waitFor(() => {
       expect(mockClearItemDraft).toHaveBeenCalledWith("draft-1");
       expect(mockRouterReplace).toHaveBeenCalledWith("/(tabs)/items");
+    });
+  });
+
+  it("uses router.back on cancel-discard when history exists", async () => {
+    mockRouterCanGoBack = true;
+    mockSaveFromCamera.mockResolvedValue({
+      filePath: "/tmp/receipt-backstack.jpg",
+      mimeType: "image/jpeg",
+      originalFileName: "receipt-backstack.jpg",
+      fileSizeBytes: 31_000,
+      type: "PHOTO",
+    });
+
+    render(<NewItemRoute />);
+    expect(await screen.findByText("Attachments")).toBeTruthy();
+
+    fireEvent.press(screen.getByTestId("additem-btn-takephoto"));
+    await waitFor(() => {
+      expect(mockAddAttachmentToDraft).toHaveBeenCalled();
+    });
+
+    fireEvent.press(screen.getByTestId("additem-btn-cancel"));
+    expect(screen.getByTestId("additem-discard-modal")).toBeTruthy();
+    fireEvent.press(screen.getByTestId("additem-discard-confirm"));
+
+    await waitFor(() => {
+      expect(mockClearItemDraft).toHaveBeenCalledWith("draft-1");
+      expect(mockRouterBack).toHaveBeenCalled();
+      expect(mockRouterReplace).not.toHaveBeenCalledWith("/(tabs)/items");
     });
   });
 });
