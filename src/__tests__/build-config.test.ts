@@ -54,6 +54,7 @@ describe("Release build config", () => {
   it("uses runtime/app version strategy for EAS updates and builds", () => {
     expect(easConfig.cli?.appVersionSource).toBe("remote");
     expect(appConfig.expo.runtimeVersion?.policy).toBe("appVersion");
+    expect(appConfig.expo.version).toMatch(/^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/);
     expect(appConfig.expo.version).toBe(packageConfig.version);
     expect(packageConfig.dependencies?.["expo-updates"]).toBeTruthy();
   });

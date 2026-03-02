@@ -9,7 +9,10 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "lint": "expo lint",
-    "test": "jest --runInBand"
+    "test": "jest --runInBand",
+    "test:ci": "jest --runInBand --ci",
+    "typecheck": "tsc --noEmit",
+    "release:preflight": "npm run lint && npm run typecheck && npm run test:ci"
   },
   "dependencies": {
     "@gluestack-style/react": "^1.0.57",

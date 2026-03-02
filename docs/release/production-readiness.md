@@ -50,6 +50,9 @@ Define a binary release gate for V1. V1 ships only when all must-have checks are
 - [ ] PASS: Production build artifacts can be generated.
   Exit criteria:
   - Android and iOS EAS build commands complete successfully on release commit.
+- [ ] PASS: Final hardware QA is completed on signed production artifacts.
+  Exit criteria:
+  - `docs/release/final-qa-hardware-checklist.md` is fully executed and signed off.
 
 ### 4) Privacy and Local-First Guarantees
 - [ ] PASS: Local-first behavior is preserved when cloud integration is unavailable.

@@ -244,6 +244,12 @@ Run tests:
 npm test
 ```
 
+Run release preflight checks:
+
+```bash
+npm run release:preflight
+```
+
 Build preview:
 
 ```bash
@@ -281,6 +287,7 @@ Release checklist:
 
 - `docs/release-internal-testing-checklist.md`
 - `docs/release/build-versioning.md`
+- `docs/release/final-qa-hardware-checklist.md`
 
 ## Security & Privacy
 
