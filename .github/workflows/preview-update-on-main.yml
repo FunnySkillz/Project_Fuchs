@@ -1,0 +1,48 @@
+name: Preview Update On Main
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: preview-update-main
+  cancel-in-progress: true
+
+jobs:
+  publish-preview-update:
+    name: Publish EAS preview update
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate EXPO_TOKEN secret
+        run: |
+          if [ -z "${{ secrets.EXPO_TOKEN }}" ]; then
+            echo "Missing EXPO_TOKEN secret. Add it in repository secrets."
+            exit 1
+          fi
+
+      - name: Setup EAS CLI
+        uses: expo/expo-github-action@v8
+        with:
+          token: ${{ secrets.EXPO_TOKEN }}
+          eas-version: latest
+
+      - name: Publish update to preview channel
+        run: npx eas update --channel preview --auto --non-interactive
