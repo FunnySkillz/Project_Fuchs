@@ -53,6 +53,8 @@ let mockLocalSearchParams: Record<string, string | string[] | undefined> = {};
 const mockPush = jest.fn();
 const mockReplace = jest.fn();
 const mockDeleteItemWithAttachments = jest.fn();
+const mockNavigationAddListener = jest.fn();
+const mockNavigationDispatch = jest.fn();
 
 function mockApplyRouteTarget(target: unknown) {
   if (
@@ -95,6 +97,13 @@ jest.mock("expo-router", () => {
     },
   };
 });
+
+jest.mock("@react-navigation/native", () => ({
+  useNavigation: () => ({
+    addListener: mockNavigationAddListener,
+    dispatch: mockNavigationDispatch,
+  }),
+}));
 
 jest.mock("@/components/themed-text", () => {
   const { Text } = require("react-native");
@@ -543,41 +552,41 @@ async function createPurchaseViaUiFlow(
   view.rerender(<NewItemRoute />);
   expect(await screen.findByText("Add Item")).toBeTruthy();
 
-  fireEvent.press(screen.getByTestId("new-item-attachment-take-photo"));
+  fireEvent.press(screen.getByTestId("additem-btn-takephoto"));
   expect(await screen.findByText(input.receiptFileName)).toBeTruthy();
 
-  fireEvent.changeText(screen.getByTestId("new-item-title-input"), input.title);
+  fireEvent.changeText(screen.getByTestId("additem-input-title"), input.title);
   fireEvent.changeText(
-    screen.getByTestId("new-item-purchase-date-input"),
+    screen.getByTestId("additem-input-date"),
     input.purchaseDate,
   );
   fireEvent.changeText(
-    screen.getByTestId("new-item-total-price-input"),
+    screen.getByTestId("additem-input-price"),
     input.price,
   );
   fireEvent.changeText(
-    screen.getByTestId("new-item-vendor-input"),
+    screen.getByTestId("additem-input-vendor"),
     input.vendor,
   );
-  fireEvent.changeText(screen.getByTestId("new-item-notes-input"), input.notes);
+  fireEvent.changeText(screen.getByTestId("additem-input-notes"), input.notes);
 
   if (input.usage !== "WORK") {
     fireEvent.press(
-      screen.getByTestId(`new-item-usage-${input.usage.toLowerCase()}`),
+      screen.getByTestId(`additem-seg-usage-${input.usage.toLowerCase()}`),
     );
   }
   if (input.usage === "MIXED" && input.workPercent) {
     fireEvent.changeText(
-      screen.getByTestId("new-item-work-percent-input"),
+      screen.getByTestId("additem-input-workpercent"),
       input.workPercent,
     );
   }
 
-  fireEvent.press(screen.getByTestId("new-item-category-open"));
+  fireEvent.press(screen.getByTestId("additem-select-category"));
   fireEvent.press(screen.getByText("Electronics"));
 
   const countBeforeSave = mockItemStore.length;
-  fireEvent.press(screen.getByTestId("action-add-item"));
+  fireEvent.press(screen.getByTestId("additem-btn-save"));
   await waitFor(() => {
     expect(mockItemStore).toHaveLength(countBeforeSave + 1);
     expect(mockReplace).toHaveBeenCalledWith("/(tabs)/items");
@@ -592,6 +601,8 @@ describe("App first-user UI journey", () => {
     mockPush.mockReset();
     mockReplace.mockReset();
     mockDeleteItemWithAttachments.mockReset();
+    mockNavigationAddListener.mockReset();
+    mockNavigationDispatch.mockReset();
     mockComputeDeductibleImpactCents.mockReset();
     mockEstimateTaxImpact.mockReset();
     mockComputeDeductibleImpactCents.mockImplementation((item: Item) => {
@@ -636,6 +647,7 @@ describe("App first-user UI journey", () => {
     mockDraftStore.clear();
     mockDraftCounter = 0;
     mockCameraAttachmentQueue.splice(0, mockCameraAttachmentQueue.length);
+    mockNavigationAddListener.mockReturnValue(jest.fn());
   });
 
   it("walks from onboarding to creating TV and laptop invoices via real UI interactions", async () => {

@@ -1,5 +1,5 @@
 import React from "react";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react-native";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 import { Linking } from "react-native";
 
 import NewItemRoute from "@/app/item/new";
@@ -14,6 +14,9 @@ const mockDeleteLocalAttachmentFile = jest.fn();
 const mockClearItemDraft = jest.fn();
 const mockAddAttachmentToDraft = jest.fn();
 const mockGetItemDraftAttachments = jest.fn();
+const mockNavigationAddListener = jest.fn();
+const mockNavigationDispatch = jest.fn();
+let beforeRemoveHandler: ((event: any) => void) | null = null;
 let mockOpenSettingsSpy: jest.SpyInstance<Promise<void>, []>;
 const mockDraftAttachments: Array<{
   filePath: string;
@@ -48,8 +51,6 @@ jest.mock("@gluestack-ui/themed", () => {
       <MockTouchableOpacity {...props}>{children}</MockTouchableOpacity>
     ),
     ActionsheetItemText: ({ children, ...props }: any) => <MockText {...props}>{children}</MockText>,
-    Badge: Block,
-    BadgeText: ({ children, ...props }: any) => <MockText {...props}>{children}</MockText>,
     Box: Block,
     Button: ({ children, ...props }: any) => <MockTouchableOpacity {...props}>{children}</MockTouchableOpacity>,
     ButtonText: ({ children, ...props }: any) => <MockText {...props}>{children}</MockText>,
@@ -58,10 +59,6 @@ jest.mock("@gluestack-ui/themed", () => {
     HStack: Block,
     Input: Block,
     InputField: (props: any) => <MockTextInput {...props} />,
-    Slider: Block,
-    SliderFilledTrack: Block,
-    SliderThumb: Block,
-    SliderTrack: Block,
     Spinner: (props: any) => <MockActivityIndicator {...props} />,
     Text: ({ children, ...props }: any) => <MockText {...props}>{children}</MockText>,
     Textarea: Block,
@@ -74,6 +71,26 @@ jest.mock("expo-router", () => ({
   useRouter: () => mockRouter,
   useLocalSearchParams: () => ({
     draftId: "draft-1",
+  }),
+}));
+
+jest.mock("@/hooks/use-theme", () => ({
+  useTheme: () => ({
+    background: "#ffffff",
+    backgroundElement: "#f3f4f6",
+    text: "#111827",
+    textSecondary: "#6b7280",
+    border: "#d1d5db",
+    primary: "#2563eb",
+    danger: "#dc2626",
+    textOnPrimary: "#ffffff",
+  }),
+}));
+
+jest.mock("@react-navigation/native", () => ({
+  useNavigation: () => ({
+    addListener: mockNavigationAddListener,
+    dispatch: mockNavigationDispatch,
   }),
 }));
 
@@ -110,6 +127,9 @@ describe("NewItemRoute attachments and cancel behavior", () => {
     mockClearItemDraft.mockReset();
     mockAddAttachmentToDraft.mockReset();
     mockGetItemDraftAttachments.mockReset();
+    mockNavigationAddListener.mockReset();
+    mockNavigationDispatch.mockReset();
+    beforeRemoveHandler = null;
     mockDraftAttachments.splice(0, mockDraftAttachments.length);
     if (mockOpenSettingsSpy) {
       mockOpenSettingsSpy.mockRestore();
@@ -131,6 +151,12 @@ describe("NewItemRoute attachments and cancel behavior", () => {
       mockDraftAttachments.push(attachment);
     });
     mockGetItemDraftAttachments.mockImplementation(() => [...mockDraftAttachments]);
+    mockNavigationAddListener.mockImplementation((eventName: string, handler: (event: any) => void) => {
+      if (eventName === "beforeRemove") {
+        beforeRemoveHandler = handler;
+      }
+      return jest.fn();
+    });
   });
 
   afterEach(() => {
@@ -148,16 +174,18 @@ describe("NewItemRoute attachments and cancel behavior", () => {
 
     render(<NewItemRoute />);
 
-    expect(await screen.findByText("1) Attachments")).toBeTruthy();
+    expect(await screen.findByText("Attachments")).toBeTruthy();
 
-    fireEvent.press(screen.getByTestId("new-item-attachment-take-photo"));
+    fireEvent.press(screen.getByTestId("additem-btn-takephoto"));
 
     await waitFor(() => {
       expect(mockAddAttachmentToDraft).toHaveBeenCalled();
       expect(screen.getByText("receipt-a.jpg")).toBeTruthy();
     });
 
-    fireEvent.press(screen.getByTestId("new-item-cancel"));
+    fireEvent.press(screen.getByTestId("additem-btn-cancel"));
+    expect(screen.getByTestId("additem-discard-modal")).toBeTruthy();
+    fireEvent.press(screen.getByTestId("additem-discard-confirm"));
 
     await waitFor(() => {
       expect(mockClearItemDraft).toHaveBeenCalledWith("draft-1");
@@ -177,9 +205,9 @@ describe("NewItemRoute attachments and cancel behavior", () => {
     });
 
     const view = render(<NewItemRoute />);
-    expect(await screen.findByText("1) Attachments")).toBeTruthy();
+    expect(await screen.findByText("Attachments")).toBeTruthy();
 
-    fireEvent.press(screen.getByTestId("new-item-attachment-upload"));
+    fireEvent.press(screen.getByTestId("additem-btn-upload"));
     await waitFor(() => {
       expect(mockAddAttachmentToDraft).toHaveBeenCalled();
       expect(screen.getByText("receipt-exit.pdf")).toBeTruthy();
@@ -201,9 +229,9 @@ describe("NewItemRoute attachments and cancel behavior", () => {
     );
 
     render(<NewItemRoute />);
-    expect(await screen.findByText("1) Attachments")).toBeTruthy();
+    expect(await screen.findByText("Attachments")).toBeTruthy();
 
-    fireEvent.press(screen.getByTestId("new-item-attachment-take-photo"));
+    fireEvent.press(screen.getByTestId("additem-btn-takephoto"));
 
     await waitFor(() => {
       expect(screen.getByText(/Camera access is denied/i)).toBeTruthy();
@@ -220,13 +248,54 @@ describe("NewItemRoute attachments and cancel behavior", () => {
     mockSaveFromPicker.mockRejectedValue(new Error("User canceled document picker"));
 
     render(<NewItemRoute />);
-    expect(await screen.findByText("1) Attachments")).toBeTruthy();
+    expect(await screen.findByText("Attachments")).toBeTruthy();
 
-    fireEvent.press(screen.getByTestId("new-item-attachment-upload"));
+    fireEvent.press(screen.getByTestId("additem-btn-upload"));
 
     await waitFor(() => {
       expect(mockAddAttachmentToDraft).not.toHaveBeenCalled();
       expect(screen.queryByText("Action canceled.")).toBeNull();
+    });
+  });
+
+  it("shows discard confirmation on navigation back when form is dirty", async () => {
+    mockSaveFromCamera.mockResolvedValue({
+      filePath: "/tmp/receipt-back.jpg",
+      mimeType: "image/jpeg",
+      originalFileName: "receipt-back.jpg",
+      fileSizeBytes: 31_000,
+      type: "PHOTO",
+    });
+
+    render(<NewItemRoute />);
+    expect(await screen.findByText("Attachments")).toBeTruthy();
+
+    fireEvent.press(screen.getByTestId("additem-btn-takephoto"));
+    await waitFor(() => {
+      expect(mockAddAttachmentToDraft).toHaveBeenCalled();
+    });
+
+    expect(beforeRemoveHandler).not.toBeNull();
+    const preventDefault = jest.fn();
+    await act(async () => {
+      beforeRemoveHandler?.({
+        preventDefault,
+        data: {
+          action: { type: "GO_BACK" },
+        },
+      });
+    });
+
+    expect(preventDefault).toHaveBeenCalled();
+    await waitFor(() => {
+      expect(screen.getByTestId("additem-discard-modal")).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByTestId("additem-discard-confirm"));
+
+    await waitFor(() => {
+      expect(mockClearItemDraft).toHaveBeenCalledWith("draft-1");
+      expect(mockRouterReplace).toHaveBeenCalledWith("/(tabs)/items");
     });
   });
 });

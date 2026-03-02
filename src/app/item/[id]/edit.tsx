@@ -1,7 +1,8 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { useNavigation } from "@react-navigation/native";
 import { Image } from "expo-image";
-import React, { useCallback, useMemo, useState } from "react";
-import { Linking, ScrollView } from "react-native";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { BackHandler, Linking, Modal, ScrollView } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   Actionsheet,
@@ -51,7 +52,7 @@ import {
   shouldOfferOpenSettingsForError,
 } from "@/services/friendly-errors";
 import { validateItemInput } from "@/domain/item-validation";
-import { formatYmdFromDateLocal } from "@/utils/date";
+import { addMonthsToYmd, formatYmdFromDateLocal } from "@/utils/date";
 import { parseEuroInputToCents } from "@/utils/money";
 
 function toSingleParam(value: string | string[] | undefined): string | undefined {
@@ -89,16 +90,39 @@ const usageOptions: { value: ItemUsageType; label: string }[] = [
   { value: "OTHER", label: "OTHER" },
 ];
 
+interface InitialSnapshot {
+  title: string;
+  purchaseDate: string;
+  totalPrice: string;
+  categoryId: string | null;
+  usageType: ItemUsageType;
+  workPercent: string;
+  warrantyMonths: string;
+  vendor: string;
+  notes: string;
+  usefulLifeMonthsOverride: string;
+}
+
 export default function ItemEditRoute() {
   const router = useRouter();
+  const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ id?: string | string[] }>();
   const itemId = toSingleParam(params.id);
+  const canGoBack =
+    typeof (router as { canGoBack?: () => boolean }).canGoBack === "function"
+      ? (router as { canGoBack: () => boolean }).canGoBack()
+      : false;
+  const allowNavigationExitRef = useRef(false);
+  const pendingNavigationActionRef = useRef<any | null>(null);
+  const initialSnapshotRef = useRef<InitialSnapshot | null>(null);
+  const initialSnapshotCapturedRef = useRef(false);
 
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isAttachmentBusy, setIsAttachmentBusy] = useState(false);
   const [isCreatingCategory, setIsCreatingCategory] = useState(false);
+  const [isDiscardModalOpen, setIsDiscardModalOpen] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [showOpenSettingsAction, setShowOpenSettingsAction] = useState(false);
 
@@ -116,7 +140,9 @@ export default function ItemEditRoute() {
   const [usageType, setUsageType] = useState<ItemUsageType>("WORK");
   const [workPercent, setWorkPercent] = useState("");
   const [warrantyMonths, setWarrantyMonths] = useState("");
+  const [vendor, setVendor] = useState("");
   const [notes, setNotes] = useState("");
+  const [usefulLifeMonthsOverride, setUsefulLifeMonthsOverride] = useState("");
   const [newCategoryName, setNewCategoryName] = useState("");
 
   const parsedTotalCents = useMemo(() => parseEuroInputToCents(totalPrice), [totalPrice]);
@@ -136,6 +162,25 @@ export default function ItemEditRoute() {
     const parsed = Number.parseInt(trimmed, 10);
     return Number.isFinite(parsed) ? parsed : null;
   }, [warrantyMonths]);
+  const parsedUsefulLifeMonthsOverride = useMemo(() => {
+    const trimmed = usefulLifeMonthsOverride.trim();
+    if (trimmed.length === 0) {
+      return null;
+    }
+    const parsed = Number.parseInt(trimmed, 10);
+    return Number.isFinite(parsed) ? parsed : null;
+  }, [usefulLifeMonthsOverride]);
+
+  const usefulLifeMonthsOverrideError = useMemo(() => {
+    const trimmed = usefulLifeMonthsOverride.trim();
+    if (trimmed.length === 0) {
+      return null;
+    }
+    if (parsedUsefulLifeMonthsOverride === null || parsedUsefulLifeMonthsOverride <= 0) {
+      return "Useful life override must be a positive number of months.";
+    }
+    return null;
+  }, [parsedUsefulLifeMonthsOverride, usefulLifeMonthsOverride]);
 
   const validation = useMemo(() => {
     return validateItemInput({
@@ -164,6 +209,40 @@ export default function ItemEditRoute() {
     }
     return categories.find((entry) => entry.id === categoryId)?.name ?? "Unknown category";
   }, [categories, categoryId]);
+
+  const isDirty = useMemo(() => {
+    const initial = initialSnapshotRef.current;
+    if (!initial) {
+      return false;
+    }
+    return (
+      title !== initial.title ||
+      purchaseDate !== initial.purchaseDate ||
+      totalPrice !== initial.totalPrice ||
+      categoryId !== initial.categoryId ||
+      usageType !== initial.usageType ||
+      workPercent !== initial.workPercent ||
+      warrantyMonths !== initial.warrantyMonths ||
+      vendor !== initial.vendor ||
+      notes !== initial.notes ||
+      usefulLifeMonthsOverride !== initial.usefulLifeMonthsOverride ||
+      newCategoryName.trim().length > 0
+    );
+  }, [
+    categoryId,
+    newCategoryName,
+    notes,
+    purchaseDate,
+    title,
+    totalPrice,
+    usageType,
+    usefulLifeMonthsOverride,
+    vendor,
+    warrantyMonths,
+    workPercent,
+  ]);
+
+  const canSave = validation.valid && usefulLifeMonthsOverrideError === null && !isSaving;
 
   const clearLoadError = useCallback(() => {
     setLoadError(null);
@@ -203,6 +282,8 @@ export default function ItemEditRoute() {
       return;
     }
 
+    initialSnapshotCapturedRef.current = false;
+    initialSnapshotRef.current = null;
     setIsLoading(true);
     clearLoadError();
     try {
@@ -235,7 +316,12 @@ export default function ItemEditRoute() {
       setUsageType(loadedItem.usageType);
       setWorkPercent(loadedItem.workPercent !== null ? String(loadedItem.workPercent) : "");
       setWarrantyMonths(loadedItem.warrantyMonths !== null ? String(loadedItem.warrantyMonths) : "");
+      setVendor(loadedItem.vendor ?? "");
       setNotes(loadedItem.notes ?? "");
+      setUsefulLifeMonthsOverride(
+        loadedItem.usefulLifeMonthsOverride !== null ? String(loadedItem.usefulLifeMonthsOverride) : ""
+      );
+      setNewCategoryName("");
     } catch (error) {
       console.error("Failed to load item for edit", error);
       setActionableLoadError(error, "Could not load item for editing.");
@@ -248,8 +334,101 @@ export default function ItemEditRoute() {
     void loadEditData();
   }, [loadEditData]);
 
+  useEffect(() => {
+    if (isLoading || !item || initialSnapshotCapturedRef.current) {
+      return;
+    }
+
+    initialSnapshotRef.current = {
+      title,
+      purchaseDate,
+      totalPrice,
+      categoryId,
+      usageType,
+      workPercent,
+      warrantyMonths,
+      vendor,
+      notes,
+      usefulLifeMonthsOverride,
+    };
+    initialSnapshotCapturedRef.current = true;
+  }, [
+    categoryId,
+    isLoading,
+    item,
+    notes,
+    purchaseDate,
+    title,
+    totalPrice,
+    usageType,
+    usefulLifeMonthsOverride,
+    vendor,
+    warrantyMonths,
+    workPercent,
+  ]);
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener("beforeRemove", (event: any) => {
+      if (allowNavigationExitRef.current || !isDirty) {
+        return;
+      }
+
+      event.preventDefault();
+      pendingNavigationActionRef.current = event?.data?.action ?? null;
+      setIsDiscardModalOpen(true);
+    });
+
+    return unsubscribe;
+  }, [isDirty, navigation]);
+
+  useEffect(() => {
+    const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
+      if (!isDirty) {
+        return false;
+      }
+
+      pendingNavigationActionRef.current = null;
+      setIsDiscardModalOpen(true);
+      return true;
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [isDirty]);
+
+  const exitEditFlow = useCallback(() => {
+    allowNavigationExitRef.current = true;
+    pendingNavigationActionRef.current = null;
+    setIsDiscardModalOpen(false);
+
+    if (
+      canGoBack &&
+      typeof (router as { back?: () => void }).back === "function"
+    ) {
+      (router as { back: () => void }).back();
+      return;
+    }
+
+    if (itemId) {
+      router.replace(`/item/${itemId}`);
+      return;
+    }
+
+    router.replace("/(tabs)/items");
+  }, [canGoBack, itemId, navigation, router]);
+
+  const handleExitRequest = useCallback(() => {
+    pendingNavigationActionRef.current = null;
+    if (!isDirty) {
+      exitEditFlow();
+      return;
+    }
+    setIsDiscardModalOpen(true);
+  }, [exitEditFlow, isDirty]);
+
   const saveChanges = async () => {
-    if (!itemId || !validation.valid || parsedTotalCents === null) {
+    if (!itemId || !validation.valid || parsedTotalCents === null || usefulLifeMonthsOverrideError !== null) {
       return;
     }
 
@@ -265,11 +444,17 @@ export default function ItemEditRoute() {
         usageType,
         workPercent: usageType === "MIXED" ? parsedWorkPercent : null,
         categoryId,
+        vendor: vendor.trim().length > 0 ? vendor.trim() : null,
         warrantyMonths: parsedWarrantyMonths,
         notes: notes.trim().length > 0 ? notes.trim() : null,
+        usefulLifeMonthsOverride:
+          parsedUsefulLifeMonthsOverride !== null && parsedUsefulLifeMonthsOverride > 0
+            ? parsedUsefulLifeMonthsOverride
+            : null,
       });
 
       setItem(updated);
+      allowNavigationExitRef.current = true;
       router.replace(`/item/${itemId}`);
     } catch (error) {
       console.error("Failed to update item", error);
@@ -376,6 +561,11 @@ export default function ItemEditRoute() {
     } finally {
       setIsCreatingCategory(false);
     }
+  };
+
+  const closeDiscardModal = () => {
+    pendingNavigationActionRef.current = null;
+    setIsDiscardModalOpen(false);
   };
 
   if (isLoading) {
@@ -622,6 +812,41 @@ export default function ItemEditRoute() {
                 {fieldErrors.warrantyMonths ? (
                   <Text size="xs" color="$error600">{fieldErrors.warrantyMonths}</Text>
                 ) : null}
+                <Text size="xs" color="$textLight500">
+                  Warranty until: {parsedWarrantyMonths && parsedWarrantyMonths > 0 ? addMonthsToYmd(purchaseDate, parsedWarrantyMonths) : "n/a"}
+                </Text>
+              </VStack>
+
+              <VStack space="xs">
+                <Text bold size="sm">
+                  Vendor
+                </Text>
+                <Input variant="outline">
+                  <InputField
+                    value={vendor}
+                    onChangeText={setVendor}
+                    placeholder="Optional vendor/store"
+                    testID="item-edit-vendor-input"
+                  />
+                </Input>
+              </VStack>
+
+              <VStack space="xs">
+                <Text bold size="sm">
+                  Useful life override (months)
+                </Text>
+                <Input variant="outline">
+                  <InputField
+                    value={usefulLifeMonthsOverride}
+                    onChangeText={setUsefulLifeMonthsOverride}
+                    keyboardType="number-pad"
+                    placeholder="Optional, e.g. 36"
+                    testID="item-edit-useful-life-input"
+                  />
+                </Input>
+                {usefulLifeMonthsOverrideError ? (
+                  <Text size="xs" color="$error600">{usefulLifeMonthsOverrideError}</Text>
+                ) : null}
               </VStack>
 
               <VStack space="xs">
@@ -636,6 +861,9 @@ export default function ItemEditRoute() {
                     testID="item-edit-notes-input"
                   />
                 </Textarea>
+                <Text size="xs" color="$textLight500">
+                  Optional. Missing notes may be flagged later.
+                </Text>
               </VStack>
             </VStack>
           </Card>
@@ -732,14 +960,14 @@ export default function ItemEditRoute() {
             <Button
               variant="outline"
               action="secondary"
-              onPress={() => router.replace(`/item/${item.id}`)}
+              onPress={handleExitRequest}
               testID="item-edit-cancel"
             >
               <ButtonText>Cancel</ButtonText>
             </Button>
             <Button
               onPress={() => void saveChanges()}
-              disabled={!validation.valid || isSaving}
+              disabled={!canSave}
               testID="item-edit-save"
             >
               <ButtonText>{isSaving ? "Saving..." : "Save Changes"}</ButtonText>
@@ -775,6 +1003,50 @@ export default function ItemEditRoute() {
             ))}
           </ActionsheetContent>
         </Actionsheet>
+
+        <Modal
+          visible={isDiscardModalOpen}
+          transparent
+          animationType="fade"
+          onRequestClose={closeDiscardModal}
+        >
+          <Box
+            flex={1}
+            alignItems="center"
+            justifyContent="center"
+            px="$5"
+            style={{ backgroundColor: "rgba(0,0,0,0.45)" }}
+            testID="item-edit-discard-modal"
+          >
+            <Card borderWidth="$1" borderColor="$border200" width="$full" maxWidth={420}>
+              <VStack space="md">
+                <VStack space="xs">
+                  <Heading size="md">Discard changes?</Heading>
+                  <Text size="sm">Your unsaved changes will be lost.</Text>
+                </VStack>
+                <HStack justifyContent="flex-end" space="sm">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    action="secondary"
+                    onPress={closeDiscardModal}
+                    testID="item-edit-discard-keepediting"
+                  >
+                    <ButtonText>Keep editing</ButtonText>
+                  </Button>
+                  <Button
+                    size="sm"
+                    action="negative"
+                    onPress={exitEditFlow}
+                    testID="item-edit-discard-confirm"
+                  >
+                    <ButtonText>Discard</ButtonText>
+                  </Button>
+                </HStack>
+              </VStack>
+            </Card>
+          </Box>
+        </Modal>
       </Box>
     </SafeAreaView>
   );

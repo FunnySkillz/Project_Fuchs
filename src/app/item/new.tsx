@@ -1,6 +1,16 @@
-﻿import { useLocalSearchParams, useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { useNavigation } from "@react-navigation/native";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Linking, ScrollView } from "react-native";
+import {
+  BackHandler,
+  Image,
+  KeyboardAvoidingView,
+  Linking,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+} from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   Actionsheet as GActionsheet,
@@ -10,8 +20,6 @@ import {
   ActionsheetDragIndicatorWrapper as GActionsheetDragIndicatorWrapper,
   ActionsheetItem as GActionsheetItem,
   ActionsheetItemText as GActionsheetItemText,
-  Badge as GBadge,
-  BadgeText as GBadgeText,
   Box as GBox,
   Button as GButton,
   ButtonText as GButtonText,
@@ -20,18 +28,17 @@ import {
   HStack as GHStack,
   Input as GInput,
   InputField as GInputField,
-  Slider as GSlider,
-  SliderFilledTrack as GSliderFilledTrack,
-  SliderThumb as GSliderThumb,
-  SliderTrack as GSliderTrack,
   Spinner as GSpinner,
   Text as GText,
   Textarea as GTextarea,
   TextareaInput as GTextareaInput,
   VStack as GVStack,
 } from "@gluestack-ui/themed";
+import { FileText, Plus, Upload, X } from "lucide-react-native";
+import * as Sharing from "expo-sharing";
 
 import { validateItemInput } from "@/domain/item-validation";
+import { useTheme } from "@/hooks/use-theme";
 import type { AttachmentType } from "@/models/attachment";
 import type { Category } from "@/models/category";
 import type { ItemUsageType } from "@/models/item";
@@ -78,26 +85,72 @@ function withType(attachment: StoredAttachmentFile, type: AttachmentType): Store
   };
 }
 
-const usageOptions: { value: ItemUsageType; label: string }[] = [
-  { value: "WORK", label: "WORK" },
-  { value: "PRIVATE", label: "PRIVATE" },
-  { value: "MIXED", label: "MIXED" },
-  { value: "OTHER", label: "OTHER" },
+function toAttachmentTestId(attachment: StoredAttachmentFile, index: number): string {
+  const base = attachment.originalFileName ?? attachment.filePath ?? `attachment-${index}`;
+  return `${index}-${base}`.replace(/[^a-zA-Z0-9_-]/g, "_");
+}
+
+function isPdfAttachment(attachment: StoredAttachmentFile): boolean {
+  const mime = attachment.mimeType?.toLowerCase() ?? "";
+  const name = attachment.originalFileName?.toLowerCase() ?? "";
+  return mime.includes("pdf") || name.endsWith(".pdf");
+}
+
+const usageOptions: { value: ItemUsageType; label: string; key: string }[] = [
+  { value: "WORK", label: "WORK", key: "work" },
+  { value: "PRIVATE", label: "PRIVATE", key: "private" },
+  { value: "MIXED", label: "MIXED", key: "mixed" },
+  { value: "OTHER", label: "OTHER", key: "other" },
 ];
+
+type FieldKey =
+  | "title"
+  | "purchaseDate"
+  | "totalCents"
+  | "workPercent"
+  | "warrantyMonths"
+  | "usefulLifeMonthsOverride";
+
+interface InitialSnapshot {
+  title: string;
+  purchaseDate: string;
+  totalPrice: string;
+  categoryId: string | null;
+  usageType: ItemUsageType;
+  workPercent: string;
+  warrantyMonths: string;
+  vendor: string;
+  notes: string;
+  usefulLifeMonthsOverride: string;
+  attachmentFingerprint: string;
+}
 
 export default function NewItemRoute() {
   const router = useRouter();
+  const navigation = useNavigation<any>();
+  const theme = useTheme();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ draftId?: string | string[] }>();
   const draftId = toSingleParam(params.draftId);
   const shouldCleanupDraftOnExitRef = useRef(true);
+  const allowNavigationExitRef = useRef(false);
+  const pendingNavigationActionRef = useRef<any | null>(null);
+  const fieldYRef = useRef<Partial<Record<FieldKey, number>>>({});
+  const scrollRef = useRef<ScrollView | null>(null);
+  const initialSnapshotCapturedRef = useRef(false);
+  const initialSnapshotRef = useRef<InitialSnapshot | null>(null);
 
   const [isInitializing, setIsInitializing] = useState(true);
   const [isBusy, setIsBusy] = useState(false);
   const [isSavingItem, setIsSavingItem] = useState(false);
+  const [submitAttempted, setSubmitAttempted] = useState(false);
+  const [touchedFields, setTouchedFields] = useState<Partial<Record<FieldKey, boolean>>>({});
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [saveFeedbackMessage, setSaveFeedbackMessage] = useState<string | null>(null);
   const [showOpenSettingsAction, setShowOpenSettingsAction] = useState(false);
   const [attachments, setAttachments] = useState<StoredAttachmentFile[]>([]);
+  const [isDiscardModalOpen, setIsDiscardModalOpen] = useState(false);
+  const [previewAttachment, setPreviewAttachment] = useState<StoredAttachmentFile | null>(null);
 
   const [title, setTitle] = useState("");
   const [purchaseDate, setPurchaseDate] = useState(formatYmdFromDateLocal(new Date()));
@@ -125,6 +178,12 @@ export default function NewItemRoute() {
     () => attachments.filter((attachment) => attachment.type === "PHOTO"),
     [attachments]
   );
+  const attachmentFingerprint = useMemo(() => {
+    return attachments
+      .map((attachment) => `${attachment.filePath}|${attachment.type}`)
+      .sort()
+      .join("||");
+  }, [attachments]);
 
   const parsedTotalCents = useMemo(() => parseEuroInputToCents(totalPrice), [totalPrice]);
   const parsedWorkPercent = useMemo(() => {
@@ -193,7 +252,7 @@ export default function NewItemRoute() {
     return grouped;
   }, [validation.errors]);
 
-  const canSave = validation.valid && usefulLifeMonthsOverrideError === null && !isSavingItem;
+  const canSave = validation.valid && usefulLifeMonthsOverrideError === null && !isSavingItem && !isBusy;
 
   const selectedCategoryName = useMemo(() => {
     if (!categoryId) {
@@ -208,6 +267,53 @@ export default function NewItemRoute() {
     }
     return addMonthsToYmd(purchaseDate, parsedWarrantyMonths);
   }, [parsedWarrantyMonths, purchaseDate]);
+
+  const isDirty = useMemo(() => {
+    const initial = initialSnapshotRef.current;
+    if (!initial) {
+      return false;
+    }
+    return (
+      title !== initial.title ||
+      purchaseDate !== initial.purchaseDate ||
+      totalPrice !== initial.totalPrice ||
+      categoryId !== initial.categoryId ||
+      usageType !== initial.usageType ||
+      workPercent !== initial.workPercent ||
+      warrantyMonths !== initial.warrantyMonths ||
+      vendor !== initial.vendor ||
+      notes !== initial.notes ||
+      usefulLifeMonthsOverride !== initial.usefulLifeMonthsOverride ||
+      attachmentFingerprint !== initial.attachmentFingerprint ||
+      newCategoryName.trim().length > 0
+    );
+  }, [
+    attachmentFingerprint,
+    categoryId,
+    newCategoryName,
+    notes,
+    purchaseDate,
+    title,
+    totalPrice,
+    usageType,
+    usefulLifeMonthsOverride,
+    vendor,
+    warrantyMonths,
+    workPercent,
+  ]);
+
+  const setFieldTouched = useCallback((field: FieldKey) => {
+    setTouchedFields((current) => ({ ...current, [field]: true }));
+  }, []);
+
+  const shouldShowFieldError = useCallback(
+    (field: FieldKey) => Boolean((submitAttempted || touchedFields[field]) && fieldErrors[field]),
+    [fieldErrors, submitAttempted, touchedFields]
+  );
+
+  const showUsefulLifeError = Boolean(
+    (submitAttempted || touchedFields.usefulLifeMonthsOverride) && usefulLifeMonthsOverrideError
+  );
 
   const reloadDraftAttachments = useCallback((id: string) => {
     setAttachments(getItemDraftAttachments(id));
@@ -249,6 +355,41 @@ export default function NewItemRoute() {
   }, [draftId, loadCategories, reloadDraftAttachments, router]);
 
   useEffect(() => {
+    if (isInitializing || !draftId || initialSnapshotCapturedRef.current) {
+      return;
+    }
+
+    initialSnapshotRef.current = {
+      title,
+      purchaseDate,
+      totalPrice,
+      categoryId,
+      usageType,
+      workPercent,
+      warrantyMonths,
+      vendor,
+      notes,
+      usefulLifeMonthsOverride,
+      attachmentFingerprint,
+    };
+    initialSnapshotCapturedRef.current = true;
+  }, [
+    attachmentFingerprint,
+    categoryId,
+    draftId,
+    isInitializing,
+    notes,
+    purchaseDate,
+    title,
+    totalPrice,
+    usageType,
+    usefulLifeMonthsOverride,
+    vendor,
+    warrantyMonths,
+    workPercent,
+  ]);
+
+  useEffect(() => {
     return () => {
       if (!draftId || !shouldCleanupDraftOnExitRef.current) {
         return;
@@ -259,6 +400,36 @@ export default function NewItemRoute() {
       });
     };
   }, [draftId]);
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener("beforeRemove", (event: any) => {
+      if (allowNavigationExitRef.current || !isDirty) {
+        return;
+      }
+
+      event.preventDefault();
+      pendingNavigationActionRef.current = event?.data?.action ?? null;
+      setIsDiscardModalOpen(true);
+    });
+
+    return unsubscribe;
+  }, [isDirty, navigation]);
+
+  useEffect(() => {
+    const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
+      if (!isDirty) {
+        return false;
+      }
+
+      pendingNavigationActionRef.current = null;
+      setIsDiscardModalOpen(true);
+      return true;
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [isDirty]);
 
   const clearError = useCallback(() => {
     setErrorMessage(null);
@@ -278,6 +449,35 @@ export default function NewItemRoute() {
       setShowOpenSettingsAction(false);
     }
   }, []);
+
+  const handleOpenPdfAttachment = useCallback(
+    async (attachment: StoredAttachmentFile) => {
+      clearError();
+      try {
+        const canShare = await Sharing.isAvailableAsync();
+        if (canShare) {
+          await Sharing.shareAsync(attachment.filePath);
+          return;
+        }
+        await Linking.openURL(attachment.filePath);
+      } catch (error) {
+        console.error("Failed to open PDF attachment", error);
+        setActionableError(error, "Could not open PDF attachment.");
+      }
+    },
+    [clearError, setActionableError]
+  );
+
+  const openAttachmentPreview = useCallback(
+    (attachment: StoredAttachmentFile) => {
+      if (isPdfAttachment(attachment)) {
+        void handleOpenPdfAttachment(attachment);
+        return;
+      }
+      setPreviewAttachment(attachment);
+    },
+    [handleOpenPdfAttachment]
+  );
 
   const addReceiptFromCamera = async () => {
     if (!draftId) {
@@ -365,6 +565,9 @@ export default function NewItemRoute() {
     try {
       await removeAttachmentFromDraft(draftId, filePath);
       reloadDraftAttachments(draftId);
+      if (previewAttachment?.filePath === filePath) {
+        setPreviewAttachment(null);
+      }
     } catch (error) {
       console.error("Failed to remove attachment", error);
       setActionableError(error, "Could not remove attachment.");
@@ -396,9 +599,13 @@ export default function NewItemRoute() {
     }
   };
 
-  const cancelDraft = async () => {
+  const exitAfterDiscard = useCallback(async () => {
     if (!draftId) {
-      router.replace("/(tabs)/items");
+      if (typeof router.canGoBack === "function" && router.canGoBack()) {
+        router.back();
+      } else {
+        router.replace("/(tabs)/items");
+      }
       return;
     }
 
@@ -406,14 +613,67 @@ export default function NewItemRoute() {
     clearError();
     try {
       await clearItemDraft(draftId);
-      router.replace("/(tabs)/items");
+      shouldCleanupDraftOnExitRef.current = false;
+      allowNavigationExitRef.current = true;
+      pendingNavigationActionRef.current = null;
+
+      if (typeof router.canGoBack === "function" && router.canGoBack()) {
+        router.back();
+      } else {
+        router.replace("/(tabs)/items");
+      }
     } catch (error) {
       console.error("Failed to clear item draft", error);
       setActionableError(error, "Could not cancel draft safely. Please retry.");
     } finally {
       setIsBusy(false);
+      setIsDiscardModalOpen(false);
     }
+  }, [clearError, draftId, navigation, router, setActionableError]);
+
+  const handleExitRequest = useCallback(async () => {
+    pendingNavigationActionRef.current = null;
+    if (!isDirty) {
+      await exitAfterDiscard();
+      return;
+    }
+    setIsDiscardModalOpen(true);
+  }, [exitAfterDiscard, isDirty]);
+
+  const closeDiscardModal = () => {
+    pendingNavigationActionRef.current = null;
+    setIsDiscardModalOpen(false);
   };
+
+  const scrollToField = useCallback((field: FieldKey) => {
+    const y = fieldYRef.current[field];
+    if (typeof y !== "number") {
+      return;
+    }
+    scrollRef.current?.scrollTo({ y: Math.max(0, y - 20), animated: true });
+  }, []);
+
+  const getFirstInvalidField = useCallback((): FieldKey | null => {
+    if (fieldErrors.title) {
+      return "title";
+    }
+    if (fieldErrors.purchaseDate) {
+      return "purchaseDate";
+    }
+    if (fieldErrors.totalCents) {
+      return "totalCents";
+    }
+    if (fieldErrors.workPercent) {
+      return "workPercent";
+    }
+    if (fieldErrors.warrantyMonths) {
+      return "warrantyMonths";
+    }
+    if (usefulLifeMonthsOverrideError) {
+      return "usefulLifeMonthsOverride";
+    }
+    return null;
+  }, [fieldErrors, usefulLifeMonthsOverrideError]);
 
   const saveItem = async () => {
     if (!draftId || !validation.valid || parsedTotalCents === null || usefulLifeMonthsOverrideError !== null) {
@@ -421,6 +681,7 @@ export default function NewItemRoute() {
     }
 
     setIsSavingItem(true);
+    setSaveFeedbackMessage(null);
     clearError();
     try {
       const itemRepository = await getItemRepository();
@@ -442,13 +703,29 @@ export default function NewItemRoute() {
 
       await linkDraftAttachmentsToItem(draftId, created.id);
       shouldCleanupDraftOnExitRef.current = false;
+      allowNavigationExitRef.current = true;
+      setSaveFeedbackMessage("Saved");
+      await new Promise((resolve) => setTimeout(resolve, 600));
       router.replace("/(tabs)/items");
     } catch (error) {
       console.error("Failed to save item", error);
+      setSaveFeedbackMessage(null);
       setActionableError(error, "Could not save item. Please retry.");
     } finally {
       setIsSavingItem(false);
     }
+  };
+
+  const submitAndSave = async () => {
+    setSubmitAttempted(true);
+    if (!validation.valid || usefulLifeMonthsOverrideError !== null) {
+      const firstInvalid = getFirstInvalidField();
+      if (firstInvalid) {
+        scrollToField(firstInvalid);
+      }
+      return;
+    }
+    await saveItem();
   };
 
   if (isInitializing) {
@@ -464,456 +741,742 @@ export default function NewItemRoute() {
     );
   }
 
-  const workPercentSliderValue =
-    parsedWorkPercent !== null && parsedWorkPercent >= 0 && parsedWorkPercent <= 100
-      ? parsedWorkPercent
-      : 0;
   const actionBarBottomInset = Math.max(insets.bottom, 12);
-  const actionBarEstimatedHeight = 76 + actionBarBottomInset;
+  const actionBarEstimatedHeight = 80 + actionBarBottomInset;
 
   return (
     <SafeAreaView style={{ flex: 1 }} edges={["top"]}>
-      <GBox flex={1}>
-      <ScrollView
-        contentContainerStyle={{
-          width: "100%",
-          maxWidth: 860,
-          alignSelf: "center",
-          paddingHorizontal: 20,
-          paddingTop: 24,
-          paddingBottom: actionBarEstimatedHeight + 40,
-        }}
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        keyboardVerticalOffset={insets.top}
       >
-        <GVStack space="lg">
-          <GVStack space="xs">
-            <GHeading size="xl">Add Item</GHeading>
-            <GText size="sm">
-              Add receipt files and item details in one flow. Cancel safely discards draft files.
-            </GText>
-          </GVStack>
-
-          {errorMessage && (
-            <GCard borderWidth="$1" borderColor="$error300">
-              <GVStack space="sm">
-                <GText size="sm">{errorMessage}</GText>
-                {showOpenSettingsAction && (
-                  <GButton
-                    variant="outline"
-                    action="secondary"
-                    alignSelf="flex-start"
-                    onPress={() => void openDeviceSettings()}
-                    testID="new-item-open-settings"
-                  >
-                    <GButtonText>Open Settings</GButtonText>
-                  </GButton>
-                )}
+        <GBox flex={1}>
+          <ScrollView
+            ref={scrollRef}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={{
+              width: "100%",
+              maxWidth: 860,
+              alignSelf: "center",
+              paddingHorizontal: 20,
+              paddingTop: 20,
+              paddingBottom: actionBarEstimatedHeight + 24,
+            }}
+          >
+            <GVStack space="lg">
+              <GVStack space="xs">
+                <GHeading size="xl">Add Item</GHeading>
+                <GText size="sm">Capture purchase data and receipts in one clean flow.</GText>
               </GVStack>
-            </GCard>
-          )}
 
-          <GCard borderWidth="$1" borderColor="$border200">
-            <GVStack space="md">
-              <GHeading size="md">1) Attachments</GHeading>
-              <GHStack space="sm" flexWrap="wrap">
-                <GButton
-                  variant="outline"
-                  action="secondary"
-                  onPress={() => void addReceiptFromCamera()}
-                  disabled={isBusy}
-                  testID="new-item-attachment-take-photo"
+              {errorMessage && (
+                <GCard
+                  borderWidth="$1"
+                  borderColor="$error300"
+                  style={{ backgroundColor: theme.backgroundElement, borderRadius: 14 }}
                 >
-                  <GButtonText>{isBusy ? "Working..." : "Take photo"}</GButtonText>
-                </GButton>
-                <GButton
-                  variant="outline"
-                  action="secondary"
-                  onPress={() => void uploadReceipt()}
-                  disabled={isBusy}
-                  testID="new-item-attachment-upload"
-                >
-                  <GButtonText>{isBusy ? "Working..." : "Upload PDF/Image"}</GButtonText>
-                </GButton>
-                <GButton
-                  variant="outline"
-                  action="secondary"
-                  onPress={() => void addExtraPhoto()}
-                  disabled={isBusy}
-                  testID="new-item-attachment-extra-photo"
-                >
-                  <GButtonText>{isBusy ? "Working..." : "Add extra photo"}</GButtonText>
-                </GButton>
-              </GHStack>
-              <GText size="sm">Receipts: {receiptAttachments.length}</GText>
-              <GText size="sm">Extra photos: {extraPhotos.length}</GText>
-
-              {attachments.length === 0 ? (
-                <GCard borderWidth="$1" borderColor="$border200">
                   <GVStack space="sm">
-                    <GText bold size="md">
-                      No files attached yet
-                    </GText>
-                    <GText size="sm">
-                      You can still save without attachments. Missing receipts are flagged in list/detail views.
-                    </GText>
+                    <GText size="sm">{errorMessage}</GText>
+                    {showOpenSettingsAction && (
+                      <GButton
+                        variant="outline"
+                        action="secondary"
+                        alignSelf="flex-start"
+                        onPress={() => void openDeviceSettings()}
+                        testID="new-item-open-settings"
+                        accessibilityLabel="Open device settings"
+                      >
+                        <GButtonText>Open Settings</GButtonText>
+                      </GButton>
+                    )}
                   </GVStack>
                 </GCard>
-              ) : (
-                <GVStack space="sm">
-                  <GHeading size="sm">Preview</GHeading>
-                  {attachments.map((attachment) => (
-                    <GHStack key={attachment.filePath} justifyContent="space-between" alignItems="center" space="sm">
-                      <GVStack flex={1} space="xs">
-                        <GText bold size="sm">
-                          {attachment.type === "RECEIPT" ? "Receipt" : "Photo"}
-                        </GText>
-                        <GText size="sm">{attachment.originalFileName ?? "Unnamed file"}</GText>
-                        <GText size="sm">{formatFileSize(attachment.fileSizeBytes)}</GText>
-                      </GVStack>
-                      <GButton
-                        variant="link"
-                        action="secondary"
-                        onPress={() => void removeAttachment(attachment.filePath)}
-                      >
-                        <GButtonText>Remove</GButtonText>
-                      </GButton>
-                    </GHStack>
-                  ))}
-                </GVStack>
               )}
-            </GVStack>
-          </GCard>
 
-          <GCard borderWidth="$1" borderColor="$border200">
-            <GVStack space="md">
-              <GHeading size="md">2) Required fields</GHeading>
-
-              <GVStack space="xs">
-                <GText bold size="sm">
-                  Title *
-                </GText>
-                <GInput variant="outline">
-                  <GInputField
-                    value={title}
-                    onChangeText={setTitle}
-                    placeholder="e.g. Laptop for work"
-                    testID="new-item-title-input"
-                  />
-                </GInput>
-                {fieldErrors.title && (
-                  <GText size="xs" color="$error600">
-                    {fieldErrors.title}
-                  </GText>
-                )}
-              </GVStack>
-
-              <GVStack space="xs">
-                <GText bold size="sm">
-                  Purchase date *
-                </GText>
-                <GHStack space="sm" flexWrap="wrap" alignItems="center">
-                  <GInput variant="outline" flex={1} minWidth={180}>
-                    <GInputField
-                      value={purchaseDate}
-                      onChangeText={setPurchaseDate}
-                      placeholder="YYYY-MM-DD"
-                      autoCapitalize="none"
-                      testID="new-item-purchase-date-input"
-                    />
-                  </GInput>
-                  <GButton
-                    variant="outline"
-                    action="secondary"
-                    onPress={() => setPurchaseDate(formatYmdFromDateLocal(new Date()))}
-                  >
-                    <GButtonText>Set today</GButtonText>
-                  </GButton>
-                </GHStack>
-                {fieldErrors.purchaseDate && (
-                  <GText size="xs" color="$error600">
-                    {fieldErrors.purchaseDate}
-                  </GText>
-                )}
-              </GVStack>
-
-              <GVStack space="xs">
-                <GText bold size="sm">
-                  Price (EUR) *
-                </GText>
-                <GInput variant="outline">
-                  <GInputField
-                    value={totalPrice}
-                    onChangeText={setTotalPrice}
-                    keyboardType="decimal-pad"
-                    placeholder="e.g. 1299.90"
-                    testID="new-item-total-price-input"
-                  />
-                </GInput>
-                {fieldErrors.totalCents && (
-                  <GText size="xs" color="$error600">
-                    {fieldErrors.totalCents}
-                  </GText>
-                )}
-              </GVStack>
-
-              <GVStack space="xs">
-                <GText bold size="sm">
-                  Category
-                </GText>
-                <GButton
-                  variant="outline"
-                  action="secondary"
-                  onPress={() => setIsCategorySheetOpen(true)}
-                  justifyContent="space-between"
-                  testID="new-item-category-open"
-                >
-                  <GButtonText>{selectedCategoryName}</GButtonText>
-                </GButton>
-                {isLoadingCategories && (
-                  <GHStack space="sm" alignItems="center">
-                    <GSpinner size="small" />
-                    <GText size="xs">Loading categories...</GText>
-                  </GHStack>
-                )}
-                <GHStack space="sm" flexWrap="wrap" alignItems="center">
-                  <GInput variant="outline" flex={1} minWidth={200}>
-                    <GInputField
-                      value={newCategoryName}
-                      onChangeText={setNewCategoryName}
-                      placeholder="Create new category"
-                      testID="new-item-category-create-input"
-                    />
-                  </GInput>
-                  <GButton
-                    variant="outline"
-                    action="secondary"
-                    onPress={() => void createCategory()}
-                    disabled={isCreatingCategory}
-                    testID="new-item-category-create-button"
-                  >
-                    <GButtonText>{isCreatingCategory ? "Adding..." : "Add"}</GButtonText>
-                  </GButton>
-                </GHStack>
-              </GVStack>
-
-              <GVStack space="xs">
-                <GText bold size="sm">
-                  Usage type *
-                </GText>
-                <GHStack space="sm" flexWrap="wrap">
-                  {usageOptions.map((option) => (
+              <GCard
+                borderWidth="$1"
+                borderColor="$border200"
+                style={{ backgroundColor: theme.backgroundElement, borderRadius: 16 }}
+              >
+                <GVStack space="md">
+                  <GHeading size="md">Attachments</GHeading>
+                  <GHStack space="sm">
                     <GButton
-                      key={option.value}
-                      size="sm"
-                      variant={usageType === option.value ? "solid" : "outline"}
-                      action={usageType === option.value ? "primary" : "secondary"}
-                      onPress={() => setUsageType(option.value)}
-                      testID={`new-item-usage-${option.value.toLowerCase()}`}
+                      flex={1}
+                      variant="outline"
+                      action="secondary"
+                      onPress={() => void addReceiptFromCamera()}
+                      disabled={isBusy}
+                      testID="additem-btn-takephoto"
+                      accessibilityLabel="Take photo"
                     >
-                      <GButtonText>{option.label}</GButtonText>
+                      <GHStack space="xs" alignItems="center">
+                        <Plus size={16} color={theme.text} />
+                        <GButtonText>Take photo</GButtonText>
+                      </GHStack>
                     </GButton>
-                  ))}
-                </GHStack>
-              </GVStack>
-
-              {usageType === "MIXED" && (
-                <GVStack space="xs">
-                  <GText bold size="sm">
-                    Work percent *
-                  </GText>
-                  <GInput variant="outline">
-                    <GInputField
-                      value={workPercent}
-                      onChangeText={setWorkPercent}
-                      keyboardType="number-pad"
-                      placeholder="0-100"
-                      testID="new-item-work-percent-input"
-                    />
-                  </GInput>
-                  <GSlider
-                    value={workPercentSliderValue}
-                    minValue={0}
-                    maxValue={100}
-                    step={1}
-                    onChange={(value) => {
-                      const nextValue = Array.isArray(value) ? value[0] : value;
-                      if (typeof nextValue === "number" && Number.isFinite(nextValue)) {
-                        setWorkPercent(String(Math.round(nextValue)));
-                      }
-                    }}
+                    <GButton
+                      flex={1}
+                      variant="outline"
+                      action="secondary"
+                      onPress={() => void uploadReceipt()}
+                      disabled={isBusy}
+                      testID="additem-btn-upload"
+                      accessibilityLabel="Upload PDF or image"
+                    >
+                      <GHStack space="xs" alignItems="center">
+                        <Upload size={16} color={theme.text} />
+                        <GButtonText>Upload PDF/Image</GButtonText>
+                      </GHStack>
+                    </GButton>
+                  </GHStack>
+                  <GButton
+                    size="sm"
+                    variant="link"
+                    action="secondary"
+                    alignSelf="flex-start"
+                    onPress={() => void addExtraPhoto()}
+                    disabled={isBusy}
+                    testID="additem-btn-addextraphto"
+                    accessibilityLabel="Add extra photo"
                   >
-                    <GSliderTrack>
-                      <GSliderFilledTrack />
-                    </GSliderTrack>
-                    <GSliderThumb />
-                  </GSlider>
-                  {fieldErrors.workPercent && (
-                    <GText size="xs" color="$error600">
-                      {fieldErrors.workPercent}
+                    <GButtonText>{isBusy ? "Working..." : "Add extra photo"}</GButtonText>
+                  </GButton>
+
+                  <GText size="xs" color="$textLight500">
+                    Receipts: {receiptAttachments.length} | Extra photos: {extraPhotos.length}
+                  </GText>
+
+                  {attachments.length === 0 ? (
+                    <GText size="sm" color="$textLight500">
+                      No attachments yet. You can still save and add files later.
                     </GText>
+                  ) : (
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                      <GHStack space="sm">
+                        {attachments.map((attachment, index) => {
+                          const attachmentId = toAttachmentTestId(attachment, index);
+                          const pdf = isPdfAttachment(attachment);
+                          return (
+                            <GBox key={attachment.filePath} width={136}>
+                              <Pressable
+                                onPress={() => openAttachmentPreview(attachment)}
+                                testID={`additem-attachment-preview-${attachmentId}`}
+                                accessibilityLabel={`Preview attachment ${attachment.originalFileName ?? "file"}`}
+                              >
+                                <GCard
+                                  borderWidth="$1"
+                                  borderColor="$border200"
+                                  style={{
+                                    backgroundColor: theme.background,
+                                    borderRadius: 12,
+                                    padding: 10,
+                                    height: 120,
+                                  }}
+                                  testID={`additem-attachment-thumb-${attachmentId}`}
+                                >
+                                  <GVStack space="xs" flex={1}>
+                                    <GBox
+                                      height={64}
+                                      borderWidth="$1"
+                                      borderColor="$border200"
+                                      style={{
+                                        borderRadius: 10,
+                                        overflow: "hidden",
+                                        justifyContent: "center",
+                                        alignItems: "center",
+                                        backgroundColor: theme.backgroundElement,
+                                      }}
+                                    >
+                                      {pdf ? (
+                                        <GVStack space="xs" alignItems="center">
+                                          <FileText size={20} color={theme.textSecondary} />
+                                          <GText size="xs">PDF</GText>
+                                        </GVStack>
+                                      ) : (
+                                        <Image
+                                          source={{ uri: attachment.filePath }}
+                                          style={{ width: "100%", height: "100%" }}
+                                          resizeMode="cover"
+                                        />
+                                      )}
+                                    </GBox>
+                                    <GText size="xs" numberOfLines={1}>
+                                      {attachment.originalFileName ?? "Unnamed file"}
+                                    </GText>
+                                    <GText size="xs" color="$textLight500">
+                                      {formatFileSize(attachment.fileSizeBytes)}
+                                    </GText>
+                                  </GVStack>
+                                </GCard>
+                              </Pressable>
+                              <Pressable
+                                onPress={() => void removeAttachment(attachment.filePath)}
+                                testID={`additem-attachment-remove-${attachmentId}`}
+                                accessibilityLabel={`Remove attachment ${attachment.originalFileName ?? "file"}`}
+                                style={{
+                                  position: "absolute",
+                                  top: -10,
+                                  right: -10,
+                                  width: 44,
+                                  height: 44,
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                }}
+                              >
+                                <GBox
+                                  borderWidth="$1"
+                                  borderColor="$border200"
+                                  style={{
+                                    width: 24,
+                                    height: 24,
+                                    borderRadius: 12,
+                                    backgroundColor: theme.background,
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                  }}
+                                >
+                                  <X size={14} color={theme.text} />
+                                </GBox>
+                              </Pressable>
+                            </GBox>
+                          );
+                        })}
+                      </GHStack>
+                    </ScrollView>
                   )}
                 </GVStack>
+              </GCard>
+
+              <GCard
+                borderWidth="$1"
+                borderColor="$border200"
+                style={{ backgroundColor: theme.backgroundElement, borderRadius: 16 }}
+              >
+                <GVStack space="md">
+                  <GHeading size="md">Required</GHeading>
+
+                  <GBox
+                    onLayout={(event) => {
+                      fieldYRef.current.title = event.nativeEvent.layout.y;
+                    }}
+                  >
+                    <GVStack space="xs">
+                      <GText bold size="sm">
+                        Title
+                      </GText>
+                      <GInput variant="outline">
+                        <GInputField
+                          value={title}
+                          onChangeText={setTitle}
+                          placeholder="e.g. Laptop for work"
+                          onBlur={() => setFieldTouched("title")}
+                          onFocus={() => scrollToField("title")}
+                          testID="additem-input-title"
+                          accessibilityLabel="Item title"
+                        />
+                      </GInput>
+                      {shouldShowFieldError("title") && (
+                        <GText size="xs" color="$error600" accessibilityLiveRegion="polite">
+                          {fieldErrors.title}
+                        </GText>
+                      )}
+                    </GVStack>
+                  </GBox>
+
+                  <GBox
+                    onLayout={(event) => {
+                      fieldYRef.current.purchaseDate = event.nativeEvent.layout.y;
+                    }}
+                  >
+                    <GVStack space="xs">
+                      <GHStack justifyContent="space-between" alignItems="center">
+                        <GText bold size="sm">
+                          Purchase date
+                        </GText>
+                        <GButton
+                          size="xs"
+                          variant="outline"
+                          action="secondary"
+                          onPress={() => setPurchaseDate(formatYmdFromDateLocal(new Date()))}
+                          testID="additem-btn-settoday"
+                          accessibilityLabel="Set purchase date to today"
+                        >
+                          <GButtonText>Set today</GButtonText>
+                        </GButton>
+                      </GHStack>
+                      <GInput variant="outline">
+                        <GInputField
+                          value={purchaseDate}
+                          onChangeText={setPurchaseDate}
+                          placeholder="YYYY-MM-DD"
+                          autoCapitalize="none"
+                          onBlur={() => setFieldTouched("purchaseDate")}
+                          onFocus={() => scrollToField("purchaseDate")}
+                          testID="additem-input-date"
+                          accessibilityLabel="Purchase date"
+                        />
+                      </GInput>
+                      {shouldShowFieldError("purchaseDate") && (
+                        <GText size="xs" color="$error600" accessibilityLiveRegion="polite">
+                          {fieldErrors.purchaseDate}
+                        </GText>
+                      )}
+                    </GVStack>
+                  </GBox>
+
+                  <GBox
+                    onLayout={(event) => {
+                      fieldYRef.current.totalCents = event.nativeEvent.layout.y;
+                    }}
+                  >
+                    <GVStack space="xs">
+                      <GText bold size="sm">
+                        Price (EUR)
+                      </GText>
+                      <GInput variant="outline">
+                        <GInputField
+                          value={totalPrice}
+                          onChangeText={setTotalPrice}
+                          keyboardType="decimal-pad"
+                          placeholder="e.g. 1299.90"
+                          onBlur={() => setFieldTouched("totalCents")}
+                          onFocus={() => scrollToField("totalCents")}
+                          testID="additem-input-price"
+                          accessibilityLabel="Price in euros"
+                        />
+                      </GInput>
+                      {shouldShowFieldError("totalCents") && (
+                        <GText size="xs" color="$error600" accessibilityLiveRegion="polite">
+                          {fieldErrors.totalCents}
+                        </GText>
+                      )}
+                    </GVStack>
+                  </GBox>
+
+                  <GVStack space="xs">
+                    <GText bold size="sm">
+                      Category
+                    </GText>
+                    <GButton
+                      variant="outline"
+                      action="secondary"
+                      onPress={() => setIsCategorySheetOpen(true)}
+                      justifyContent="space-between"
+                      testID="additem-select-category"
+                      accessibilityLabel="Select category"
+                    >
+                      <GButtonText>{selectedCategoryName}</GButtonText>
+                    </GButton>
+                    {isLoadingCategories && (
+                      <GHStack space="sm" alignItems="center">
+                        <GSpinner size="small" />
+                        <GText size="xs">Loading categories...</GText>
+                      </GHStack>
+                    )}
+                  </GVStack>
+
+                  <GVStack space="xs">
+                    <GText size="xs" color="$textLight500">
+                      Create new category
+                    </GText>
+                    <GHStack space="sm" alignItems="center">
+                      <GInput variant="outline" flex={1}>
+                        <GInputField
+                          value={newCategoryName}
+                          onChangeText={setNewCategoryName}
+                          placeholder="e.g. Office equipment"
+                          testID="additem-input-newcategory"
+                          accessibilityLabel="Create new category"
+                        />
+                      </GInput>
+                      <GButton
+                        size="sm"
+                        variant="outline"
+                        action="secondary"
+                        onPress={() => void createCategory()}
+                        disabled={isCreatingCategory}
+                        testID="additem-btn-addcategory"
+                        accessibilityLabel="Add category"
+                      >
+                        <GButtonText>{isCreatingCategory ? "Adding..." : "Add"}</GButtonText>
+                      </GButton>
+                    </GHStack>
+                  </GVStack>
+
+                  <GVStack space="xs">
+                    <GText bold size="sm">
+                      Usage type
+                    </GText>
+                    <GHStack space="sm" flexWrap="wrap">
+                      {usageOptions.map((option) => (
+                        <GButton
+                          key={option.value}
+                          size="sm"
+                          variant={usageType === option.value ? "solid" : "outline"}
+                          action={usageType === option.value ? "primary" : "secondary"}
+                          onPress={() => setUsageType(option.value)}
+                          testID={`additem-seg-usage-${option.key}`}
+                          accessibilityLabel={`Usage type ${option.label}`}
+                        >
+                          <GButtonText>{option.label}</GButtonText>
+                        </GButton>
+                      ))}
+                    </GHStack>
+                  </GVStack>
+
+                  {usageType === "MIXED" && (
+                    <GBox
+                      onLayout={(event) => {
+                        fieldYRef.current.workPercent = event.nativeEvent.layout.y;
+                      }}
+                    >
+                      <GVStack space="xs">
+                        <GText bold size="sm">
+                          Work percent (%)
+                        </GText>
+                        <GInput variant="outline">
+                          <GInputField
+                            value={workPercent}
+                            onChangeText={setWorkPercent}
+                            keyboardType="number-pad"
+                            placeholder="0-100"
+                            onBlur={() => setFieldTouched("workPercent")}
+                            onFocus={() => scrollToField("workPercent")}
+                            testID="additem-input-workpercent"
+                            accessibilityLabel="Work percent"
+                          />
+                        </GInput>
+                        <GText size="xs" color="$textLight500">
+                          Used to calculate deductible share.
+                        </GText>
+                        {shouldShowFieldError("workPercent") && (
+                          <GText size="xs" color="$error600" accessibilityLiveRegion="polite">
+                            {fieldErrors.workPercent}
+                          </GText>
+                        )}
+                      </GVStack>
+                    </GBox>
+                  )}
+                </GVStack>
+              </GCard>
+
+              <GCard
+                borderWidth="$1"
+                borderColor="$border200"
+                style={{ backgroundColor: theme.backgroundElement, borderRadius: 16 }}
+              >
+                <GVStack space="md">
+                  <GHeading size="md">Optional</GHeading>
+
+                  <GVStack space="xs">
+                    <GText bold size="sm">
+                      Notes
+                    </GText>
+                    <GTextarea>
+                      <GTextareaInput
+                        value={notes}
+                        onChangeText={setNotes}
+                        placeholder="Optional context for invoice or audit trail"
+                        testID="additem-input-notes"
+                        accessibilityLabel="Notes"
+                      />
+                    </GTextarea>
+                    <GText size="xs" color="$textLight500">
+                      Optional. Missing notes may be flagged later.
+                    </GText>
+                  </GVStack>
+
+                  <GBox
+                    onLayout={(event) => {
+                      fieldYRef.current.warrantyMonths = event.nativeEvent.layout.y;
+                    }}
+                  >
+                    <GVStack space="xs">
+                      <GText bold size="sm">
+                        Warranty months
+                      </GText>
+                      <GInput variant="outline">
+                        <GInputField
+                          value={warrantyMonths}
+                          onChangeText={setWarrantyMonths}
+                          keyboardType="number-pad"
+                          placeholder="Optional"
+                          onBlur={() => setFieldTouched("warrantyMonths")}
+                          onFocus={() => scrollToField("warrantyMonths")}
+                          testID="additem-input-warrantymonths"
+                          accessibilityLabel="Warranty months"
+                        />
+                      </GInput>
+                      {shouldShowFieldError("warrantyMonths") && (
+                        <GText size="xs" color="$error600" accessibilityLiveRegion="polite">
+                          {fieldErrors.warrantyMonths}
+                        </GText>
+                      )}
+                      <GText size="xs" color="$textLight500">
+                        Warranty until: {warrantyUntilDate ?? "n/a"}
+                      </GText>
+                    </GVStack>
+                  </GBox>
+
+                  <GVStack space="xs">
+                    <GText bold size="sm">
+                      Vendor
+                    </GText>
+                    <GInput variant="outline">
+                      <GInputField
+                        value={vendor}
+                        onChangeText={setVendor}
+                        placeholder="Optional vendor/store"
+                        testID="additem-input-vendor"
+                        accessibilityLabel="Vendor"
+                      />
+                    </GInput>
+                  </GVStack>
+                </GVStack>
+              </GCard>
+
+              <GCard
+                borderWidth="$1"
+                borderColor="$border200"
+                style={{ backgroundColor: theme.backgroundElement, borderRadius: 16 }}
+              >
+                <GVStack space="md">
+                  <GHStack alignItems="center" justifyContent="space-between">
+                    <GHeading size="md">Advanced</GHeading>
+                    <GButton
+                      size="sm"
+                      variant="outline"
+                      action="secondary"
+                      onPress={() => setIsAdvancedOpen((current) => !current)}
+                      testID="additem-advanced-toggle"
+                      accessibilityLabel="Toggle advanced fields"
+                    >
+                      <GButtonText>{isAdvancedOpen ? "Hide" : "Show"}</GButtonText>
+                    </GButton>
+                  </GHStack>
+
+                  {isAdvancedOpen && (
+                    <GBox
+                      onLayout={(event) => {
+                        fieldYRef.current.usefulLifeMonthsOverride = event.nativeEvent.layout.y;
+                      }}
+                    >
+                      <GVStack space="xs">
+                        <GText bold size="sm">
+                          Useful life override (months)
+                        </GText>
+                        <GInput variant="outline">
+                          <GInputField
+                            value={usefulLifeMonthsOverride}
+                            onChangeText={setUsefulLifeMonthsOverride}
+                            keyboardType="number-pad"
+                            placeholder="Optional, e.g. 36"
+                            onBlur={() => setFieldTouched("usefulLifeMonthsOverride")}
+                            onFocus={() => scrollToField("usefulLifeMonthsOverride")}
+                            testID="additem-input-usefullife"
+                            accessibilityLabel="Useful life override in months"
+                          />
+                        </GInput>
+                        <GText size="xs" color="$textLight500">
+                          Overrides automatic useful-life mapping for this item only.
+                        </GText>
+                        {showUsefulLifeError && (
+                          <GText size="xs" color="$error600" accessibilityLiveRegion="polite">
+                            {usefulLifeMonthsOverrideError}
+                          </GText>
+                        )}
+                      </GVStack>
+                    </GBox>
+                  )}
+                </GVStack>
+              </GCard>
+            </GVStack>
+          </ScrollView>
+
+          <GBox
+            borderTopWidth="$1"
+            borderColor="$border200"
+            bg="$background0"
+            style={{ paddingTop: 12, paddingBottom: actionBarBottomInset, paddingHorizontal: 20 }}
+          >
+            <GVStack space="xs">
+              {saveFeedbackMessage && (
+                <GText
+                  size="xs"
+                  textAlign="center"
+                  style={{ color: theme.primary }}
+                  accessibilityLiveRegion="polite"
+                >
+                  {saveFeedbackMessage}
+                </GText>
               )}
+              <GHStack justifyContent="space-between" alignItems="center" space="sm">
+                <GButton
+                  flex={1}
+                  variant="outline"
+                  action="secondary"
+                  onPress={() => void handleExitRequest()}
+                  disabled={isBusy || isSavingItem}
+                  testID="additem-btn-cancel"
+                  accessibilityLabel="Cancel add item"
+                >
+                  <GButtonText testID="new-item-cancel">Cancel</GButtonText>
+                </GButton>
+
+                <GButton
+                  flex={1}
+                  onPress={() => void submitAndSave()}
+                  disabled={!canSave}
+                  testID="additem-btn-save"
+                  accessibilityLabel="Save item"
+                >
+                  <GButtonText testID="action-add-item">{isSavingItem ? "Saving..." : "Save Item"}</GButtonText>
+                </GButton>
+              </GHStack>
             </GVStack>
-          </GCard>
+          </GBox>
 
-          <GCard borderWidth="$1" borderColor="$border200">
-            <GVStack space="md">
-              <GHeading size="md">3) Optional</GHeading>
+          <GActionsheet isOpen={isCategorySheetOpen} onClose={() => setIsCategorySheetOpen(false)}>
+            <GActionsheetBackdrop />
+            <GActionsheetContent>
+              <GActionsheetDragIndicatorWrapper>
+                <GActionsheetDragIndicator />
+              </GActionsheetDragIndicatorWrapper>
+              <GActionsheetItem
+                onPress={() => {
+                  setCategoryId(null);
+                  setIsCategorySheetOpen(false);
+                }}
+              >
+                <GActionsheetItemText>No category selected</GActionsheetItemText>
+              </GActionsheetItem>
+              {categories.map((category) => (
+                <GActionsheetItem
+                  key={category.id}
+                  onPress={() => {
+                    setCategoryId(category.id);
+                    setIsCategorySheetOpen(false);
+                  }}
+                >
+                  <GActionsheetItemText>{category.name}</GActionsheetItemText>
+                </GActionsheetItem>
+              ))}
+            </GActionsheetContent>
+          </GActionsheet>
+        </GBox>
+      </KeyboardAvoidingView>
 
-              <GVStack space="xs">
-                <GText bold size="sm">
-                  Notes
-                </GText>
-                <GTextarea>
-                  <GTextareaInput
-                    value={notes}
-                    onChangeText={setNotes}
-                    placeholder="Optional notes for invoice or audit context"
-                    testID="new-item-notes-input"
-                  />
-                </GTextarea>
-                {(usageType === "WORK" || usageType === "MIXED") && notes.trim().length === 0 && (
-                  <GBadge size="sm" action="warning" variant="outline" alignSelf="flex-start">
-                    <GBadgeText>Missing notes will be flagged</GBadgeText>
-                  </GBadge>
-                )}
-              </GVStack>
-
-              <GVStack space="xs">
-                <GText bold size="sm">
-                  Warranty months
-                </GText>
-                <GInput variant="outline">
-                  <GInputField
-                    value={warrantyMonths}
-                    onChangeText={setWarrantyMonths}
-                    keyboardType="number-pad"
-                    placeholder="Optional"
-                    testID="new-item-warranty-months-input"
-                  />
-                </GInput>
-                {fieldErrors.warrantyMonths && (
-                  <GText size="xs" color="$error600">
-                    {fieldErrors.warrantyMonths}
-                  </GText>
-                )}
-                <GText size="xs">Warranty until: {warrantyUntilDate ?? "n/a"}</GText>
-              </GVStack>
-
-              <GVStack space="xs">
-                <GText bold size="sm">
-                  Vendor
-                </GText>
-                <GInput variant="outline">
-                  <GInputField
-                    value={vendor}
-                    onChangeText={setVendor}
-                    placeholder="Optional vendor/store"
-                    testID="new-item-vendor-input"
-                  />
-                </GInput>
-              </GVStack>
-            </GVStack>
-          </GCard>
-
-          <GCard borderWidth="$1" borderColor="$border200">
-            <GVStack space="md">
-              <GHStack alignItems="center" justifyContent="space-between">
-                <GHeading size="md">4) Advanced</GHeading>
+      <Modal
+        visible={Boolean(previewAttachment)}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setPreviewAttachment(null)}
+      >
+        <Pressable
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.85)",
+            justifyContent: "center",
+            alignItems: "center",
+            padding: 20,
+          }}
+          onPress={() => setPreviewAttachment(null)}
+        >
+          {previewAttachment && !isPdfAttachment(previewAttachment) && (
+            <Pressable
+              onPress={(event) => event.stopPropagation()}
+              style={{
+                width: "100%",
+                maxWidth: 760,
+                maxHeight: "80%",
+                backgroundColor: theme.background,
+                borderRadius: 16,
+                padding: 12,
+              }}
+            >
+              <Image
+                source={{ uri: previewAttachment.filePath }}
+                resizeMode="contain"
+                style={{ width: "100%", height: 380, borderRadius: 10 }}
+              />
+              <GHStack justifyContent="space-between" alignItems="center" mt="$3">
                 <GButton
                   size="sm"
                   variant="outline"
                   action="secondary"
-                  onPress={() => setIsAdvancedOpen((current) => !current)}
-                  testID="new-item-advanced-toggle"
+                  onPress={() => setPreviewAttachment(null)}
+                  accessibilityLabel="Close attachment preview"
                 >
-                  <GButtonText>{isAdvancedOpen ? "Hide" : "Show"}</GButtonText>
+                  <GButtonText>Close</GButtonText>
+                </GButton>
+                <GButton
+                  size="sm"
+                  variant="outline"
+                  action="secondary"
+                  onPress={() => void removeAttachment(previewAttachment.filePath)}
+                  accessibilityLabel="Delete attachment"
+                >
+                  <GButtonText>Delete</GButtonText>
                 </GButton>
               </GHStack>
+            </Pressable>
+          )}
+        </Pressable>
+      </Modal>
 
-              {isAdvancedOpen && (
-                <GVStack space="xs">
-                  <GText bold size="sm">
-                    Useful life override (months)
-                  </GText>
-                  <GInput variant="outline">
-                    <GInputField
-                      value={usefulLifeMonthsOverride}
-                      onChangeText={setUsefulLifeMonthsOverride}
-                      keyboardType="number-pad"
-                      placeholder="Optional, e.g. 36"
-                      testID="new-item-useful-life-input"
-                    />
-                  </GInput>
-                  {usefulLifeMonthsOverrideError && (
-                    <GText size="xs" color="$error600">
-                      {usefulLifeMonthsOverrideError}
-                    </GText>
-                  )}
-                </GVStack>
-              )}
+      <Modal
+        visible={isDiscardModalOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={closeDiscardModal}
+      >
+        <GBox
+          flex={1}
+          alignItems="center"
+          justifyContent="center"
+          px="$5"
+          style={{ backgroundColor: "rgba(0,0,0,0.45)" }}
+          testID="additem-discard-modal"
+        >
+          <GCard
+            borderWidth="$1"
+            borderColor="$border200"
+            width="$full"
+            maxWidth={420}
+            style={{ backgroundColor: theme.background, borderRadius: 16 }}
+          >
+            <GVStack space="md">
+              <GVStack space="xs">
+                <GHeading size="md">Discard changes?</GHeading>
+                <GText size="sm">Your changes and draft attachments will be lost.</GText>
+              </GVStack>
+              <GHStack justifyContent="flex-end" space="sm">
+                <GButton
+                  size="sm"
+                  variant="outline"
+                  action="secondary"
+                  onPress={closeDiscardModal}
+                  testID="additem-discard-keepediting"
+                  accessibilityLabel="Keep editing"
+                >
+                  <GButtonText>Keep editing</GButtonText>
+                </GButton>
+                <GButton
+                  size="sm"
+                  action="negative"
+                  onPress={() => void exitAfterDiscard()}
+                  testID="additem-discard-confirm"
+                  accessibilityLabel="Discard changes"
+                >
+                  <GButtonText>Discard</GButtonText>
+                </GButton>
+              </GHStack>
             </GVStack>
           </GCard>
-        </GVStack>
-      </ScrollView>
-
-      <GBox
-        borderTopWidth="$1"
-        borderColor="$border200"
-        bg="$background0"
-        px="$5"
-        pt="$3"
-        style={{ paddingBottom: actionBarBottomInset }}
-      >
-        <GHStack justifyContent="space-between" alignItems="center" space="sm">
-          <GButton
-            variant="outline"
-            action="secondary"
-            onPress={() => void cancelDraft()}
-            disabled={isBusy || isSavingItem}
-            testID="new-item-cancel"
-          >
-            <GButtonText>Cancel</GButtonText>
-          </GButton>
-
-          <GButton
-            onPress={() => void saveItem()}
-            disabled={!canSave || isBusy}
-            testID="action-add-item"
-          >
-            <GButtonText>{isSavingItem ? "Saving..." : "Save Item"}</GButtonText>
-          </GButton>
-        </GHStack>
-      </GBox>
-
-      <GActionsheet isOpen={isCategorySheetOpen} onClose={() => setIsCategorySheetOpen(false)}>
-        <GActionsheetBackdrop />
-        <GActionsheetContent>
-          <GActionsheetDragIndicatorWrapper>
-            <GActionsheetDragIndicator />
-          </GActionsheetDragIndicatorWrapper>
-          <GActionsheetItem
-            onPress={() => {
-              setCategoryId(null);
-              setIsCategorySheetOpen(false);
-            }}
-          >
-            <GActionsheetItemText>No category selected</GActionsheetItemText>
-          </GActionsheetItem>
-          {categories.map((category) => (
-            <GActionsheetItem
-              key={category.id}
-              onPress={() => {
-                setCategoryId(category.id);
-                setIsCategorySheetOpen(false);
-              }}
-            >
-              <GActionsheetItemText>{category.name}</GActionsheetItemText>
-            </GActionsheetItem>
-          ))}
-        </GActionsheetContent>
-      </GActionsheet>
-      </GBox>
+        </GBox>
+      </Modal>
     </SafeAreaView>
   );
 }

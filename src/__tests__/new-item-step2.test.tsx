@@ -21,6 +21,8 @@ const mockAddAttachmentToDraft = jest.fn();
 const mockGetItemDraftAttachments = jest.fn();
 const mockClearItemDraft = jest.fn();
 const mockLinkDraftAttachmentsToItem = jest.fn();
+const mockNavigationAddListener = jest.fn();
+const mockNavigationDispatch = jest.fn();
 
 const mockDraftAttachments: Array<{
   filePath: string;
@@ -65,10 +67,6 @@ jest.mock("@gluestack-ui/themed", () => {
     HStack: MockContainer,
     Input: MockContainer,
     InputField: (props: any) => <MockTextInput {...props} />,
-    Slider: MockContainer,
-    SliderFilledTrack: MockContainer,
-    SliderThumb: MockContainer,
-    SliderTrack: MockContainer,
     Spinner: (props: any) => <MockActivityIndicator {...props} />,
     Text: ({ children, ...props }: any) => <MockText {...props}>{children}</MockText>,
     Textarea: MockContainer,
@@ -80,6 +78,26 @@ jest.mock("@gluestack-ui/themed", () => {
 jest.mock("expo-router", () => ({
   useRouter: () => mockRouter,
   useLocalSearchParams: () => mockRouteParams,
+}));
+
+jest.mock("@/hooks/use-theme", () => ({
+  useTheme: () => ({
+    background: "#ffffff",
+    backgroundElement: "#f3f4f6",
+    text: "#111827",
+    textSecondary: "#6b7280",
+    border: "#d1d5db",
+    primary: "#2563eb",
+    danger: "#dc2626",
+    textOnPrimary: "#ffffff",
+  }),
+}));
+
+jest.mock("@react-navigation/native", () => ({
+  useNavigation: () => ({
+    addListener: mockNavigationAddListener,
+    dispatch: mockNavigationDispatch,
+  }),
 }));
 
 jest.mock("@/repositories/create-core-repositories", () => ({
@@ -117,6 +135,8 @@ describe("NewItemRoute save and validation", () => {
     mockGetItemDraftAttachments.mockReset();
     mockClearItemDraft.mockReset();
     mockLinkDraftAttachmentsToItem.mockReset();
+    mockNavigationAddListener.mockReset();
+    mockNavigationDispatch.mockReset();
     mockDraftAttachments.splice(0, mockDraftAttachments.length);
 
     mockGetCategoryRepository.mockResolvedValue({
@@ -141,6 +161,7 @@ describe("NewItemRoute save and validation", () => {
     });
     mockClearItemDraft.mockResolvedValue(undefined);
     mockLinkDraftAttachmentsToItem.mockResolvedValue(undefined);
+    mockNavigationAddListener.mockReturnValue(jest.fn());
 
     mockCreateItem.mockResolvedValue({ id: "item-123" });
   });
@@ -157,7 +178,7 @@ describe("NewItemRoute save and validation", () => {
     render(<NewItemRoute />);
     expect(await screen.findByText("Add Item")).toBeTruthy();
 
-    fireEvent.press(screen.getByTestId("new-item-attachment-take-photo"));
+    fireEvent.press(screen.getByTestId("additem-btn-takephoto"));
 
     await waitFor(() => {
       expect(mockSaveFromCamera).toHaveBeenCalledTimes(1);
@@ -168,13 +189,13 @@ describe("NewItemRoute save and validation", () => {
       expect(screen.getByText("receipt-a.jpg")).toBeTruthy();
     });
 
-    fireEvent.changeText(screen.getByTestId("new-item-title-input"), "  Work monitor  ");
-    fireEvent.changeText(screen.getByTestId("new-item-purchase-date-input"), "2026-01-15");
-    fireEvent.changeText(screen.getByTestId("new-item-total-price-input"), "499.99");
-    fireEvent.changeText(screen.getByTestId("new-item-vendor-input"), "  Saturn  ");
-    fireEvent.changeText(screen.getByTestId("new-item-notes-input"), "  invoice attached  ");
+    fireEvent.changeText(screen.getByTestId("additem-input-title"), "  Work monitor  ");
+    fireEvent.changeText(screen.getByTestId("additem-input-date"), "2026-01-15");
+    fireEvent.changeText(screen.getByTestId("additem-input-price"), "499.99");
+    fireEvent.changeText(screen.getByTestId("additem-input-vendor"), "  Saturn  ");
+    fireEvent.changeText(screen.getByTestId("additem-input-notes"), "  invoice attached  ");
 
-    fireEvent.press(screen.getByTestId("action-add-item"));
+    fireEvent.press(screen.getByTestId("additem-btn-save"));
 
     await waitFor(() => {
       expect(mockCreateItem).toHaveBeenCalledWith(
@@ -195,34 +216,36 @@ describe("NewItemRoute save and validation", () => {
     });
   });
 
-  it("blocks save when required fields are invalid", async () => {
+  it("keeps save disabled when required fields are invalid", async () => {
     render(<NewItemRoute />);
 
     expect(await screen.findByText("Add Item")).toBeTruthy();
-    expect(screen.getByText("Title is required.")).toBeTruthy();
-    expect(screen.getByText("Total price is required and must be greater than 0.")).toBeTruthy();
 
-    fireEvent.press(screen.getByTestId("action-add-item"));
-
-    await waitFor(() => {
-      expect(mockCreateItem).not.toHaveBeenCalled();
-      expect(mockLinkDraftAttachmentsToItem).not.toHaveBeenCalled();
-    });
+    const saveButton = screen.getByTestId("additem-btn-save");
+    expect(saveButton.props.accessibilityState?.disabled).toBe(true);
+    fireEvent.press(saveButton);
+    expect(mockCreateItem).not.toHaveBeenCalled();
+    expect(mockLinkDraftAttachmentsToItem).not.toHaveBeenCalled();
   });
 
-  it("blocks save for MIXED usage when work percent is missing", async () => {
+  it("requires work percent for MIXED usage before enabling save", async () => {
     render(<NewItemRoute />);
 
     expect(await screen.findByText("Add Item")).toBeTruthy();
 
-    fireEvent.changeText(screen.getByTestId("new-item-title-input"), "Mixed use tablet");
-    fireEvent.changeText(screen.getByTestId("new-item-total-price-input"), "899.00");
-    fireEvent.press(screen.getByTestId("new-item-usage-mixed"));
+    fireEvent.changeText(screen.getByTestId("additem-input-title"), "Mixed use tablet");
+    fireEvent.changeText(screen.getByTestId("additem-input-price"), "899.00");
+    fireEvent.press(screen.getByTestId("additem-seg-usage-mixed"));
 
-    fireEvent.press(screen.getByTestId("action-add-item"));
+    await waitFor(() => {
+      expect(screen.getByTestId("additem-input-workpercent")).toBeTruthy();
+    });
+
+    fireEvent(screen.getByTestId("additem-input-workpercent"), "blur");
 
     await waitFor(() => {
       expect(screen.getByText("Work percent is required for mixed usage.")).toBeTruthy();
+      expect(screen.getByTestId("additem-btn-save").props.accessibilityState?.disabled).toBe(true);
       expect(mockCreateItem).not.toHaveBeenCalled();
       expect(mockLinkDraftAttachmentsToItem).not.toHaveBeenCalled();
     });
