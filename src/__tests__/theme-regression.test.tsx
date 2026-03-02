@@ -197,7 +197,8 @@ describe("theme regression smoke", () => {
     renderWithTheme(<HomeRoute />, mode);
 
     expect(await screen.findByText("Steuerausgleich 2026")).toBeTruthy();
-    expect(screen.getAllByText("Add Item").length).toBeGreaterThan(0);
+    expect(screen.getByText("No items added yet.")).toBeTruthy();
+    expect(screen.getByText("Use the center + button to add your first item.")).toBeTruthy();
     expect(screen.getByText("Deductible this year")).toBeTruthy();
   });
 

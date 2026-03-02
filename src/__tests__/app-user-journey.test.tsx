@@ -505,7 +505,7 @@ async function createPurchaseViaUiFlow(input: PurchaseFlowInput): Promise<void> 
   fireEvent.press(screen.getByText("Electronics"));
 
   const countBeforeSave = mockItemStore.length;
-  fireEvent.press(screen.getByTestId("new-item-save"));
+  fireEvent.press(screen.getByTestId("action-add-item"));
   await waitFor(() => {
     expect(mockItemStore).toHaveLength(countBeforeSave + 1);
     expect(mockReplace).toHaveBeenCalledWith("/(tabs)/items");
@@ -589,9 +589,10 @@ describe("App first-user UI journey", () => {
     profileSetupView.unmount();
 
     const homeBeforeItems = render(<HomeRoute />);
-    expect(await screen.findByText("No items yet")).toBeTruthy();
-    fireEvent.press(screen.getByTestId("home-add-item-empty-cta"));
-    expect(mockPush).toHaveBeenCalledWith("/item/new");
+    expect(await screen.findByText("No items added yet.")).toBeTruthy();
+    expect(screen.getByText("Use the center + button to add your first item.")).toBeTruthy();
+    fireEvent.press(screen.getByTestId("home-go-items-empty-cta"));
+    expect(mockPush).toHaveBeenCalledWith("/(tabs)/items");
     homeBeforeItems.unmount();
 
     mockCameraAttachmentQueue.push(
@@ -650,7 +651,7 @@ describe("App first-user UI journey", () => {
 
     const homeAfterItems = render(<HomeRoute />);
     expect(await screen.findByText("Steuerausgleich 2026")).toBeTruthy();
-    expect(screen.queryByText("No items yet")).toBeNull();
+    expect(screen.queryByText("No items added yet.")).toBeNull();
     homeAfterItems.unmount();
   });
 

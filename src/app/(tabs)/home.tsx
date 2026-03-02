@@ -148,78 +148,73 @@ export default function HomeRoute() {
           </Card>
 
           {hasItems ? (
-            <>
-              <Button onPress={() => router.push("/item/new")} testID="home-add-item-cta">
-                <ButtonText>Add Item</ButtonText>
-              </Button>
-              <HStack space="md" flexWrap="wrap">
-                <Pressable
-                  flex={1}
-                  minWidth={240}
-                  onPress={() =>
-                    router.push({
-                      pathname: "/(tabs)/items",
-                      params: { year: String(stats.year), missingReceipt: "1" },
-                    })
-                  }
-                  testID="home-missing-receipts-card"
-                >
-                  <Card borderWidth="$1" borderColor="$border200">
-                    <VStack space="sm">
-                      <Text bold size="md">
-                        Missing receipts
-                      </Text>
-                      <Heading size="2xl">{stats.missingReceiptCount}</Heading>
-                      <Badge size="sm" action="warning" variant="solid">
-                        <BadgeText>Open filtered items</BadgeText>
-                      </Badge>
-                    </VStack>
-                  </Card>
-                </Pressable>
+            <HStack space="md" flexWrap="wrap">
+              <Pressable
+                flex={1}
+                minWidth={240}
+                onPress={() =>
+                  router.push({
+                    pathname: "/(tabs)/items",
+                    params: { year: String(stats.year), missingReceipt: "1" },
+                  })
+                }
+                testID="home-missing-receipts-card"
+              >
+                <Card borderWidth="$1" borderColor="$border200">
+                  <VStack space="sm">
+                    <Text bold size="md">
+                      Missing receipts
+                    </Text>
+                    <Heading size="2xl">{stats.missingReceiptCount}</Heading>
+                    <Badge size="sm" action="warning" variant="solid">
+                      <BadgeText>Open filtered items</BadgeText>
+                    </Badge>
+                  </VStack>
+                </Card>
+              </Pressable>
 
-                <Pressable
-                  flex={1}
-                  minWidth={240}
-                  onPress={() =>
-                    router.push({
-                      pathname: "/(tabs)/items",
-                      params: { year: String(stats.year), missingNotes: "1" },
-                    })
-                  }
-                  testID="home-missing-notes-card"
-                >
-                  <Card borderWidth="$1" borderColor="$border200">
-                    <VStack space="sm">
-                      <Text bold size="md">
-                        Missing notes
-                      </Text>
-                      <Heading size="2xl">{stats.missingNotesCount}</Heading>
-                      <Badge size="sm" action="warning" variant="solid">
-                        <BadgeText>Open filtered items</BadgeText>
-                      </Badge>
-                    </VStack>
-                  </Card>
-                </Pressable>
-              </HStack>
-            </>
+              <Pressable
+                flex={1}
+                minWidth={240}
+                onPress={() =>
+                  router.push({
+                    pathname: "/(tabs)/items",
+                    params: { year: String(stats.year), missingNotes: "1" },
+                  })
+                }
+                testID="home-missing-notes-card"
+              >
+                <Card borderWidth="$1" borderColor="$border200">
+                  <VStack space="sm">
+                    <Text bold size="md">
+                      Missing notes
+                    </Text>
+                    <Heading size="2xl">{stats.missingNotesCount}</Heading>
+                    <Badge size="sm" action="warning" variant="solid">
+                      <BadgeText>Open filtered items</BadgeText>
+                    </Badge>
+                  </VStack>
+                </Card>
+              </Pressable>
+            </HStack>
           ) : (
-            <Card borderWidth="$1" borderColor="$border200">
-              <VStack space="sm">
-                <Text bold size="md">
-                  No items yet
-                </Text>
-                <Text size="sm">
-                  Start with your first purchase record to see deductible impact and export options.
-                </Text>
+            <VStack space="sm">
+              <Text bold size="md">
+                No items added yet.
+              </Text>
+              <Text size="sm">Use the center + button to add your first item.</Text>
+              <HStack space="md" flexWrap="wrap">
                 <Button
-                  onPress={() => router.push("/item/new")}
+                  variant="outline"
+                  action="secondary"
                   alignSelf="flex-start"
-                  testID="home-add-item-empty-cta"
+                  onPress={() => router.push("/(tabs)/items")}
+                  testID="home-go-items-empty-cta"
                 >
-                  <ButtonText>Add Item</ButtonText>
+                  <ButtonText>Go to Items</ButtonText>
                 </Button>
-              </VStack>
-            </Card>
+              </HStack>
+            </VStack>
           )}
         </VStack>
       </Box>

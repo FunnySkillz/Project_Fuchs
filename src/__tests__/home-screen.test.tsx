@@ -140,9 +140,6 @@ describe("HomeRoute", () => {
     expect(screen.getByText(formatCents(30_000))).toBeTruthy();
     expect(screen.getByText(`Estimated refund impact: ${formatCents(12_000)}`)).toBeTruthy();
 
-    fireEvent.press(screen.getByTestId("home-add-item-cta"));
-    expect(mockPush).toHaveBeenCalledWith("/item/new");
-
     fireEvent.press(screen.getByTestId("home-missing-receipts-card"));
     expect(mockPush).toHaveBeenCalledWith({
       pathname: "/(tabs)/items",
@@ -174,14 +171,14 @@ describe("HomeRoute", () => {
 
     renderHome();
 
-    expect(await screen.findByText("No items yet")).toBeTruthy();
-    expect(screen.queryByTestId("home-add-item-cta")).toBeNull();
-    expect(screen.getAllByText("Add Item")).toHaveLength(1);
+    expect(await screen.findByText("No items added yet.")).toBeTruthy();
+    expect(screen.getByText("Use the center + button to add your first item.")).toBeTruthy();
     expect(screen.queryByTestId("home-missing-receipts-card")).toBeNull();
     expect(screen.queryByTestId("home-missing-notes-card")).toBeNull();
+    expect(screen.getByTestId("home-go-items-empty-cta")).toBeTruthy();
 
-    fireEvent.press(screen.getByTestId("home-add-item-empty-cta"));
-    expect(mockPush).toHaveBeenCalledWith("/item/new");
+    fireEvent.press(screen.getByTestId("home-go-items-empty-cta"));
+    expect(mockPush).toHaveBeenCalledWith("/(tabs)/items");
   });
 
   it("shows error state and retries loading", async () => {

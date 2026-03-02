@@ -879,7 +879,7 @@ export default function NewItemRoute() {
           <GButton
             onPress={() => void saveItem()}
             disabled={!canSave || isBusy}
-            testID="new-item-save"
+            testID="action-add-item"
           >
             <GButtonText>{isSavingItem ? "Saving..." : "Save Item"}</GButtonText>
           </GButton>

@@ -209,7 +209,7 @@ describe("ItemsRoute", () => {
     expect(await screen.findByText("No items found. Adjust filters or add a new item.")).toBeTruthy();
   });
 
-  it("keeps a floating add-item FAB visible and routes to add-item flow", async () => {
+  it("does not render a floating add-item FAB anymore", async () => {
     mockGetSettings.mockResolvedValue({
       taxYearDefault: 2026,
       marginalRateBps: 4_000,
@@ -228,9 +228,8 @@ describe("ItemsRoute", () => {
 
     render(<ItemsRoute />);
 
-    expect(await screen.findByTestId("items-add-fab")).toBeTruthy();
-    fireEvent.press(screen.getByTestId("items-add-fab"));
-    expect(mockPush).toHaveBeenCalledWith("/item/new");
+    expect(await screen.findByText("No items found. Adjust filters or add a new item.")).toBeTruthy();
+    expect(screen.queryByTestId("items-add-fab")).toBeNull();
   });
 
   it("applies incoming year and missing receipt params from navigation", async () => {

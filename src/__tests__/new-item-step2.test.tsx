@@ -174,7 +174,7 @@ describe("NewItemRoute save and validation", () => {
     fireEvent.changeText(screen.getByTestId("new-item-vendor-input"), "  Saturn  ");
     fireEvent.changeText(screen.getByTestId("new-item-notes-input"), "  invoice attached  ");
 
-    fireEvent.press(screen.getByTestId("new-item-save"));
+    fireEvent.press(screen.getByTestId("action-add-item"));
 
     await waitFor(() => {
       expect(mockCreateItem).toHaveBeenCalledWith(
@@ -202,7 +202,7 @@ describe("NewItemRoute save and validation", () => {
     expect(screen.getByText("Title is required.")).toBeTruthy();
     expect(screen.getByText("Total price is required and must be greater than 0.")).toBeTruthy();
 
-    fireEvent.press(screen.getByTestId("new-item-save"));
+    fireEvent.press(screen.getByTestId("action-add-item"));
 
     await waitFor(() => {
       expect(mockCreateItem).not.toHaveBeenCalled();
@@ -219,7 +219,7 @@ describe("NewItemRoute save and validation", () => {
     fireEvent.changeText(screen.getByTestId("new-item-total-price-input"), "899.00");
     fireEvent.press(screen.getByTestId("new-item-usage-mixed"));
 
-    fireEvent.press(screen.getByTestId("new-item-save"));
+    fireEvent.press(screen.getByTestId("action-add-item"));
 
     await waitFor(() => {
       expect(screen.getByText("Work percent is required for mixed usage.")).toBeTruthy();
