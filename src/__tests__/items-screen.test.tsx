@@ -86,6 +86,7 @@ jest.mock("react-native-gesture-handler", () => {
         children,
         onSwipeableWillClose,
         onSwipeableWillOpen,
+        onSwipeableOpen,
         renderRightActions,
         testID,
       }: any,
@@ -95,6 +96,24 @@ jest.mock("react-native-gesture-handler", () => {
         onSwipeableWillClose?.();
       });
       mockSwipeableCloseByTestId.set(testID, closeMock);
+      const listeners = new Map<string | number, ({ value }: { value: number }) => void>();
+      let listenerId = 0;
+      const dragX = {
+        addListener: (callback: ({ value }: { value: number }) => void) => {
+          listenerId += 1;
+          listeners.set(listenerId, callback);
+          return listenerId;
+        },
+        removeListener: (id: string | number) => {
+          listeners.delete(id);
+        },
+        interpolate: () => 0,
+      };
+      const emitDrag = (value: number) => {
+        listeners.forEach((listener) => {
+          listener({ value });
+        });
+      };
 
       ReactModule.useImperativeHandle(ref, () => ({
         close: closeMock,
@@ -102,8 +121,22 @@ jest.mock("react-native-gesture-handler", () => {
 
       return (
         <View testID={testID}>
-          <TouchableOpacity testID={`${testID}-open`} onPress={() => onSwipeableWillOpen?.()} />
-          {typeof renderRightActions === "function" ? renderRightActions() : null}
+          <TouchableOpacity
+            testID={`${testID}-open`}
+            onPress={() => {
+              emitDrag(-40);
+              onSwipeableWillOpen?.();
+            }}
+          />
+          <TouchableOpacity
+            testID={`${testID}-full-open`}
+            onPress={() => {
+              emitDrag(-90);
+              onSwipeableWillOpen?.();
+              onSwipeableOpen?.("right");
+            }}
+          />
+          {typeof renderRightActions === "function" ? renderRightActions({}, dragX) : null}
           {children}
         </View>
       );
@@ -374,6 +407,58 @@ describe("ItemsRoute", () => {
       expect(mockDeleteItemWithAttachments).toHaveBeenCalledWith("item-1");
       expect(screen.queryByText("Work Laptop")).toBeNull();
     });
+  });
+
+  it("deletes immediately on full swipe when no attachments exist", async () => {
+    const item = {
+      id: "item-1",
+      title: "Keyboard",
+      purchaseDate: "2026-02-01",
+      totalCents: 9_990,
+      currency: "EUR",
+      usageType: "WORK",
+      workPercent: null,
+      categoryId: null,
+      vendor: "Store",
+      warrantyMonths: null,
+      notes: null,
+      usefulLifeMonthsOverride: null,
+      createdAt: "2026-02-01T10:00:00.000Z",
+      updatedAt: "2026-02-01T10:00:00.000Z",
+      deletedAt: null,
+    };
+
+    mockGetSettings.mockResolvedValue({
+      taxYearDefault: 2026,
+      marginalRateBps: 4_000,
+      defaultWorkPercent: 100,
+      gwgThresholdCents: 100_000,
+      applyHalfYearRule: false,
+      appLockEnabled: false,
+      uploadToOneDriveAfterExport: false,
+      themeModePreference: "system",
+      currency: "EUR",
+    });
+    let currentItems = [item];
+    mockListItems.mockImplementation(async () => [...currentItems]);
+    mockListMissingReceiptItemIds.mockResolvedValue([]);
+    mockListCategories.mockResolvedValue([]);
+    mockListAttachmentsByItem.mockResolvedValue([]);
+    mockComputeDeductibleImpactCents.mockReturnValue(2_000);
+    mockDeleteItemWithAttachments.mockImplementation(async () => {
+      currentItems = [];
+    });
+
+    render(<ItemsRoute />);
+
+    expect(await screen.findByText("Keyboard")).toBeTruthy();
+    fireEvent.press(screen.getByTestId("items-swipeable-item-1-full-open"));
+
+    await waitFor(() => {
+      expect(mockDeleteItemWithAttachments).toHaveBeenCalledWith("item-1");
+      expect(screen.queryByText("Keyboard")).toBeNull();
+    });
+    expect(screen.queryByTestId("items-delete-confirm-modal")).toBeNull();
   });
 
   it("keeps the item when delete confirmation is canceled", async () => {

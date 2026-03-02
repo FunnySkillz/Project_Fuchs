@@ -1,9 +1,10 @@
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
-import { FlatList, ScrollView, StyleSheet, View } from "react-native";
+import { Animated, FlatList, ScrollView, StyleSheet, View } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { GestureHandlerRootView, Swipeable } from "react-native-gesture-handler";
+import { Trash2 } from "lucide-react-native";
 import {
   AlertDialog,
   AlertDialogBackdrop,
@@ -63,6 +64,87 @@ const usageTypeOptions: { label: string; value: ItemUsageType | null }[] = [
   { label: "OTHER", value: "OTHER" },
 ];
 
+const IOS_DELETE_RED = "#FF3B30";
+const DELETE_ACTION_WIDTH = 92;
+const FULL_SWIPE_TRIGGER_RATIO = 0.85;
+const ROW_BORDER_RADIUS = 16;
+
+interface DeleteSwipeActionProps {
+  item: Item;
+  isDeleting: boolean;
+  textOnDeleteColor: string;
+  onDeletePress: (item: Item) => void;
+  onFullSwipeArmChange: (isArmed: boolean) => void;
+  dragX?: Animated.AnimatedInterpolation<number>;
+}
+
+function DeleteSwipeAction({
+  item,
+  isDeleting,
+  textOnDeleteColor,
+  onDeletePress,
+  onFullSwipeArmChange,
+  dragX,
+}: DeleteSwipeActionProps) {
+  const contentTranslateX = useMemo(() => {
+    if (dragX && typeof dragX.interpolate === "function") {
+      return dragX.interpolate({
+        inputRange: [-DELETE_ACTION_WIDTH, 0],
+        outputRange: [0, 14],
+        extrapolate: "clamp",
+      });
+    }
+    return new Animated.Value(0);
+  }, [dragX]);
+
+  useEffect(() => {
+    if (!dragX) {
+      onFullSwipeArmChange(false);
+      return;
+    }
+
+    const dragValue = dragX as {
+      addListener?: (callback: ({ value }: { value: number }) => void) => string | number;
+      removeListener?: (id: string | number) => void;
+    };
+    if (typeof dragValue.addListener !== "function") {
+      return;
+    }
+
+    const threshold = -DELETE_ACTION_WIDTH * FULL_SWIPE_TRIGGER_RATIO;
+    const listenerId = dragValue.addListener(({ value }: { value: number }) => {
+      onFullSwipeArmChange(value <= threshold);
+    });
+
+    return () => {
+      if (typeof dragValue.removeListener === "function") {
+        dragValue.removeListener(listenerId);
+      }
+      onFullSwipeArmChange(false);
+    };
+  }, [dragX, onFullSwipeArmChange]);
+
+  return (
+    <Animated.View style={styles.deleteActionContainer}>
+      <Animated.View style={[styles.deleteActionContent, { transform: [{ translateX: contentTranslateX }] }]}>
+        <Pressable
+          onPress={() => onDeletePress(item)}
+          testID={`items-delete-action-${item.id}`}
+          accessibilityLabel={`Delete ${item.title}`}
+          accessibilityRole="button"
+          disabled={isDeleting}
+          style={styles.deleteActionPressable}
+        >
+          <Trash2 color={textOnDeleteColor} size={16} strokeWidth={2} />
+          <Text size="xs" bold style={{ color: textOnDeleteColor }}>
+            Delete
+          </Text>
+        </Pressable>
+      </Animated.View>
+    </Animated.View>
+  );
+}
+
 function toSingleParam(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
 }
@@ -113,6 +195,7 @@ export default function ItemsRoute() {
 
   const swipeableRefs = useRef<Map<string, Swipeable | null>>(new Map());
   const openedSwipeableIdRef = useRef<string | null>(null);
+  const fullSwipeArmedByItemIdRef = useRef<Map<string, boolean>>(new Map());
 
   const parsedYear = useMemo(() => parseYearInput(year), [year]);
   const categoryMap = useMemo(
@@ -301,6 +384,7 @@ export default function ItemsRoute() {
     if (openedSwipeableIdRef.current === itemId) {
       openedSwipeableIdRef.current = null;
     }
+    fullSwipeArmedByItemIdRef.current.delete(itemId);
   }, []);
 
   const performDelete = useCallback(
@@ -342,6 +426,7 @@ export default function ItemsRoute() {
       if (isDeletingItem) {
         return;
       }
+      closeOpenedSwipeable();
 
       try {
         const attachmentRepository = await getAttachmentRepository();
@@ -358,7 +443,7 @@ export default function ItemsRoute() {
         setLoadError("Could not delete item.");
       }
     },
-    [isDeletingItem, performDelete]
+    [closeOpenedSwipeable, isDeletingItem, performDelete]
   );
 
   const confirmDeleteCandidate = useCallback(() => {
@@ -370,23 +455,42 @@ export default function ItemsRoute() {
     void performDelete(selectedItem);
   }, [deleteCandidateItem, performDelete]);
 
+  const handleSwipeableOpen = useCallback(
+    (item: Item, direction: "left" | "right") => {
+      if (direction !== "right") {
+        return;
+      }
+
+      if (!fullSwipeArmedByItemIdRef.current.get(item.id)) {
+        return;
+      }
+
+      fullSwipeArmedByItemIdRef.current.set(item.id, false);
+      void requestDelete(item);
+    },
+    [requestDelete]
+  );
+
   const renderRightActions = useCallback(
-    (item: Item) => (
-      <View style={[styles.deleteActionContainer, { backgroundColor: theme.danger }]}>
-        <Button
-          action="negative"
-          variant="solid"
-          onPress={() => void requestDelete(item)}
-          testID={`items-delete-action-${item.id}`}
-          accessibilityLabel={`Delete ${item.title}`}
-          style={styles.deleteActionButton}
-          disabled={isDeletingItem}
-        >
-          <ButtonText>Delete</ButtonText>
-        </Button>
-      </View>
+    (
+      _progress: Animated.AnimatedInterpolation<number>,
+      dragX: Animated.AnimatedInterpolation<number>,
+      item: Item
+    ) => (
+      <DeleteSwipeAction
+        item={item}
+        isDeleting={isDeletingItem}
+        textOnDeleteColor={theme.textOnPrimary}
+        onDeletePress={(selectedItem) => {
+          void requestDelete(selectedItem);
+        }}
+        onFullSwipeArmChange={(isArmed) => {
+          fullSwipeArmedByItemIdRef.current.set(item.id, isArmed);
+        }}
+        dragX={dragX}
+      />
     ),
-    [isDeletingItem, requestDelete, theme.danger]
+    [isDeletingItem, requestDelete, theme.textOnPrimary]
   );
 
   return (
@@ -498,56 +602,57 @@ export default function ItemsRoute() {
               const hasMissingNotes = missingNotesForItem(item);
 
               return (
-                <Swipeable
-                  ref={(node) => {
-                    swipeableRefs.current.set(item.id, node);
-                  }}
-                  friction={2}
-                  overshootRight={false}
-                  rightThreshold={44}
-                  testID={`items-swipeable-${item.id}`}
-                  onSwipeableWillOpen={() => handleSwipeableWillOpen(item.id)}
-                  onSwipeableWillClose={() => handleSwipeableWillClose(item.id)}
-                  renderRightActions={() => renderRightActions(item)}
-                >
-                  <Pressable
-                    onPress={() => router.push(`/item/${item.id}`)}
-                    testID={`items-row-${item.id}`}
-                    mb="$3"
-                    maxWidth={900}
-                    alignSelf="center"
-                    width="$full"
+                <View style={styles.rowContainer}>
+                  <Swipeable
+                    ref={(node) => {
+                      swipeableRefs.current.set(item.id, node);
+                    }}
+                    friction={2}
+                    overshootRight={false}
+                    overshootFriction={8}
+                    rightThreshold={Math.round(DELETE_ACTION_WIDTH * 0.55)}
+                    testID={`items-swipeable-${item.id}`}
+                    onSwipeableWillOpen={() => handleSwipeableWillOpen(item.id)}
+                    onSwipeableWillClose={() => handleSwipeableWillClose(item.id)}
+                    onSwipeableOpen={(direction) => handleSwipeableOpen(item, direction)}
+                    renderRightActions={(progress, dragX) => renderRightActions(progress, dragX, item)}
                   >
-                    <Card borderWidth="$1" borderColor="$border200">
-                      <VStack space="sm">
-                        <HStack alignItems="flex-start" justifyContent="space-between" space="md">
-                          <Text bold size="md" flex={1}>
-                            {item.title}
-                          </Text>
-                          <Text bold size="md">
-                            {formatCents(item.totalCents)}
-                          </Text>
-                        </HStack>
+                    <Pressable
+                      onPress={() => router.push(`/item/${item.id}`)}
+                      testID={`items-row-${item.id}`}
+                      style={styles.rowPressable}
+                    >
+                      <Card borderWidth="$1" borderColor="$border200" style={styles.rowCard}>
+                        <VStack space="sm">
+                          <HStack alignItems="flex-start" justifyContent="space-between" space="md">
+                            <Text bold size="md" flex={1}>
+                              {item.title}
+                            </Text>
+                            <Text bold size="md">
+                              {formatCents(item.totalCents)}
+                            </Text>
+                          </HStack>
 
-                        <Text size="sm">{rowPriceAndDate(item)}</Text>
-                        <Text size="sm">Deductible this year: {formatCents(deductibleImpact)}</Text>
+                          <Text size="sm">{rowPriceAndDate(item)}</Text>
+                          <Text size="sm">Deductible this year: {formatCents(deductibleImpact)}</Text>
 
-                        <HStack space="sm" flexWrap="wrap">
-                          {hasMissingReceipt && (
-                            <Badge size="sm" action="warning" variant="outline">
-                              <BadgeText>Missing receipt</BadgeText>
-                            </Badge>
-                          )}
-                          {hasMissingNotes && (
-                            <Badge size="sm" action="warning" variant="outline">
-                              <BadgeText>Missing notes</BadgeText>
-                            </Badge>
-                          )}
-                        </HStack>
-                      </VStack>
-                    </Card>
-                  </Pressable>
-                </Swipeable>
+                          <HStack space="sm" flexWrap="wrap">
+                            {hasMissingReceipt && (
+                              <Badge size="sm" action="warning" variant="outline">
+                                <BadgeText>Missing receipt</BadgeText>
+                              </Badge>
+                            )}
+                            {hasMissingNotes && (
+                              <Badge size="sm" action="warning" variant="outline">
+                                <BadgeText>Missing notes</BadgeText>
+                              </Badge>
+                            )}
+                          </HStack>
+                        </VStack>
+                      </Card>
+                    </Pressable>
+                  </Swipeable>
+                </View>
               );
             }}
           />
@@ -664,16 +769,40 @@ export default function ItemsRoute() {
 }
 
 const styles = StyleSheet.create({
+  rowContainer: {
+    marginBottom: 12,
+    maxWidth: 900,
+    width: "100%",
+    alignSelf: "center",
+    borderRadius: ROW_BORDER_RADIUS,
+    overflow: "hidden",
+  },
+  rowPressable: {
+    width: "100%",
+  },
+  rowCard: {
+    borderRadius: ROW_BORDER_RADIUS,
+    minHeight: 116,
+  },
   deleteActionContainer: {
+    backgroundColor: IOS_DELETE_RED,
+    width: DELETE_ACTION_WIDTH,
     height: "100%",
     justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 12,
-    borderRadius: 12,
-    minWidth: 96,
+    alignItems: "stretch",
   },
-  deleteActionButton: {
+  deleteActionContent: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  deleteActionPressable: {
+    flex: 1,
     minHeight: 44,
     minWidth: 88,
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 10,
   },
 });
