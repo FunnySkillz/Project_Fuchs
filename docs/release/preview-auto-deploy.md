@@ -8,6 +8,7 @@ This project is configured to publish an EAS preview update on every push to `ma
 - Trigger: `push` to `main` (and manual `workflow_dispatch`)
 - Action: `eas update --channel preview --auto --non-interactive`
 - Build profile channel: `preview` in `eas.json`
+- Runtime strategy: `app.json > expo.runtimeVersion.policy = appVersion`
 
 ## One-time setup
 

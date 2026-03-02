@@ -3,6 +3,9 @@
     "name": "SteuerFuchs",
     "slug": "SteuerFuchs",
     "version": "1.0.0",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
     "orientation": "portrait",
     "icon": "./assets/images/SteuerFuchs_Icon.png",
     "scheme": "steuerfuchs",
@@ -70,6 +73,9 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "updates": {
+      "url": "https://u.expo.dev/e1f908b7-f0ce-4eef-9c5a-a0fb6cd4e1b2"
     },
     "extra": {
       "router": {},

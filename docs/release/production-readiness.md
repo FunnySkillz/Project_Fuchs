@@ -86,8 +86,9 @@ Define a binary release gate for V1. V1 ships only when all must-have checks are
 
 1. Freeze release branch and stop feature merges.
 2. Set versioning:
-   - Update `package.json` version.
-   - Update Expo app version/build numbers in app config.
+   - Update `package.json` version and `expo.version` in `app.json`.
+   - Keep EAS remote versioning enabled (`eas.json > cli.appVersionSource = remote`).
+   - Keep profile `autoIncrement` enabled for native build numbers.
 3. Run local gate commands:
    - `npx tsc --noEmit`
    - `npm test`

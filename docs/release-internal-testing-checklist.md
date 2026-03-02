@@ -30,6 +30,10 @@
 - [ ] `dev` profile exists for internal dev-client testing.
 - [ ] `preview` profile exists for internal distribution testing.
 - [ ] `production` profile remains reserved for store builds.
+- [ ] `preview` channel is set to `preview`.
+- [ ] `production` channel is set to `production`.
+- [ ] `cli.appVersionSource` is `remote` and profile `autoIncrement` is enabled.
+- [ ] Android build credentials are configured once via `eas credentials:configure-build`.
 
 Commands:
 
@@ -61,3 +65,4 @@ eas build --platform ios --profile preview
 - [ ] `npx tsc --noEmit` passes locally.
 - [ ] No blocking crashes in smoke tests.
 - [ ] Known limitations documented before wider rollout.
+- [ ] Versioning strategy documented and up-to-date (`docs/release/build-versioning.md`).

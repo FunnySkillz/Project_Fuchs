@@ -250,6 +250,12 @@ Build preview:
 eas build --profile preview
 ```
 
+Build production:
+
+```bash
+eas build --profile production
+```
+
 Auto-publish preview updates on `main`:
 
 - See `docs/release/preview-auto-deploy.md`
@@ -274,6 +280,7 @@ eas build --platform ios --profile preview
 Release checklist:
 
 - `docs/release-internal-testing-checklist.md`
+- `docs/release/build-versioning.md`
 
 ## Security & Privacy
 
