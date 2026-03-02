@@ -105,6 +105,12 @@ const usageOptions: { value: ItemUsageType; label: string; key: string }[] = [
   { value: "OTHER", label: "OTHER", key: "other" },
 ];
 
+const requiredFieldMessages: Record<"title" | "purchaseDate" | "totalCents", string> = {
+  title: "Title is required.",
+  purchaseDate: "Purchase date is required.",
+  totalCents: "Price is required and must be greater than 0.",
+};
+
 type FieldKey =
   | "title"
   | "purchaseDate"
@@ -127,6 +133,10 @@ interface InitialSnapshot {
   attachmentFingerprint: string;
 }
 
+type FocusTarget = {
+  focus?: () => void;
+};
+
 export default function NewItemRoute() {
   const router = useRouter();
   const navigation = useNavigation<any>();
@@ -139,6 +149,7 @@ export default function NewItemRoute() {
   const pendingNavigationActionRef = useRef<any | null>(null);
   const fieldYRef = useRef<Partial<Record<FieldKey, number>>>({});
   const scrollRef = useRef<ScrollView | null>(null);
+  const inputRef = useRef<Partial<Record<FieldKey, FocusTarget | null>>>({});
   const initialSnapshotCapturedRef = useRef(false);
   const initialSnapshotRef = useRef<InitialSnapshot | null>(null);
 
@@ -255,7 +266,22 @@ export default function NewItemRoute() {
     return grouped;
   }, [validation.errors]);
 
-  const canSave = validation.valid && usefulLifeMonthsOverrideError === null && !isSavingItem && !isBusy;
+  const validationMessages = useMemo(() => {
+    return {
+      title: fieldErrors.title ? requiredFieldMessages.title : undefined,
+      purchaseDate: fieldErrors.purchaseDate
+        ? purchaseDate.trim().length === 0
+          ? requiredFieldMessages.purchaseDate
+          : fieldErrors.purchaseDate
+        : undefined,
+      totalCents: fieldErrors.totalCents ? requiredFieldMessages.totalCents : undefined,
+      workPercent: fieldErrors.workPercent,
+      warrantyMonths: fieldErrors.warrantyMonths,
+    };
+  }, [fieldErrors, purchaseDate]);
+
+  const isFormValid = validation.valid && usefulLifeMonthsOverrideError === null;
+  const isSaveDisabled = (submitAttempted && !isFormValid) || isSavingItem || isBusy;
 
   const selectedCategoryName = useMemo(() => {
     if (!categoryId) {
@@ -731,6 +757,16 @@ export default function NewItemRoute() {
     scrollRef.current?.scrollTo({ y: Math.max(0, y - 20), animated: true });
   }, []);
 
+  const focusField = useCallback((field: FieldKey) => {
+    const target = inputRef.current[field];
+    if (!target || typeof target.focus !== "function") {
+      return;
+    }
+    requestAnimationFrame(() => {
+      target.focus?.();
+    });
+  }, []);
+
   const getFirstInvalidField = useCallback((): FieldKey | null => {
     if (fieldErrors.title) {
       return "title";
@@ -754,7 +790,7 @@ export default function NewItemRoute() {
   }, [fieldErrors, usefulLifeMonthsOverrideError]);
 
   const saveItem = async () => {
-    if (!draftId || !validation.valid || parsedTotalCents === null || usefulLifeMonthsOverrideError !== null) {
+    if (!draftId || !isFormValid || parsedTotalCents === null) {
       return;
     }
 
@@ -796,10 +832,11 @@ export default function NewItemRoute() {
 
   const submitAndSave = async () => {
     setSubmitAttempted(true);
-    if (!validation.valid || usefulLifeMonthsOverrideError !== null) {
+    if (!isFormValid) {
       const firstInvalid = getFirstInvalidField();
       if (firstInvalid) {
         scrollToField(firstInvalid);
+        focusField(firstInvalid);
       }
       return;
     }
@@ -1044,8 +1081,14 @@ export default function NewItemRoute() {
                       <GText bold size="sm">
                         Title
                       </GText>
-                      <GInput variant="outline">
+                      <GInput
+                        variant="outline"
+                        borderColor={shouldShowFieldError("title") ? "$error600" : "$border200"}
+                      >
                         <GInputField
+                          ref={(node) => {
+                            inputRef.current.title = node as FocusTarget | null;
+                          }}
                           value={title}
                           onChangeText={setTitle}
                           placeholder="e.g. Laptop for work"
@@ -1055,8 +1098,13 @@ export default function NewItemRoute() {
                         />
                       </GInput>
                       {shouldShowFieldError("title") && (
-                        <GText size="xs" color="$error600" accessibilityLiveRegion="polite">
-                          {fieldErrors.title}
+                        <GText
+                          size="xs"
+                          color="$error600"
+                          accessibilityLiveRegion="polite"
+                          testID="additem-error-title"
+                        >
+                          {validationMessages.title}
                         </GText>
                       )}
                     </GVStack>
@@ -1083,20 +1131,26 @@ export default function NewItemRoute() {
                           <GButtonText>Set today</GButtonText>
                         </GButton>
                       </GHStack>
-                      <GInput variant="outline">
+                      <GInput
+                        variant="outline"
+                        borderColor={shouldShowFieldError("purchaseDate") ? "$error600" : "$border200"}
+                      >
                         <GInputField
+                          ref={(node) => {
+                            inputRef.current.purchaseDate = node as FocusTarget | null;
+                          }}
                           value={purchaseDate}
                           onChangeText={setPurchaseDate}
                           placeholder="YYYY-MM-DD"
                           autoCapitalize="none"
                           onBlur={() => setFieldTouched("purchaseDate")}
-                          testID="additem-input-date"
+                          testID="additem-input-purchaseDate"
                           accessibilityLabel="Purchase date"
                         />
                       </GInput>
                       {shouldShowFieldError("purchaseDate") && (
                         <GText size="xs" color="$error600" accessibilityLiveRegion="polite">
-                          {fieldErrors.purchaseDate}
+                          {validationMessages.purchaseDate}
                         </GText>
                       )}
                     </GVStack>
@@ -1111,8 +1165,14 @@ export default function NewItemRoute() {
                       <GText bold size="sm">
                         Price (EUR)
                       </GText>
-                      <GInput variant="outline">
+                      <GInput
+                        variant="outline"
+                        borderColor={shouldShowFieldError("totalCents") ? "$error600" : "$border200"}
+                      >
                         <GInputField
+                          ref={(node) => {
+                            inputRef.current.totalCents = node as FocusTarget | null;
+                          }}
                           value={totalPrice}
                           onChangeText={setTotalPrice}
                           keyboardType="decimal-pad"
@@ -1123,8 +1183,13 @@ export default function NewItemRoute() {
                         />
                       </GInput>
                       {shouldShowFieldError("totalCents") && (
-                        <GText size="xs" color="$error600" accessibilityLiveRegion="polite">
-                          {fieldErrors.totalCents}
+                        <GText
+                          size="xs"
+                          color="$error600"
+                          accessibilityLiveRegion="polite"
+                          testID="additem-error-price"
+                        >
+                          {validationMessages.totalCents}
                         </GText>
                       )}
                     </GVStack>
@@ -1211,8 +1276,14 @@ export default function NewItemRoute() {
                         <GText bold size="sm">
                           Work percent (%)
                         </GText>
-                        <GInput variant="outline">
+                        <GInput
+                          variant="outline"
+                          borderColor={shouldShowFieldError("workPercent") ? "$error600" : "$border200"}
+                        >
                           <GInputField
+                            ref={(node) => {
+                              inputRef.current.workPercent = node as FocusTarget | null;
+                            }}
                             value={workPercent}
                             onChangeText={setWorkPercent}
                             keyboardType="number-pad"
@@ -1227,7 +1298,7 @@ export default function NewItemRoute() {
                         </GText>
                         {shouldShowFieldError("workPercent") && (
                           <GText size="xs" color="$error600" accessibilityLiveRegion="polite">
-                            {fieldErrors.workPercent}
+                            {validationMessages.workPercent}
                           </GText>
                         )}
                       </GVStack>
@@ -1271,8 +1342,14 @@ export default function NewItemRoute() {
                       <GText bold size="sm">
                         Warranty months
                       </GText>
-                      <GInput variant="outline">
+                      <GInput
+                        variant="outline"
+                        borderColor={shouldShowFieldError("warrantyMonths") ? "$error600" : "$border200"}
+                      >
                         <GInputField
+                          ref={(node) => {
+                            inputRef.current.warrantyMonths = node as FocusTarget | null;
+                          }}
                           value={warrantyMonths}
                           onChangeText={setWarrantyMonths}
                           keyboardType="number-pad"
@@ -1284,7 +1361,7 @@ export default function NewItemRoute() {
                       </GInput>
                       {shouldShowFieldError("warrantyMonths") && (
                         <GText size="xs" color="$error600" accessibilityLiveRegion="polite">
-                          {fieldErrors.warrantyMonths}
+                          {validationMessages.warrantyMonths}
                         </GText>
                       )}
                       <GText size="xs" color="$textLight500">
@@ -1340,8 +1417,14 @@ export default function NewItemRoute() {
                         <GText bold size="sm">
                           Useful life override (months)
                         </GText>
-                        <GInput variant="outline">
+                        <GInput
+                          variant="outline"
+                          borderColor={showUsefulLifeError ? "$error600" : "$border200"}
+                        >
                           <GInputField
+                            ref={(node) => {
+                              inputRef.current.usefulLifeMonthsOverride = node as FocusTarget | null;
+                            }}
                             value={usefulLifeMonthsOverride}
                             onChangeText={setUsefulLifeMonthsOverride}
                             keyboardType="number-pad"
@@ -1406,7 +1489,7 @@ export default function NewItemRoute() {
                   <GButton
                     flex={1}
                     onPress={() => void submitAndSave()}
-                    disabled={!canSave}
+                    disabled={isSaveDisabled}
                     testID="additem-btn-save"
                     accessibilityLabel="Save item"
                   >

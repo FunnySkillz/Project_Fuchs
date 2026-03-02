@@ -90,6 +90,20 @@ const usageOptions: { value: ItemUsageType; label: string }[] = [
   { value: "OTHER", label: "OTHER" },
 ];
 
+type FieldKey =
+  | "title"
+  | "purchaseDate"
+  | "totalCents"
+  | "workPercent"
+  | "warrantyMonths"
+  | "usefulLifeMonthsOverride";
+
+const requiredFieldMessages: Record<"title" | "purchaseDate" | "totalCents", string> = {
+  title: "Title is required.",
+  purchaseDate: "Purchase date is required.",
+  totalCents: "Price is required and must be greater than 0.",
+};
+
 interface InitialSnapshot {
   title: string;
   purchaseDate: string;
@@ -103,6 +117,10 @@ interface InitialSnapshot {
   usefulLifeMonthsOverride: string;
 }
 
+type FocusTarget = {
+  focus?: () => void;
+};
+
 export default function ItemEditRoute() {
   const router = useRouter();
   const navigation = useNavigation<any>();
@@ -112,6 +130,9 @@ export default function ItemEditRoute() {
   const allowNavigationExitRef = useRef(false);
   const initialSnapshotRef = useRef<InitialSnapshot | null>(null);
   const initialSnapshotCapturedRef = useRef(false);
+  const fieldYRef = useRef<Partial<Record<FieldKey, number>>>({});
+  const scrollRef = useRef<ScrollView | null>(null);
+  const inputRef = useRef<Partial<Record<FieldKey, FocusTarget | null>>>({});
 
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -120,6 +141,8 @@ export default function ItemEditRoute() {
   const [isDiscardModalOpen, setIsDiscardModalOpen] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [showOpenSettingsAction, setShowOpenSettingsAction] = useState(false);
+  const [submitAttempted, setSubmitAttempted] = useState(false);
+  const [touchedFields, setTouchedFields] = useState<Partial<Record<FieldKey, boolean>>>({});
 
   const [item, setItem] = useState<Item | null>(null);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -198,6 +221,20 @@ export default function ItemEditRoute() {
     return grouped;
   }, [validation.errors]);
 
+  const validationMessages = useMemo(() => {
+    return {
+      title: fieldErrors.title ? requiredFieldMessages.title : undefined,
+      purchaseDate: fieldErrors.purchaseDate
+        ? purchaseDate.trim().length === 0
+          ? requiredFieldMessages.purchaseDate
+          : fieldErrors.purchaseDate
+        : undefined,
+      totalCents: fieldErrors.totalCents ? requiredFieldMessages.totalCents : undefined,
+      workPercent: fieldErrors.workPercent,
+      warrantyMonths: fieldErrors.warrantyMonths,
+    };
+  }, [fieldErrors, purchaseDate]);
+
   const selectedCategoryName = useMemo(() => {
     if (!categoryId) {
       return "No category selected";
@@ -237,7 +274,21 @@ export default function ItemEditRoute() {
     workPercent,
   ]);
 
-  const canSave = validation.valid && usefulLifeMonthsOverrideError === null && !isSaving;
+  const isFormValid = validation.valid && usefulLifeMonthsOverrideError === null;
+  const isSaveDisabled = (submitAttempted && !isFormValid) || isSaving;
+
+  const setFieldTouched = useCallback((field: FieldKey) => {
+    setTouchedFields((current) => ({ ...current, [field]: true }));
+  }, []);
+
+  const shouldShowFieldError = useCallback(
+    (field: FieldKey) => Boolean((submitAttempted || touchedFields[field]) && fieldErrors[field]),
+    [fieldErrors, submitAttempted, touchedFields]
+  );
+
+  const showUsefulLifeError = Boolean(
+    (submitAttempted || touchedFields.usefulLifeMonthsOverride) && usefulLifeMonthsOverrideError
+  );
 
   const clearLoadError = useCallback(() => {
     setLoadError(null);
@@ -316,6 +367,8 @@ export default function ItemEditRoute() {
       setUsefulLifeMonthsOverride(
         loadedItem.usefulLifeMonthsOverride !== null ? String(loadedItem.usefulLifeMonthsOverride) : ""
       );
+      setSubmitAttempted(false);
+      setTouchedFields({});
       setNewCategoryName("");
     } catch (error) {
       console.error("Failed to load item for edit", error);
@@ -424,8 +477,54 @@ export default function ItemEditRoute() {
     setIsDiscardModalOpen(true);
   }, [goBackFromEditFlow, isDirty]);
 
+  const scrollToField = useCallback((field: FieldKey) => {
+    const y = fieldYRef.current[field];
+    if (typeof y !== "number") {
+      return;
+    }
+    scrollRef.current?.scrollTo({ y: Math.max(0, y - 20), animated: true });
+  }, []);
+
+  const focusField = useCallback((field: FieldKey) => {
+    const target = inputRef.current[field];
+    if (!target || typeof target.focus !== "function") {
+      return;
+    }
+    requestAnimationFrame(() => {
+      target.focus?.();
+    });
+  }, []);
+
+  const getFirstInvalidField = useCallback((): FieldKey | null => {
+    if (fieldErrors.title) {
+      return "title";
+    }
+    if (fieldErrors.purchaseDate) {
+      return "purchaseDate";
+    }
+    if (fieldErrors.totalCents) {
+      return "totalCents";
+    }
+    if (fieldErrors.workPercent) {
+      return "workPercent";
+    }
+    if (fieldErrors.warrantyMonths) {
+      return "warrantyMonths";
+    }
+    if (usefulLifeMonthsOverrideError) {
+      return "usefulLifeMonthsOverride";
+    }
+    return null;
+  }, [fieldErrors, usefulLifeMonthsOverrideError]);
+
   const saveChanges = async () => {
-    if (!itemId || !validation.valid || parsedTotalCents === null || usefulLifeMonthsOverrideError !== null) {
+    setSubmitAttempted(true);
+    if (!itemId || !isFormValid || parsedTotalCents === null) {
+      const firstInvalid = getFirstInvalidField();
+      if (firstInvalid) {
+        scrollToField(firstInvalid);
+        focusField(firstInvalid);
+      }
       return;
     }
 
@@ -618,6 +717,7 @@ export default function ItemEditRoute() {
     <SafeAreaView style={{ flex: 1 }} edges={["bottom"]}>
       <Box flex={1} px="$5" py="$6">
         <ScrollView
+          ref={scrollRef}
           contentContainerStyle={{
             width: "100%",
             maxWidth: 860,
@@ -659,31 +759,60 @@ export default function ItemEditRoute() {
             <VStack space="md">
               <Heading size="md">Fields</Heading>
 
+              <Box
+                onLayout={(event) => {
+                  fieldYRef.current.title = event.nativeEvent.layout.y;
+                }}
+              >
               <VStack space="xs">
                 <Text bold size="sm">
                   Title *
                 </Text>
-                <Input variant="outline">
+                <Input
+                  variant="outline"
+                  borderColor={shouldShowFieldError("title") ? "$error600" : "$border200"}
+                >
                   <InputField
+                    ref={(node) => {
+                      inputRef.current.title = node as FocusTarget | null;
+                    }}
                     value={title}
                     onChangeText={setTitle}
                     placeholder="e.g. Work laptop"
+                    onBlur={() => setFieldTouched("title")}
                     testID="item-edit-title-input"
                   />
                 </Input>
-                {fieldErrors.title ? <Text size="xs" color="$error600">{fieldErrors.title}</Text> : null}
+                {shouldShowFieldError("title") ? (
+                  <Text size="xs" color="$error600">{validationMessages.title}</Text>
+                ) : null}
               </VStack>
+              </Box>
 
+              <Box
+                onLayout={(event) => {
+                  fieldYRef.current.purchaseDate = event.nativeEvent.layout.y;
+                }}
+              >
               <VStack space="xs">
                 <Text bold size="sm">
                   Purchase date *
                 </Text>
                 <HStack space="sm" flexWrap="wrap" alignItems="center">
-                  <Input variant="outline" flex={1} minWidth={180}>
+                  <Input
+                    variant="outline"
+                    flex={1}
+                    minWidth={180}
+                    borderColor={shouldShowFieldError("purchaseDate") ? "$error600" : "$border200"}
+                  >
                     <InputField
+                      ref={(node) => {
+                        inputRef.current.purchaseDate = node as FocusTarget | null;
+                      }}
                       value={purchaseDate}
                       onChangeText={setPurchaseDate}
                       placeholder="YYYY-MM-DD"
+                      onBlur={() => setFieldTouched("purchaseDate")}
                       testID="item-edit-purchase-date-input"
                     />
                   </Input>
@@ -695,28 +824,42 @@ export default function ItemEditRoute() {
                     <ButtonText>Set today</ButtonText>
                   </Button>
                 </HStack>
-                {fieldErrors.purchaseDate ? (
-                  <Text size="xs" color="$error600">{fieldErrors.purchaseDate}</Text>
+                {shouldShowFieldError("purchaseDate") ? (
+                  <Text size="xs" color="$error600">{validationMessages.purchaseDate}</Text>
                 ) : null}
               </VStack>
+              </Box>
 
+              <Box
+                onLayout={(event) => {
+                  fieldYRef.current.totalCents = event.nativeEvent.layout.y;
+                }}
+              >
               <VStack space="xs">
                 <Text bold size="sm">
                   Price (EUR) *
                 </Text>
-                <Input variant="outline">
+                <Input
+                  variant="outline"
+                  borderColor={shouldShowFieldError("totalCents") ? "$error600" : "$border200"}
+                >
                   <InputField
+                    ref={(node) => {
+                      inputRef.current.totalCents = node as FocusTarget | null;
+                    }}
                     value={totalPrice}
                     onChangeText={setTotalPrice}
                     keyboardType="decimal-pad"
                     placeholder="e.g. 1299.90"
+                    onBlur={() => setFieldTouched("totalCents")}
                     testID="item-edit-total-price-input"
                   />
                 </Input>
-                {fieldErrors.totalCents ? (
-                  <Text size="xs" color="$error600">{fieldErrors.totalCents}</Text>
+                {shouldShowFieldError("totalCents") ? (
+                  <Text size="xs" color="$error600">{validationMessages.totalCents}</Text>
                 ) : null}
               </VStack>
+              </Box>
 
               <VStack space="xs">
                 <Text bold size="sm">
@@ -773,45 +916,71 @@ export default function ItemEditRoute() {
               </VStack>
 
               {usageType === "MIXED" ? (
+                <Box
+                  onLayout={(event) => {
+                    fieldYRef.current.workPercent = event.nativeEvent.layout.y;
+                  }}
+                >
                 <VStack space="xs">
                   <Text bold size="sm">
                     Work percent *
                   </Text>
-                  <Input variant="outline">
+                  <Input
+                    variant="outline"
+                    borderColor={shouldShowFieldError("workPercent") ? "$error600" : "$border200"}
+                  >
                     <InputField
+                      ref={(node) => {
+                        inputRef.current.workPercent = node as FocusTarget | null;
+                      }}
                       value={workPercent}
                       onChangeText={setWorkPercent}
                       keyboardType="number-pad"
                       placeholder="0-100"
+                      onBlur={() => setFieldTouched("workPercent")}
                       testID="item-edit-work-percent-input"
                     />
                   </Input>
-                  {fieldErrors.workPercent ? (
-                    <Text size="xs" color="$error600">{fieldErrors.workPercent}</Text>
+                  {shouldShowFieldError("workPercent") ? (
+                    <Text size="xs" color="$error600">{validationMessages.workPercent}</Text>
                   ) : null}
                 </VStack>
+                </Box>
               ) : null}
 
+              <Box
+                onLayout={(event) => {
+                  fieldYRef.current.warrantyMonths = event.nativeEvent.layout.y;
+                }}
+              >
               <VStack space="xs">
                 <Text bold size="sm">
                   Warranty months
                 </Text>
-                <Input variant="outline">
+                <Input
+                  variant="outline"
+                  borderColor={shouldShowFieldError("warrantyMonths") ? "$error600" : "$border200"}
+                >
                   <InputField
+                    ref={(node) => {
+                      inputRef.current.warrantyMonths = node as FocusTarget | null;
+                    }}
                     value={warrantyMonths}
                     onChangeText={setWarrantyMonths}
                     keyboardType="number-pad"
                     placeholder="Optional"
+                    onBlur={() => setFieldTouched("warrantyMonths")}
                     testID="item-edit-warranty-months-input"
                   />
                 </Input>
-                {fieldErrors.warrantyMonths ? (
-                  <Text size="xs" color="$error600">{fieldErrors.warrantyMonths}</Text>
+                {shouldShowFieldError("warrantyMonths") ? (
+                  <Text size="xs" color="$error600">{validationMessages.warrantyMonths}</Text>
                 ) : null}
                 <Text size="xs" color="$textLight500">
                   Warranty until: {parsedWarrantyMonths && parsedWarrantyMonths > 0 ? addMonthsToYmd(purchaseDate, parsedWarrantyMonths) : "n/a"}
                 </Text>
               </VStack>
+              </Box>
 
               <VStack space="xs">
                 <Text bold size="sm">
@@ -827,23 +996,36 @@ export default function ItemEditRoute() {
                 </Input>
               </VStack>
 
+              <Box
+                onLayout={(event) => {
+                  fieldYRef.current.usefulLifeMonthsOverride = event.nativeEvent.layout.y;
+                }}
+              >
               <VStack space="xs">
                 <Text bold size="sm">
                   Useful life override (months)
                 </Text>
-                <Input variant="outline">
+                <Input
+                  variant="outline"
+                  borderColor={showUsefulLifeError ? "$error600" : "$border200"}
+                >
                   <InputField
+                    ref={(node) => {
+                      inputRef.current.usefulLifeMonthsOverride = node as FocusTarget | null;
+                    }}
                     value={usefulLifeMonthsOverride}
                     onChangeText={setUsefulLifeMonthsOverride}
                     keyboardType="number-pad"
                     placeholder="Optional, e.g. 36"
+                    onBlur={() => setFieldTouched("usefulLifeMonthsOverride")}
                     testID="item-edit-useful-life-input"
                   />
                 </Input>
-                {usefulLifeMonthsOverrideError ? (
+                {showUsefulLifeError ? (
                   <Text size="xs" color="$error600">{usefulLifeMonthsOverrideError}</Text>
                 ) : null}
               </VStack>
+              </Box>
 
               <VStack space="xs">
                 <Text bold size="sm">
@@ -964,7 +1146,7 @@ export default function ItemEditRoute() {
             </Button>
             <Button
               onPress={() => void saveChanges()}
-              disabled={!canSave}
+              disabled={isSaveDisabled}
               testID="item-edit-save"
             >
               <ButtonText>{isSaving ? "Saving..." : "Save Changes"}</ButtonText>

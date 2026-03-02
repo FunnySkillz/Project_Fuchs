@@ -580,7 +580,7 @@ async function createPurchaseViaUiFlow(
 
   fireEvent.changeText(screen.getByTestId("additem-input-title"), input.title);
   fireEvent.changeText(
-    screen.getByTestId("additem-input-date"),
+    screen.getByTestId("additem-input-purchaseDate"),
     input.purchaseDate,
   );
   fireEvent.changeText(

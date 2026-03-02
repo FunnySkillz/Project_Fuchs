@@ -231,6 +231,54 @@ describe("ItemEditRoute", () => {
     });
   });
 
+  it("shows required price error when saving with empty price", async () => {
+    render(<ItemEditRoute />);
+
+    expect(await screen.findByText("Edit Item")).toBeTruthy();
+    fireEvent.changeText(screen.getByTestId("item-edit-total-price-input"), "");
+
+    const saveButton = screen.getByTestId("item-edit-save");
+    expect(saveButton.props.accessibilityState?.disabled).not.toBe(true);
+    fireEvent.press(saveButton);
+
+    await waitFor(() => {
+      expect(screen.getByText("Price is required and must be greater than 0.")).toBeTruthy();
+      expect(screen.getByTestId("item-edit-save").props.accessibilityState?.disabled).toBe(true);
+      expect(mockUpdateItem).not.toHaveBeenCalled();
+    });
+  });
+
+  it("re-enables save after fixing invalid price and persists changes", async () => {
+    render(<ItemEditRoute />);
+
+    expect(await screen.findByText("Edit Item")).toBeTruthy();
+    fireEvent.changeText(screen.getByTestId("item-edit-total-price-input"), "");
+    fireEvent.press(screen.getByTestId("item-edit-save"));
+
+    await waitFor(() => {
+      expect(screen.getByText("Price is required and must be greater than 0.")).toBeTruthy();
+      expect(screen.getByTestId("item-edit-save").props.accessibilityState?.disabled).toBe(true);
+    });
+
+    fireEvent.changeText(screen.getByTestId("item-edit-total-price-input"), "299.99");
+
+    await waitFor(() => {
+      expect(screen.queryByText("Price is required and must be greater than 0.")).toBeNull();
+      expect(screen.getByTestId("item-edit-save").props.accessibilityState?.disabled).not.toBe(true);
+    });
+
+    fireEvent.press(screen.getByTestId("item-edit-save"));
+
+    await waitFor(() => {
+      expect(mockUpdateItem).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: "item-1",
+          totalCents: 29_999,
+        })
+      );
+    });
+  });
+
   it("shows discard confirmation on cancel when form is dirty", async () => {
     render(<ItemEditRoute />);
 

@@ -191,7 +191,7 @@ describe("NewItemRoute save and validation", () => {
     });
 
     fireEvent.changeText(screen.getByTestId("additem-input-title"), "  Work monitor  ");
-    fireEvent.changeText(screen.getByTestId("additem-input-date"), "2026-01-15");
+    fireEvent.changeText(screen.getByTestId("additem-input-purchaseDate"), "2026-01-15");
     fireEvent.changeText(screen.getByTestId("additem-input-price"), "499.99");
     fireEvent.changeText(screen.getByTestId("additem-input-vendor"), "  Saturn  ");
     fireEvent.changeText(screen.getByTestId("additem-input-notes"), "  invoice attached  ");
@@ -217,16 +217,59 @@ describe("NewItemRoute save and validation", () => {
     });
   });
 
-  it("keeps save disabled when required fields are invalid", async () => {
+  it("shows price required error after submit attempt when price is empty", async () => {
     render(<NewItemRoute />);
 
     expect(await screen.findByText("Add Item")).toBeTruthy();
 
     const saveButton = screen.getByTestId("additem-btn-save");
-    expect(saveButton.props.accessibilityState?.disabled).toBe(true);
+    expect(saveButton.props.accessibilityState?.disabled).not.toBe(true);
     fireEvent.press(saveButton);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("additem-error-price")).toBeTruthy();
+      expect(screen.getByText("Price is required and must be greater than 0.")).toBeTruthy();
+      expect(screen.getByTestId("additem-btn-save").props.accessibilityState?.disabled).toBe(true);
+    });
+
     expect(mockCreateItem).not.toHaveBeenCalled();
     expect(mockLinkDraftAttachmentsToItem).not.toHaveBeenCalled();
+  });
+
+  it("shows price required error when price is 0", async () => {
+    render(<NewItemRoute />);
+
+    expect(await screen.findByText("Add Item")).toBeTruthy();
+    fireEvent.changeText(screen.getByTestId("additem-input-title"), "Desk Lamp");
+    fireEvent.changeText(screen.getByTestId("additem-input-price"), "0");
+
+    fireEvent.press(screen.getByTestId("additem-btn-save"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("additem-error-price")).toBeTruthy();
+      expect(screen.getByText("Price is required and must be greater than 0.")).toBeTruthy();
+    });
+    expect(mockCreateItem).not.toHaveBeenCalled();
+  });
+
+  it("removes price error and enables save when price becomes valid", async () => {
+    render(<NewItemRoute />);
+
+    expect(await screen.findByText("Add Item")).toBeTruthy();
+    fireEvent.changeText(screen.getByTestId("additem-input-title"), "Desk Lamp");
+
+    fireEvent.press(screen.getByTestId("additem-btn-save"));
+    await waitFor(() => {
+      expect(screen.getByTestId("additem-error-price")).toBeTruthy();
+      expect(screen.getByTestId("additem-btn-save").props.accessibilityState?.disabled).toBe(true);
+    });
+
+    fireEvent.changeText(screen.getByTestId("additem-input-price"), "149.99");
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("additem-error-price")).toBeNull();
+      expect(screen.getByTestId("additem-btn-save").props.accessibilityState?.disabled).not.toBe(true);
+    });
   });
 
   it("requires work percent for MIXED usage before enabling save", async () => {
@@ -243,6 +286,7 @@ describe("NewItemRoute save and validation", () => {
     });
 
     fireEvent(screen.getByTestId("additem-input-workpercent"), "blur");
+    fireEvent.press(screen.getByTestId("additem-btn-save"));
 
     await waitFor(() => {
       expect(screen.getByText("Work percent is required for mixed usage.")).toBeTruthy();
