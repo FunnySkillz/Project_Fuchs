@@ -110,7 +110,6 @@ export default function ItemEditRoute() {
   const params = useLocalSearchParams<{ id?: string | string[] }>();
   const itemId = toSingleParam(params.id);
   const allowNavigationExitRef = useRef(false);
-  const pendingNavigationActionRef = useRef<any | null>(null);
   const initialSnapshotRef = useRef<InitialSnapshot | null>(null);
   const initialSnapshotCapturedRef = useRef(false);
 
@@ -363,10 +362,22 @@ export default function ItemEditRoute() {
     workPercent,
   ]);
 
-  const exitEditFlow = useCallback(() => {
+  const goBackFromEditFlow = useCallback(() => {
     allowNavigationExitRef.current = true;
-    pendingNavigationActionRef.current = null;
     setIsDiscardModalOpen(false);
+
+    const navigationWithBack = navigation as {
+      canGoBack?: () => boolean;
+      goBack?: () => void;
+    };
+    if (
+      typeof navigationWithBack.canGoBack === "function" &&
+      navigationWithBack.canGoBack() &&
+      typeof navigationWithBack.goBack === "function"
+    ) {
+      navigationWithBack.goBack();
+      return;
+    }
 
     if (itemId) {
       router.replace(`/item/${itemId}`);
@@ -374,7 +385,7 @@ export default function ItemEditRoute() {
     }
 
     router.replace("/(tabs)/items");
-  }, [itemId, router]);
+  }, [itemId, navigation, router]);
 
   useEffect(() => {
     const unsubscribe = navigation.addListener("beforeRemove", (event: any) => {
@@ -382,42 +393,36 @@ export default function ItemEditRoute() {
         return;
       }
 
-      event.preventDefault();
-      pendingNavigationActionRef.current = event?.data?.action ?? null;
       if (isDirty) {
+        event.preventDefault();
         setIsDiscardModalOpen(true);
-        return;
       }
-      exitEditFlow();
     });
 
     return unsubscribe;
-  }, [exitEditFlow, isDirty, navigation]);
+  }, [isDirty, navigation]);
 
   useEffect(() => {
     const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
-      pendingNavigationActionRef.current = null;
       if (isDirty) {
         setIsDiscardModalOpen(true);
-      } else {
-        exitEditFlow();
+        return true;
       }
-      return true;
+      return false;
     });
 
     return () => {
       subscription.remove();
     };
-  }, [exitEditFlow, isDirty]);
+  }, [isDirty]);
 
   const handleExitRequest = useCallback(() => {
-    pendingNavigationActionRef.current = null;
     if (!isDirty) {
-      exitEditFlow();
+      goBackFromEditFlow();
       return;
     }
     setIsDiscardModalOpen(true);
-  }, [exitEditFlow, isDirty]);
+  }, [goBackFromEditFlow, isDirty]);
 
   const saveChanges = async () => {
     if (!itemId || !validation.valid || parsedTotalCents === null || usefulLifeMonthsOverrideError !== null) {
@@ -556,13 +561,12 @@ export default function ItemEditRoute() {
   };
 
   const closeDiscardModal = () => {
-    pendingNavigationActionRef.current = null;
     setIsDiscardModalOpen(false);
   };
 
   if (isLoading) {
     return (
-      <SafeAreaView style={{ flex: 1 }} edges={["top"]}>
+      <SafeAreaView style={{ flex: 1 }} edges={["bottom"]}>
         <Box flex={1} alignItems="center" justifyContent="center" px="$5" py="$6">
           <VStack space="md" alignItems="center">
             <Spinner size="large" />
@@ -575,7 +579,7 @@ export default function ItemEditRoute() {
 
   if (!item) {
     return (
-      <SafeAreaView style={{ flex: 1 }} edges={["top"]}>
+      <SafeAreaView style={{ flex: 1 }} edges={["bottom"]}>
         <Box flex={1} px="$5" py="$6">
           <VStack space="lg" maxWidth={760} width="$full" alignSelf="center">
             <Heading size="xl">Edit Item</Heading>
@@ -611,7 +615,7 @@ export default function ItemEditRoute() {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1 }} edges={["top"]}>
+    <SafeAreaView style={{ flex: 1 }} edges={["bottom"]}>
       <Box flex={1} px="$5" py="$6">
         <ScrollView
           contentContainerStyle={{
@@ -953,9 +957,10 @@ export default function ItemEditRoute() {
               variant="outline"
               action="secondary"
               onPress={handleExitRequest}
-              testID="item-edit-cancel"
+              testID="edititem-cancel"
+              accessibilityLabel="Cancel editing item"
             >
-              <ButtonText>Cancel</ButtonText>
+              <ButtonText testID="item-edit-cancel">Cancel</ButtonText>
             </Button>
             <Button
               onPress={() => void saveChanges()}
@@ -1008,13 +1013,13 @@ export default function ItemEditRoute() {
             justifyContent="center"
             px="$5"
             style={{ backgroundColor: "rgba(0,0,0,0.45)" }}
-            testID="item-edit-discard-modal"
+            testID="discard-modal"
           >
             <Card borderWidth="$1" borderColor="$border200" width="$full" maxWidth={420}>
               <VStack space="md">
                 <VStack space="xs">
                   <Heading size="md">Discard changes?</Heading>
-                  <Text size="sm">Your unsaved changes will be lost.</Text>
+                  <Text size="sm">Your changes and draft attachments will be lost.</Text>
                 </VStack>
                 <HStack justifyContent="flex-end" space="sm">
                   <Button
@@ -1022,17 +1027,19 @@ export default function ItemEditRoute() {
                     variant="outline"
                     action="secondary"
                     onPress={closeDiscardModal}
-                    testID="item-edit-discard-keepediting"
+                    testID="keep-editing"
+                    accessibilityLabel="Keep editing"
                   >
-                    <ButtonText>Keep editing</ButtonText>
+                    <ButtonText testID="item-edit-discard-keepediting">Keep editing</ButtonText>
                   </Button>
                   <Button
                     size="sm"
                     action="negative"
-                    onPress={exitEditFlow}
-                    testID="item-edit-discard-confirm"
+                    onPress={goBackFromEditFlow}
+                    testID="discard-confirm"
+                    accessibilityLabel="Discard changes"
                   >
-                    <ButtonText>Discard</ButtonText>
+                    <ButtonText testID="item-edit-discard-confirm">Discard</ButtonText>
                   </Button>
                 </HStack>
               </VStack>
