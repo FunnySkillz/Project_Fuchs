@@ -1,4 +1,4 @@
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter, useSegments } from "expo-router";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { HeaderBackButton } from "@react-navigation/elements";
 import React, {
@@ -163,9 +163,11 @@ type FocusTarget = {
 
 export default function NewItemRoute() {
   const router = useRouter();
+  const segments = useSegments();
   const navigation = useNavigation<any>();
   const theme = useTheme();
   const insets = useSafeAreaInsets();
+  const inTabsContext = segments[0] === "(tabs)";
   const params = useLocalSearchParams<{ draftId?: string | string[] }>();
   const draftId = toSingleParam(params.draftId);
   const [generatedDraftId, setGeneratedDraftId] = useState<string | null>(null);
@@ -898,7 +900,7 @@ export default function NewItemRoute() {
 
   if (isInitializing) {
     return (
-      <SafeAreaView style={{ flex: 1 }} edges={["top", "bottom"]}>
+      <SafeAreaView style={{ flex: 1 }} edges={inTabsContext ? ["top"] : ["top", "bottom"]}>
         <GBox
           flex={1}
           alignItems="center"
@@ -915,11 +917,11 @@ export default function NewItemRoute() {
     );
   }
 
-  const actionBarBottomInset = Math.max(insets.bottom, 4);
+  const actionBarBottomInset = inTabsContext ? 6 : Math.max(insets.bottom, 4);
   const actionBarEstimatedHeight = 80 + actionBarBottomInset;
 
   return (
-    <SafeAreaView style={{ flex: 1 }} edges={["top", "bottom"]}>
+    <SafeAreaView style={{ flex: 1 }} edges={inTabsContext ? ["top"] : ["top", "bottom"]}>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
