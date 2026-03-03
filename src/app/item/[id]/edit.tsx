@@ -61,6 +61,15 @@ import { validateItemInput } from "@/domain/item-validation";
 import { addMonthsToYmd, formatYmdFromDateLocal, parseYmd } from "@/utils/date";
 import { parseEuroInputToCents } from "@/utils/money";
 
+const iosSwiftUI = Platform.OS === "ios"
+  ? {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      ...require("@expo/ui/swift-ui"),
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      ...require("@expo/ui/swift-ui/modifiers"),
+    }
+  : null;
+
 function toSingleParam(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
 }
@@ -488,7 +497,7 @@ export default function ItemEditRoute() {
     setIsDatePickerOpen(true);
   }, [purchaseDate, setFieldTouched]);
 
-  const onPurchaseDatePickerChange = useCallback(
+  const onAndroidPurchaseDatePickerChange = useCallback(
     (event: DateTimePickerEvent, selectedDate?: Date) => {
       if (Platform.OS === "android") {
         setIsDatePickerOpen(false);
@@ -506,6 +515,10 @@ export default function ItemEditRoute() {
     },
     []
   );
+
+  const onIosPurchaseDateChange = useCallback((selectedDate: Date) => {
+    setDatePickerValue(selectedDate);
+  }, []);
 
   const closePurchaseDatePicker = useCallback(() => {
     setIsDatePickerOpen(false);
@@ -948,6 +961,43 @@ export default function ItemEditRoute() {
                     {validationMessages.purchaseDate}
                   </Text>
                 ) : null}
+                {Platform.OS === "ios" && isDatePickerOpen && iosSwiftUI ? (
+                  <Card
+                    borderWidth="$1"
+                    borderColor="$border200"
+                    style={{ backgroundColor: theme.background }}
+                  >
+                    <VStack space="sm">
+                      <iosSwiftUI.Host matchContents>
+                        <iosSwiftUI.DatePicker
+                          title="Select purchase date"
+                          selection={datePickerValue}
+                          displayedComponents={["date"]}
+                          modifiers={[iosSwiftUI.datePickerStyle("wheel")]}
+                          onDateChange={onIosPurchaseDateChange}
+                        />
+                      </iosSwiftUI.Host>
+                      <HStack justifyContent="flex-end" space="sm">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          action="secondary"
+                          onPress={closePurchaseDatePicker}
+                          accessibilityLabel="Cancel date selection"
+                        >
+                          <ButtonText>Cancel</ButtonText>
+                        </Button>
+                        <Button
+                          size="sm"
+                          onPress={confirmPurchaseDatePicker}
+                          accessibilityLabel="Confirm date selection"
+                        >
+                          <ButtonText>Done</ButtonText>
+                        </Button>
+                      </HStack>
+                    </VStack>
+                  </Card>
+                ) : null}
               </VStack>
               </Box>
 
@@ -1329,61 +1379,8 @@ export default function ItemEditRoute() {
             mode="date"
             value={datePickerValue}
             display="default"
-            onChange={onPurchaseDatePickerChange}
+            onChange={onAndroidPurchaseDatePickerChange}
           />
-        )}
-
-        {Platform.OS === "ios" && (
-          <Modal
-            visible={isDatePickerOpen}
-            transparent
-            animationType="fade"
-            onRequestClose={closePurchaseDatePicker}
-          >
-            <Box
-              flex={1}
-              alignItems="center"
-              justifyContent="center"
-              px="$5"
-              style={{ backgroundColor: "rgba(0,0,0,0.45)" }}
-            >
-              <Card
-                borderWidth="$1"
-                borderColor="$border200"
-                width="$full"
-                maxWidth={420}
-                style={{ backgroundColor: theme.background, borderRadius: 16 }}
-              >
-                <VStack space="md">
-                  <Heading size="md">Select purchase date</Heading>
-                  <DateTimePicker
-                    mode="date"
-                    value={datePickerValue}
-                    display="spinner"
-                    onChange={onPurchaseDatePickerChange}
-                  />
-                  <HStack justifyContent="flex-end" space="sm">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      action="secondary"
-                      onPress={closePurchaseDatePicker}
-                      accessibilityLabel="Cancel date selection"
-                    >
-                      <ButtonText>Cancel</ButtonText>
-                    </Button>
-                    <Button
-                      size="sm"
-                      onPress={confirmPurchaseDatePicker}
-                      accessibilityLabel="Confirm date selection"
-                    >
-                      <ButtonText>Done</ButtonText>
-                    </Button>
-                  </HStack>
-                </VStack>
-              </Card>
-            </Box>
-          </Modal>
         )}
 
         <Actionsheet isOpen={isCategorySheetOpen} onClose={() => setIsCategorySheetOpen(false)}>

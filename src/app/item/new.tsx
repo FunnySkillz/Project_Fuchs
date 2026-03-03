@@ -77,6 +77,15 @@ import {
 import { addMonthsToYmd, formatYmdFromDateLocal, parseYmd } from "@/utils/date";
 import { parseEuroInputToCents } from "@/utils/money";
 
+const iosSwiftUI = Platform.OS === "ios"
+  ? {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      ...require("@expo/ui/swift-ui"),
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      ...require("@expo/ui/swift-ui/modifiers"),
+    }
+  : null;
+
 function toSingleParam(
   value: string | string[] | undefined,
 ): string | undefined {
@@ -574,7 +583,7 @@ export default function NewItemRoute() {
     setIsDatePickerOpen(true);
   }, [purchaseDate, setFieldTouched]);
 
-  const onPurchaseDatePickerChange = useCallback(
+  const onAndroidPurchaseDatePickerChange = useCallback(
     (event: DateTimePickerEvent, selectedDate?: Date) => {
       if (Platform.OS === "android") {
         setIsDatePickerOpen(false);
@@ -592,6 +601,10 @@ export default function NewItemRoute() {
     },
     [],
   );
+
+  const onIosPurchaseDateChange = useCallback((selectedDate: Date) => {
+    setDatePickerValue(selectedDate);
+  }, []);
 
   const closePurchaseDatePicker = useCallback(() => {
     setIsDatePickerOpen(false);
@@ -1322,6 +1335,43 @@ export default function NewItemRoute() {
                           {validationMessages.purchaseDate}
                         </GText>
                       )}
+                      {Platform.OS === "ios" && isDatePickerOpen && iosSwiftUI && (
+                        <GCard
+                          borderWidth="$1"
+                          borderColor="$border200"
+                          style={{ backgroundColor: theme.background }}
+                        >
+                          <GVStack space="sm">
+                            <iosSwiftUI.Host matchContents>
+                              <iosSwiftUI.DatePicker
+                                title="Select purchase date"
+                                selection={datePickerValue}
+                                displayedComponents={["date"]}
+                                modifiers={[iosSwiftUI.datePickerStyle("wheel")]}
+                                onDateChange={onIosPurchaseDateChange}
+                              />
+                            </iosSwiftUI.Host>
+                            <GHStack justifyContent="flex-end" space="sm">
+                              <GButton
+                                size="sm"
+                                variant="outline"
+                                action="secondary"
+                                onPress={closePurchaseDatePicker}
+                                accessibilityLabel="Cancel date selection"
+                              >
+                                <GButtonText>Cancel</GButtonText>
+                              </GButton>
+                              <GButton
+                                size="sm"
+                                onPress={confirmPurchaseDatePicker}
+                                accessibilityLabel="Confirm date selection"
+                              >
+                                <GButtonText>Done</GButtonText>
+                              </GButton>
+                            </GHStack>
+                          </GVStack>
+                        </GCard>
+                      )}
                     </GVStack>
                   </GBox>
 
@@ -1733,61 +1783,8 @@ export default function NewItemRoute() {
               mode="date"
               value={datePickerValue}
               display="default"
-              onChange={onPurchaseDatePickerChange}
+              onChange={onAndroidPurchaseDatePickerChange}
             />
-          )}
-
-          {Platform.OS === "ios" && (
-            <Modal
-              visible={isDatePickerOpen}
-              transparent
-              animationType="fade"
-              onRequestClose={closePurchaseDatePicker}
-            >
-              <GBox
-                flex={1}
-                alignItems="center"
-                justifyContent="center"
-                px="$5"
-                style={{ backgroundColor: "rgba(0,0,0,0.45)" }}
-              >
-                <GCard
-                  borderWidth="$1"
-                  borderColor="$border200"
-                  width="$full"
-                  maxWidth={420}
-                  style={{ backgroundColor: theme.background, borderRadius: 16 }}
-                >
-                  <GVStack space="md">
-                    <GHeading size="md">Select purchase date</GHeading>
-                    <DateTimePicker
-                      mode="date"
-                      value={datePickerValue}
-                      display="spinner"
-                      onChange={onPurchaseDatePickerChange}
-                    />
-                    <GHStack justifyContent="flex-end" space="sm">
-                      <GButton
-                        size="sm"
-                        variant="outline"
-                        action="secondary"
-                        onPress={closePurchaseDatePicker}
-                        accessibilityLabel="Cancel date selection"
-                      >
-                        <GButtonText>Cancel</GButtonText>
-                      </GButton>
-                      <GButton
-                        size="sm"
-                        onPress={confirmPurchaseDatePicker}
-                        accessibilityLabel="Confirm date selection"
-                      >
-                        <GButtonText>Done</GButtonText>
-                      </GButton>
-                    </GHStack>
-                  </GVStack>
-                </GCard>
-              </GBox>
-            </Modal>
           )}
 
           <GActionsheet

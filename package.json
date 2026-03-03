@@ -15,6 +15,7 @@
     "release:preflight": "npm run lint && npm run typecheck && npm run test:ci"
   },
   "dependencies": {
+    "@expo/ui": "^55.0.1",
     "@gluestack-style/react": "^1.0.57",
     "@gluestack-ui/config": "^1.1.20",
     "@gluestack-ui/themed": "^1.1.73",
