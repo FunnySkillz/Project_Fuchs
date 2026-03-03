@@ -1,5 +1,6 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useNavigation } from "@react-navigation/native";
+import { HeaderBackButton } from "@react-navigation/elements";
 import { Image } from "expo-image";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BackHandler, Linking, Modal, ScrollView } from "react-native";
@@ -419,55 +420,13 @@ export default function ItemEditRoute() {
     allowNavigationExitRef.current = true;
     setIsDiscardModalOpen(false);
 
-    const navigationWithBack = navigation as {
-      canGoBack?: () => boolean;
-      goBack?: () => void;
-    };
-    if (
-      typeof navigationWithBack.canGoBack === "function" &&
-      navigationWithBack.canGoBack() &&
-      typeof navigationWithBack.goBack === "function"
-    ) {
-      navigationWithBack.goBack();
-      return;
-    }
-
     if (itemId) {
       router.replace(`/item/${itemId}`);
       return;
     }
 
     router.replace("/(tabs)/items");
-  }, [itemId, navigation, router]);
-
-  useEffect(() => {
-    const unsubscribe = navigation.addListener("beforeRemove", (event: any) => {
-      if (allowNavigationExitRef.current) {
-        return;
-      }
-
-      if (isDirty) {
-        event.preventDefault();
-        setIsDiscardModalOpen(true);
-      }
-    });
-
-    return unsubscribe;
-  }, [isDirty, navigation]);
-
-  useEffect(() => {
-    const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
-      if (isDirty) {
-        setIsDiscardModalOpen(true);
-        return true;
-      }
-      return false;
-    });
-
-    return () => {
-      subscription.remove();
-    };
-  }, [isDirty]);
+  }, [itemId, router]);
 
   const handleExitRequest = useCallback(() => {
     if (!isDirty) {
@@ -475,6 +434,61 @@ export default function ItemEditRoute() {
       return;
     }
     setIsDiscardModalOpen(true);
+  }, [goBackFromEditFlow, isDirty]);
+
+  useEffect(() => {
+    const navigationWithOptions = navigation as {
+      setOptions?: (options: {
+        headerLeft?: (props: { canGoBack?: boolean; tintColor?: string }) => React.ReactNode;
+      }) => void;
+    };
+    if (typeof navigationWithOptions.setOptions !== "function") {
+      return;
+    }
+
+    navigationWithOptions.setOptions({
+      headerLeft: (props: { canGoBack?: boolean; tintColor?: string }) =>
+        props.canGoBack ? (
+          <HeaderBackButton
+            testID="edititem-header-back"
+            tintColor={props.tintColor}
+            onPress={handleExitRequest}
+          />
+        ) : null,
+    });
+  }, [handleExitRequest, navigation]);
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener("beforeRemove", (event: any) => {
+      if (allowNavigationExitRef.current) {
+        return;
+      }
+
+      event.preventDefault();
+      if (isDirty) {
+        setIsDiscardModalOpen(true);
+        return;
+      }
+
+      goBackFromEditFlow();
+    });
+
+    return unsubscribe;
+  }, [goBackFromEditFlow, isDirty, navigation]);
+
+  useEffect(() => {
+    const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
+      if (isDirty) {
+        setIsDiscardModalOpen(true);
+        return true;
+      }
+      goBackFromEditFlow();
+      return true;
+    });
+
+    return () => {
+      subscription.remove();
+    };
   }, [goBackFromEditFlow, isDirty]);
 
   const scrollToField = useCallback((field: FieldKey) => {

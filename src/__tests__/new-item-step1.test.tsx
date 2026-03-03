@@ -338,8 +338,8 @@ describe("NewItemRoute attachments and cancel behavior", () => {
 
     await waitFor(() => {
       expect(mockClearItemDraft).toHaveBeenCalledWith("draft-1");
-      expect(mockNavigationGoBack).toHaveBeenCalledTimes(1);
-      expect(mockRouterReplace).not.toHaveBeenCalledWith("/(tabs)/items");
+      expect(mockNavigationGoBack).not.toHaveBeenCalled();
+      expect(mockRouterReplace).toHaveBeenCalledWith("/(tabs)/items");
       expect(mockRouterBack).not.toHaveBeenCalled();
     });
   });

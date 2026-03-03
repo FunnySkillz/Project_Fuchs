@@ -11,6 +11,7 @@ let mockNavigationCanGoBack = true;
 
 const mockNavigationAddListener = jest.fn();
 const mockNavigationDispatch = jest.fn();
+const mockNavigationSetOptions = jest.fn();
 let beforeRemoveHandler: ((event: any) => void) | null = null;
 
 const mockGetById = jest.fn();
@@ -87,6 +88,7 @@ jest.mock("@react-navigation/native", () => ({
     canGoBack: () => mockNavigationCanGoBack,
     goBack: mockNavigationGoBack,
     dispatch: mockNavigationDispatch,
+    setOptions: mockNavigationSetOptions,
   }),
 }));
 
@@ -128,6 +130,7 @@ describe("ItemEditRoute", () => {
 
     mockNavigationAddListener.mockReset();
     mockNavigationDispatch.mockReset();
+    mockNavigationSetOptions.mockReset();
     beforeRemoveHandler = null;
 
     mockGetById.mockReset();
@@ -291,8 +294,8 @@ describe("ItemEditRoute", () => {
     fireEvent.press(screen.getByTestId("discard-confirm"));
 
     await waitFor(() => {
-      expect(mockNavigationGoBack).toHaveBeenCalledTimes(1);
-      expect(mockRouterReplace).not.toHaveBeenCalledWith("/item/item-1");
+      expect(mockNavigationGoBack).not.toHaveBeenCalled();
+      expect(mockRouterReplace).toHaveBeenCalledWith("/item/item-1");
     });
   });
 
@@ -303,8 +306,8 @@ describe("ItemEditRoute", () => {
     fireEvent.press(screen.getByTestId("edititem-cancel"));
 
     await waitFor(() => {
-      expect(mockNavigationGoBack).toHaveBeenCalledTimes(1);
-      expect(mockRouterReplace).not.toHaveBeenCalledWith("/item/item-1");
+      expect(mockNavigationGoBack).not.toHaveBeenCalled();
+      expect(mockRouterReplace).toHaveBeenCalledWith("/item/item-1");
       expect(mockRouterBack).not.toHaveBeenCalled();
     });
   });
@@ -348,7 +351,8 @@ describe("ItemEditRoute", () => {
     fireEvent.press(screen.getByTestId("discard-confirm"));
 
     await waitFor(() => {
-      expect(mockNavigationGoBack).toHaveBeenCalledTimes(1);
+      expect(mockNavigationGoBack).not.toHaveBeenCalled();
+      expect(mockRouterReplace).toHaveBeenCalledWith("/item/item-1");
       expect(consoleErrorSpy).not.toHaveBeenCalled();
     });
     consoleErrorSpy.mockRestore();
@@ -370,8 +374,9 @@ describe("ItemEditRoute", () => {
       });
     });
 
-    expect(preventDefault).not.toHaveBeenCalled();
+    expect(preventDefault).toHaveBeenCalled();
     expect(screen.queryByTestId("discard-modal")).toBeNull();
     expect(mockNavigationGoBack).not.toHaveBeenCalled();
+    expect(mockRouterReplace).toHaveBeenCalledWith("/item/item-1");
   });
 });

@@ -432,35 +432,8 @@ export default function NewItemRoute() {
     allowNavigationExitRef.current = true;
     pendingNavigationActionRef.current = null;
     setIsDiscardModalOpen(false);
-
-    const routerWithBack = router as {
-      canGoBack?: () => boolean;
-      back?: () => void;
-    };
-    if (
-      typeof routerWithBack.canGoBack === "function" &&
-      routerWithBack.canGoBack() &&
-      typeof routerWithBack.back === "function"
-    ) {
-      routerWithBack.back();
-      return;
-    }
-
-    const navigationWithBack = navigation as {
-      canGoBack?: () => boolean;
-      goBack?: () => void;
-    };
-    if (
-      typeof navigationWithBack.canGoBack === "function" &&
-      navigationWithBack.canGoBack() &&
-      typeof navigationWithBack.goBack === "function"
-    ) {
-      navigationWithBack.goBack();
-      return;
-    }
-
     router.replace("/(tabs)/items");
-  }, [navigation, router]);
+  }, [router]);
 
   const exitAfterDiscard = useCallback(async () => {
     if (!draftId) {
@@ -539,20 +512,14 @@ export default function NewItemRoute() {
         return;
       }
 
+      event.preventDefault();
       if (isDirty) {
-        event.preventDefault();
         pendingNavigationActionRef.current = event?.data?.action ?? null;
         setIsDiscardModalOpen(true);
         return;
       }
 
-      const canGoBack =
-        typeof (navigation as { canGoBack?: () => boolean }).canGoBack === "function" &&
-        (navigation as { canGoBack: () => boolean }).canGoBack();
-      if (!canGoBack) {
-        event.preventDefault();
-        goBackFromAddFlow();
-      }
+      goBackFromAddFlow();
     });
 
     return unsubscribe;
