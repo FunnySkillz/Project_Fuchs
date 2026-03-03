@@ -144,6 +144,8 @@ export default function NewItemRoute() {
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ draftId?: string | string[] }>();
   const draftId = toSingleParam(params.draftId);
+  const [generatedDraftId, setGeneratedDraftId] = useState<string | null>(null);
+  const activeDraftId = draftId ?? generatedDraftId;
   const shouldCleanupDraftOnExitRef = useRef(true);
   const allowNavigationExitRef = useRef(false);
   const pendingNavigationActionRef = useRef<any | null>(null);
@@ -379,22 +381,19 @@ export default function NewItemRoute() {
   }, [categoryId]);
 
   useEffect(() => {
-    if (draftId) {
-      reloadDraftAttachments(draftId);
+    if (activeDraftId) {
+      reloadDraftAttachments(activeDraftId);
       setIsInitializing(false);
       void loadCategories();
       return;
     }
 
     const createdDraftId = createItemDraft();
-    router.replace({
-      pathname: "/item/new",
-      params: { draftId: createdDraftId },
-    });
-  }, [draftId, loadCategories, reloadDraftAttachments, router]);
+    setGeneratedDraftId(createdDraftId);
+  }, [activeDraftId, loadCategories, reloadDraftAttachments]);
 
   useEffect(() => {
-    if (isInitializing || !draftId || initialSnapshotCapturedRef.current) {
+    if (isInitializing || !activeDraftId || initialSnapshotCapturedRef.current) {
       return;
     }
 
@@ -415,7 +414,7 @@ export default function NewItemRoute() {
   }, [
     attachmentFingerprint,
     categoryId,
-    draftId,
+    activeDraftId,
     isInitializing,
     notes,
     purchaseDate,
@@ -446,7 +445,7 @@ export default function NewItemRoute() {
   }, [router]);
 
   const exitAfterDiscard = useCallback(async () => {
-    if (!draftId) {
+    if (!activeDraftId) {
       goBackFromAddFlow();
       return;
     }
@@ -454,7 +453,7 @@ export default function NewItemRoute() {
     setIsBusy(true);
     clearError();
     try {
-      await clearItemDraft(draftId);
+      await clearItemDraft(activeDraftId);
       shouldCleanupDraftOnExitRef.current = false;
       goBackFromAddFlow();
     } catch (error) {
@@ -464,7 +463,7 @@ export default function NewItemRoute() {
       setIsBusy(false);
       setIsDiscardModalOpen(false);
     }
-  }, [clearError, draftId, goBackFromAddFlow, setActionableError]);
+  }, [activeDraftId, clearError, goBackFromAddFlow, setActionableError]);
 
   const handleExitRequest = useCallback(async () => {
     pendingNavigationActionRef.current = null;
@@ -482,15 +481,15 @@ export default function NewItemRoute() {
 
   useEffect(() => {
     return () => {
-      if (!draftId || !shouldCleanupDraftOnExitRef.current) {
+      if (!activeDraftId || !shouldCleanupDraftOnExitRef.current) {
         return;
       }
 
-      void clearItemDraft(draftId).catch((error) => {
+      void clearItemDraft(activeDraftId).catch((error) => {
         console.error("Failed to clear draft during route exit cleanup", error);
       });
     };
-  }, [draftId]);
+  }, [activeDraftId]);
 
   useEffect(() => {
     const navigationWithOptions = navigation as {
@@ -610,7 +609,7 @@ export default function NewItemRoute() {
   );
 
   const addReceiptFromCamera = async () => {
-    if (!draftId) {
+    if (!activeDraftId) {
       return;
     }
 
@@ -622,8 +621,8 @@ export default function NewItemRoute() {
         return;
       }
 
-      addAttachmentToDraft(draftId, withType(captured, "RECEIPT"));
-      reloadDraftAttachments(draftId);
+      addAttachmentToDraft(activeDraftId, withType(captured, "RECEIPT"));
+      reloadDraftAttachments(activeDraftId);
     } catch (error) {
       if (isUserCancellationError(error)) {
         return;
@@ -636,7 +635,7 @@ export default function NewItemRoute() {
   };
 
   const uploadReceipt = async () => {
-    if (!draftId) {
+    if (!activeDraftId) {
       return;
     }
 
@@ -648,8 +647,8 @@ export default function NewItemRoute() {
         return;
       }
 
-      addAttachmentToDraft(draftId, withType(picked, "RECEIPT"));
-      reloadDraftAttachments(draftId);
+      addAttachmentToDraft(activeDraftId, withType(picked, "RECEIPT"));
+      reloadDraftAttachments(activeDraftId);
     } catch (error) {
       if (isUserCancellationError(error)) {
         return;
@@ -662,7 +661,7 @@ export default function NewItemRoute() {
   };
 
   const addExtraPhoto = async () => {
-    if (!draftId) {
+    if (!activeDraftId) {
       return;
     }
 
@@ -674,8 +673,8 @@ export default function NewItemRoute() {
         return;
       }
 
-      addAttachmentToDraft(draftId, withType(captured, "PHOTO"));
-      reloadDraftAttachments(draftId);
+      addAttachmentToDraft(activeDraftId, withType(captured, "PHOTO"));
+      reloadDraftAttachments(activeDraftId);
     } catch (error) {
       if (isUserCancellationError(error)) {
         return;
@@ -688,13 +687,13 @@ export default function NewItemRoute() {
   };
 
   const removeAttachment = async (filePath: string) => {
-    if (!draftId) {
+    if (!activeDraftId) {
       return;
     }
 
     try {
-      await removeAttachmentFromDraft(draftId, filePath);
-      reloadDraftAttachments(draftId);
+      await removeAttachmentFromDraft(activeDraftId, filePath);
+      reloadDraftAttachments(activeDraftId);
       if (previewAttachment?.filePath === filePath) {
         setPreviewAttachment(null);
       }
@@ -770,7 +769,7 @@ export default function NewItemRoute() {
   }, [fieldErrors, usefulLifeMonthsOverrideError]);
 
   const saveItem = async () => {
-    if (!draftId || !isFormValid || parsedTotalCents === null) {
+    if (!activeDraftId || !isFormValid || parsedTotalCents === null) {
       return;
     }
 
@@ -795,7 +794,7 @@ export default function NewItemRoute() {
             : null,
       });
 
-      await linkDraftAttachmentsToItem(draftId, created.id);
+      await linkDraftAttachmentsToItem(activeDraftId, created.id);
       shouldCleanupDraftOnExitRef.current = false;
       allowNavigationExitRef.current = true;
       setSaveFeedbackMessage("Saved");

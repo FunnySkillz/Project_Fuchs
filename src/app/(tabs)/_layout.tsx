@@ -1,4 +1,4 @@
-import { Tabs, useRouter } from "expo-router";
+import { Tabs } from "expo-router";
 import React from "react";
 import { Download, LayoutDashboard, Plus, Receipt, Settings } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -6,7 +6,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/hooks/use-theme";
 
 export default function TabsLayout() {
-  const router = useRouter();
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const safeAreaBottom = Math.max(insets.bottom, 8);
@@ -45,15 +44,8 @@ export default function TabsLayout() {
       />
       <Tabs.Screen
         name="add"
-        listeners={{
-          tabPress: (e) => {
-            e.preventDefault();
-            router.push("/item/new");
-          },
-        }}
         options={{
           title: "Add",
-          tabBarButtonTestID: "tab-add",
           tabBarIcon: ({ color }) => <Plus size={22} color={color} strokeWidth={1.8} />,
         }}
       />
