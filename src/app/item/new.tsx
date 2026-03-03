@@ -11,7 +11,6 @@ import React, {
 import {
   BackHandler,
   Image,
-  Keyboard,
   KeyboardAvoidingView,
   Linking,
   Modal,
@@ -199,7 +198,6 @@ export default function NewItemRoute() {
   const [isDiscardModalOpen, setIsDiscardModalOpen] = useState(false);
   const [previewAttachment, setPreviewAttachment] =
     useState<StoredAttachmentFile | null>(null);
-  const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
 
   const [title, setTitle] = useState("");
   const [purchaseDate, setPurchaseDate] = useState(
@@ -624,25 +622,6 @@ export default function NewItemRoute() {
     }, [closeDiscardModal, goBackFromAddFlow, navigation]),
   );
 
-  useEffect(() => {
-    const showEvent =
-      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
-    const hideEvent =
-      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
-
-    const showSubscription = Keyboard.addListener(showEvent, () => {
-      setIsKeyboardOpen(true);
-    });
-    const hideSubscription = Keyboard.addListener(hideEvent, () => {
-      setIsKeyboardOpen(false);
-    });
-
-    return () => {
-      showSubscription.remove();
-      hideSubscription.remove();
-    };
-  }, []);
-
   const openDeviceSettings = useCallback(async () => {
     try {
       await Linking.openSettings();
@@ -917,9 +896,6 @@ export default function NewItemRoute() {
     );
   }
 
-  const actionBarBottomInset = inTabsContext ? 6 : Math.max(insets.bottom, 4);
-  const actionBarEstimatedHeight = 80 + actionBarBottomInset;
-
   return (
     <SafeAreaView style={{ flex: 1 }} edges={inTabsContext ? ["top"] : ["top", "bottom"]}>
       <KeyboardAvoidingView
@@ -937,7 +913,7 @@ export default function NewItemRoute() {
               alignSelf: "center",
               paddingHorizontal: 20,
               paddingTop: 20,
-              paddingBottom: actionBarEstimatedHeight + 24,
+              paddingBottom: insets.bottom + 24,
             }}
           >
             <GVStack space="lg">
@@ -1640,28 +1616,7 @@ export default function NewItemRoute() {
                   )}
                 </GVStack>
               </GCard>
-            </GVStack>
-          </ScrollView>
 
-          <GText
-            testID="additem-keyboard-open-state"
-            style={{ position: "absolute", opacity: 0 }}
-          >
-            {isKeyboardOpen ? "open" : "closed"}
-          </GText>
-
-          {!isKeyboardOpen && (
-            <GBox
-              borderTopWidth="$1"
-              borderColor="$border200"
-              bg="$background0"
-              testID="additem-bottom-bar"
-              style={{
-                paddingTop: 12,
-                paddingBottom: actionBarBottomInset,
-                paddingHorizontal: 20,
-              }}
-            >
               <GVStack space="xs">
                 {saveFeedbackMessage && (
                   <GText
@@ -1673,11 +1628,7 @@ export default function NewItemRoute() {
                     {saveFeedbackMessage}
                   </GText>
                 )}
-                <GHStack
-                  justifyContent="space-between"
-                  alignItems="center"
-                  space="sm"
-                >
+                <GHStack justifyContent="space-between" alignItems="center" space="sm">
                   <GButton
                     flex={1}
                     variant="outline"
@@ -1698,15 +1649,13 @@ export default function NewItemRoute() {
                       testID="additem-btn-save"
                       accessibilityLabel="Save item"
                     >
-                      <GButtonText testID="action-add-item">
-                        {isSavingItem ? "Saving..." : "Save Item"}
-                      </GButtonText>
+                      <GButtonText testID="action-add-item">{isSavingItem ? "Saving..." : "Save Item"}</GButtonText>
                     </GButton>
                   </GBox>
                 </GHStack>
               </GVStack>
-            </GBox>
-          )}
+            </GVStack>
+          </ScrollView>
 
           <GActionsheet
             isOpen={isCategorySheetOpen}
