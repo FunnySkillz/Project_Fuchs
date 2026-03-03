@@ -32,14 +32,27 @@ jest.mock("lucide-react-native", () => {
 
 jest.mock("expo-router", () => {
   const ReactModule = require("react");
-  const { View } = require("react-native");
+  const { Pressable, View } = require("react-native");
   const TabsComponent = ({ children }: { children: React.ReactNode }) => <View>{children}</View>;
   const TabsWithScreen = Object.assign(TabsComponent, {
-    Screen: ({ options }: { options?: { tabBarButton?: (props: unknown) => React.ReactNode } }) => {
-      if (typeof options?.tabBarButton !== "function") {
+    Screen: ({
+      name,
+      options,
+      listeners,
+    }: {
+      name: string;
+      options?: { tabBarButtonTestID?: string };
+      listeners?: { tabPress?: (event: { preventDefault: () => void }) => void };
+    }) => {
+      if (name !== "add") {
         return null;
       }
-      return <>{options.tabBarButton({})}</>;
+      return (
+        <Pressable
+          testID={options?.tabBarButtonTestID ?? "tab-add"}
+          onPress={() => listeners?.tabPress?.({ preventDefault: jest.fn() })}
+        />
+      );
     },
   });
 
@@ -54,10 +67,10 @@ describe("TabsLayout", () => {
     mockPush.mockReset();
   });
 
-  it("renders center add action and opens add-item flow", () => {
+  it("opens add-item flow when add tab is pressed", () => {
     render(<TabsLayout />);
 
-    const addTabButton = screen.getByTestId("tab-add-center");
+    const addTabButton = screen.getByTestId("tab-add");
     fireEvent.press(addTabButton);
 
     expect(mockPush).toHaveBeenCalledWith("/item/new");
