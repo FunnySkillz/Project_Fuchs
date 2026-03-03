@@ -1,31 +1,56 @@
+import { BottomTabBar } from "@react-navigation/bottom-tabs";
 import { Tabs, useRouter } from "expo-router";
-import React from "react";
-import { Pressable, View } from "react-native";
 import { Download, LayoutDashboard, Plus, Receipt, Settings } from "lucide-react-native";
+import React from "react";
+import { Pressable, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+
 import { useTheme } from "@/hooks/use-theme";
 
 export default function TabsLayout() {
   const router = useRouter();
   const theme = useTheme();
   const insets = useSafeAreaInsets();
-  const bottomInset = Math.max(insets.bottom, 8);
-  const tabBarHeight = 56 + bottomInset;
-  const addButtonLift = Math.max(6, Math.min(12, insets.bottom + 6));
-  const mutedForeground = theme.textSecondary;
+  const safeAreaBottom = Math.max(insets.bottom, 8);
 
   return (
     <Tabs
+      tabBar={(props) => (
+        <View style={styles.tabBarHost}>
+          <BottomTabBar {...props} />
+          <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>
+            <View style={styles.fabContainer} pointerEvents="box-none">
+              <Pressable
+                testID="tab-add-center"
+                accessibilityRole="button"
+                accessibilityLabel="Add Item"
+                onPress={() => router.push("/item/new")}
+                style={({ pressed }) => [
+                  styles.fab,
+                  {
+                    bottom: safeAreaBottom + 12,
+                    backgroundColor: theme.primary,
+                    shadowColor: theme.text,
+                  },
+                  pressed && styles.fabPressed,
+                ]}
+              >
+                <Plus size={24} color={theme.textOnPrimary} strokeWidth={2.1} />
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      )}
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: theme.primary,
-        tabBarInactiveTintColor: mutedForeground,
+        tabBarInactiveTintColor: theme.textSecondary,
         tabBarStyle: {
           backgroundColor: theme.background,
           borderTopColor: theme.border,
-          paddingTop: 6,
-          paddingBottom: bottomInset,
-          height: tabBarHeight,
+          height: 56 + safeAreaBottom,
+          paddingBottom: safeAreaBottom,
+          paddingTop: 0,
         },
         tabBarLabelStyle: {
           fontSize: 12,
@@ -33,6 +58,7 @@ export default function TabsLayout() {
         tabBarItemStyle: {
           flex: 1,
         },
+        tabBarHideOnKeyboard: false,
       }}
     >
       <Tabs.Screen
@@ -55,56 +81,11 @@ export default function TabsLayout() {
       />
       <Tabs.Screen
         name="add"
+        listeners={{
+          tabPress: (e) => e.preventDefault(),
+        }}
         options={{
-          title: "Add",
-          tabBarLabel: "",
-          tabBarButton: ({ style, onLongPress, accessibilityState }) => (
-            <Pressable
-              onPress={() => {
-                router.push("/item/new");
-              }}
-              onLongPress={onLongPress}
-              testID="tab-add-center"
-              accessibilityLabel="Add Item"
-              accessibilityRole="button"
-              accessibilityState={{
-                ...accessibilityState,
-                selected: false,
-              }}
-              hitSlop={8}
-              style={({ pressed }) => [
-                style,
-                {
-                  width: "100%",
-                  minHeight: 64,
-                  minWidth: 64,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  opacity: pressed ? 0.9 : 1,
-                  overflow: "visible",
-                },
-              ]}
-            >
-              <View
-                style={{
-                  width: 56,
-                  height: 56,
-                  borderRadius: 28,
-                  justifyContent: "center",
-                  alignItems: "center",
-                  backgroundColor: theme.primary,
-                  shadowColor: theme.text,
-                  shadowOpacity: 0.14,
-                  shadowRadius: 10,
-                  shadowOffset: { width: 0, height: 4 },
-                  elevation: 4,
-                  transform: [{ translateY: -addButtonLift }],
-                }}
-              >
-                <Plus size={24} color={theme.textOnPrimary} strokeWidth={2.1} />
-              </View>
-            </Pressable>
-          ),
+          href: null,
         }}
       />
       <Tabs.Screen
@@ -128,3 +109,31 @@ export default function TabsLayout() {
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  tabBarHost: {
+    position: "relative",
+  },
+  fabContainer: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: "flex-end",
+    alignItems: "center",
+    zIndex: 20,
+  },
+  fab: {
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    position: "absolute",
+    alignSelf: "center",
+    justifyContent: "center",
+    alignItems: "center",
+    elevation: 6,
+    shadowOpacity: 0.18,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+  },
+  fabPressed: {
+    opacity: 0.9,
+  },
+});

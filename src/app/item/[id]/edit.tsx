@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useNavigation } from "@react-navigation/native";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { HeaderBackButton } from "@react-navigation/elements";
 import { Image } from "expo-image";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -129,6 +129,8 @@ export default function ItemEditRoute() {
   const params = useLocalSearchParams<{ id?: string | string[] }>();
   const itemId = toSingleParam(params.id);
   const allowNavigationExitRef = useRef(false);
+  const isDirtyRef = useRef(false);
+  const isDiscardModalOpenRef = useRef(false);
   const initialSnapshotRef = useRef<InitialSnapshot | null>(null);
   const initialSnapshotCapturedRef = useRef(false);
   const fieldYRef = useRef<Partial<Record<FieldKey, number>>>({});
@@ -274,6 +276,14 @@ export default function ItemEditRoute() {
     warrantyMonths,
     workPercent,
   ]);
+
+  useEffect(() => {
+    isDirtyRef.current = isDirty;
+  }, [isDirty]);
+
+  useEffect(() => {
+    isDiscardModalOpenRef.current = isDiscardModalOpen;
+  }, [isDiscardModalOpen]);
 
   const isFormValid = validation.valid && usefulLifeMonthsOverrideError === null;
   const isSaveDisabled = (submitAttempted && !isFormValid) || isSaving;
@@ -436,6 +446,10 @@ export default function ItemEditRoute() {
     setIsDiscardModalOpen(true);
   }, [goBackFromEditFlow, isDirty]);
 
+  const closeDiscardModal = useCallback(() => {
+    setIsDiscardModalOpen(false);
+  }, []);
+
   useEffect(() => {
     const navigationWithOptions = navigation as {
       setOptions?: (options: {
@@ -458,38 +472,41 @@ export default function ItemEditRoute() {
     });
   }, [handleExitRequest, navigation]);
 
-  useEffect(() => {
-    const unsubscribe = navigation.addListener("beforeRemove", (event: any) => {
-      if (allowNavigationExitRef.current) {
-        return;
-      }
+  useFocusEffect(
+    useCallback(() => {
+      const unsubscribe = navigation.addListener("beforeRemove", (event: any) => {
+        if (allowNavigationExitRef.current) {
+          return;
+        }
 
-      event.preventDefault();
-      if (isDirty) {
-        setIsDiscardModalOpen(true);
-        return;
-      }
+        event.preventDefault();
+        if (isDirtyRef.current) {
+          setIsDiscardModalOpen(true);
+          return;
+        }
 
-      goBackFromEditFlow();
-    });
+        goBackFromEditFlow();
+      });
 
-    return unsubscribe;
-  }, [goBackFromEditFlow, isDirty, navigation]);
-
-  useEffect(() => {
-    const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
-      if (isDirty) {
-        setIsDiscardModalOpen(true);
+      const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
+        if (isDiscardModalOpenRef.current) {
+          closeDiscardModal();
+          return true;
+        }
+        if (isDirtyRef.current) {
+          setIsDiscardModalOpen(true);
+          return true;
+        }
+        goBackFromEditFlow();
         return true;
-      }
-      goBackFromEditFlow();
-      return true;
-    });
+      });
 
-    return () => {
-      subscription.remove();
-    };
-  }, [goBackFromEditFlow, isDirty]);
+      return () => {
+        unsubscribe();
+        subscription.remove();
+      };
+    }, [closeDiscardModal, goBackFromEditFlow, navigation])
+  );
 
   const scrollToField = useCallback((field: FieldKey) => {
     const y = fieldYRef.current[field];
@@ -671,10 +688,6 @@ export default function ItemEditRoute() {
     } finally {
       setIsCreatingCategory(false);
     }
-  };
-
-  const closeDiscardModal = () => {
-    setIsDiscardModalOpen(false);
   };
 
   if (isLoading) {

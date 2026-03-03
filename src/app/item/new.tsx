@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useNavigation } from "@react-navigation/native";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { HeaderBackButton } from "@react-navigation/elements";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -147,6 +147,8 @@ export default function NewItemRoute() {
   const shouldCleanupDraftOnExitRef = useRef(true);
   const allowNavigationExitRef = useRef(false);
   const pendingNavigationActionRef = useRef<any | null>(null);
+  const isDirtyRef = useRef(false);
+  const isDiscardModalOpenRef = useRef(false);
   const fieldYRef = useRef<Partial<Record<FieldKey, number>>>({});
   const scrollRef = useRef<ScrollView | null>(null);
   const inputRef = useRef<Partial<Record<FieldKey, FocusTarget | null>>>({});
@@ -331,6 +333,14 @@ export default function NewItemRoute() {
     workPercent,
   ]);
 
+  useEffect(() => {
+    isDirtyRef.current = isDirty;
+  }, [isDirty]);
+
+  useEffect(() => {
+    isDiscardModalOpenRef.current = isDiscardModalOpen;
+  }, [isDiscardModalOpen]);
+
   const setFieldTouched = useCallback((field: FieldKey) => {
     setTouchedFields((current) => ({ ...current, [field]: true }));
   }, []);
@@ -465,10 +475,10 @@ export default function NewItemRoute() {
     setIsDiscardModalOpen(true);
   }, [goBackFromAddFlow, isDirty]);
 
-  const closeDiscardModal = () => {
+  const closeDiscardModal = useCallback(() => {
     pendingNavigationActionRef.current = null;
     setIsDiscardModalOpen(false);
-  };
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -506,40 +516,43 @@ export default function NewItemRoute() {
     });
   }, [handleExitRequest, navigation]);
 
-  useEffect(() => {
-    const unsubscribe = navigation.addListener("beforeRemove", (event: any) => {
-      if (allowNavigationExitRef.current) {
-        return;
-      }
+  useFocusEffect(
+    useCallback(() => {
+      const unsubscribe = navigation.addListener("beforeRemove", (event: any) => {
+        if (allowNavigationExitRef.current) {
+          return;
+        }
 
-      event.preventDefault();
-      if (isDirty) {
-        pendingNavigationActionRef.current = event?.data?.action ?? null;
-        setIsDiscardModalOpen(true);
-        return;
-      }
+        event.preventDefault();
+        if (isDirtyRef.current) {
+          pendingNavigationActionRef.current = event?.data?.action ?? null;
+          setIsDiscardModalOpen(true);
+          return;
+        }
 
-      goBackFromAddFlow();
-    });
+        goBackFromAddFlow();
+      });
 
-    return unsubscribe;
-  }, [goBackFromAddFlow, isDirty, navigation]);
-
-  useEffect(() => {
-    const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
-      pendingNavigationActionRef.current = null;
-      if (isDirty) {
-        setIsDiscardModalOpen(true);
+      const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
+        pendingNavigationActionRef.current = null;
+        if (isDiscardModalOpenRef.current) {
+          closeDiscardModal();
+          return true;
+        }
+        if (isDirtyRef.current) {
+          setIsDiscardModalOpen(true);
+          return true;
+        }
+        goBackFromAddFlow();
         return true;
-      }
-      goBackFromAddFlow();
-      return true;
-    });
+      });
 
-    return () => {
-      subscription.remove();
-    };
-  }, [goBackFromAddFlow, isDirty]);
+      return () => {
+        unsubscribe();
+        subscription.remove();
+      };
+    }, [closeDiscardModal, goBackFromAddFlow, navigation])
+  );
 
   useEffect(() => {
     const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";

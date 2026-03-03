@@ -96,6 +96,10 @@ jest.mock("@/hooks/use-theme", () => ({
 }));
 
 jest.mock("@react-navigation/native", () => ({
+  useFocusEffect: (callback: () => void | (() => void)) => {
+    const ReactModule = require("react");
+    ReactModule.useEffect(() => callback(), [callback]);
+  },
   useNavigation: () => ({
     addListener: mockNavigationAddListener,
     canGoBack: () => mockNavigationCanGoBack,
