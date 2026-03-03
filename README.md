@@ -262,11 +262,6 @@ Build production:
 eas build --profile production
 ```
 
-Auto-publish preview updates on `main`:
-
-- See `docs/release/preview-auto-deploy.md`
-- Requires GitHub secret `EXPO_TOKEN`
-
 Internal dev client build:
 
 ```bash
