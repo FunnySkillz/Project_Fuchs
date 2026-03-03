@@ -1,7 +1,13 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { HeaderBackButton } from "@react-navigation/elements";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   BackHandler,
   Image,
@@ -13,7 +19,10 @@ import {
   Pressable,
   ScrollView,
 } from "react-native";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import {
   Actionsheet as GActionsheet,
   ActionsheetBackdrop as GActionsheetBackdrop,
@@ -44,7 +53,10 @@ import { useTheme } from "@/hooks/use-theme";
 import type { AttachmentType } from "@/models/attachment";
 import type { Category } from "@/models/category";
 import type { ItemUsageType } from "@/models/item";
-import { getCategoryRepository, getItemRepository } from "@/repositories/create-core-repositories";
+import {
+  getCategoryRepository,
+  getItemRepository,
+} from "@/repositories/create-core-repositories";
 import type { StoredAttachmentFile } from "@/services/attachment-storage";
 import { saveFromCamera, saveFromPicker } from "@/services/attachment-storage";
 import {
@@ -63,7 +75,9 @@ import {
 import { addMonthsToYmd, formatYmdFromDateLocal } from "@/utils/date";
 import { parseEuroInputToCents } from "@/utils/money";
 
-function toSingleParam(value: string | string[] | undefined): string | undefined {
+function toSingleParam(
+  value: string | string[] | undefined,
+): string | undefined {
   return Array.isArray(value) ? value[0] : value;
 }
 
@@ -80,15 +94,22 @@ function formatFileSize(bytes: number | null): string {
   return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
 }
 
-function withType(attachment: StoredAttachmentFile, type: AttachmentType): StoredAttachmentFile {
+function withType(
+  attachment: StoredAttachmentFile,
+  type: AttachmentType,
+): StoredAttachmentFile {
   return {
     ...attachment,
     type,
   };
 }
 
-function toAttachmentTestId(attachment: StoredAttachmentFile, index: number): string {
-  const base = attachment.originalFileName ?? attachment.filePath ?? `attachment-${index}`;
+function toAttachmentTestId(
+  attachment: StoredAttachmentFile,
+  index: number,
+): string {
+  const base =
+    attachment.originalFileName ?? attachment.filePath ?? `attachment-${index}`;
   return `${index}-${base}`.replace(/[^a-zA-Z0-9_-]/g, "_");
 }
 
@@ -105,7 +126,10 @@ const usageOptions: { value: ItemUsageType; label: string; key: string }[] = [
   { value: "OTHER", label: "OTHER", key: "other" },
 ];
 
-const requiredFieldMessages: Record<"title" | "purchaseDate" | "totalCents", string> = {
+const requiredFieldMessages: Record<
+  "title" | "purchaseDate" | "totalCents",
+  string
+> = {
   title: "Title is required.",
   purchaseDate: "Purchase date is required.",
   totalCents: "Price is required and must be greater than 0.",
@@ -161,17 +185,24 @@ export default function NewItemRoute() {
   const [isBusy, setIsBusy] = useState(false);
   const [isSavingItem, setIsSavingItem] = useState(false);
   const [submitAttempted, setSubmitAttempted] = useState(false);
-  const [touchedFields, setTouchedFields] = useState<Partial<Record<FieldKey, boolean>>>({});
+  const [touchedFields, setTouchedFields] = useState<
+    Partial<Record<FieldKey, boolean>>
+  >({});
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [saveFeedbackMessage, setSaveFeedbackMessage] = useState<string | null>(null);
+  const [saveFeedbackMessage, setSaveFeedbackMessage] = useState<string | null>(
+    null,
+  );
   const [showOpenSettingsAction, setShowOpenSettingsAction] = useState(false);
   const [attachments, setAttachments] = useState<StoredAttachmentFile[]>([]);
   const [isDiscardModalOpen, setIsDiscardModalOpen] = useState(false);
-  const [previewAttachment, setPreviewAttachment] = useState<StoredAttachmentFile | null>(null);
+  const [previewAttachment, setPreviewAttachment] =
+    useState<StoredAttachmentFile | null>(null);
   const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
 
   const [title, setTitle] = useState("");
-  const [purchaseDate, setPurchaseDate] = useState(formatYmdFromDateLocal(new Date()));
+  const [purchaseDate, setPurchaseDate] = useState(
+    formatYmdFromDateLocal(new Date()),
+  );
   const [totalPrice, setTotalPrice] = useState("");
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [usageType, setUsageType] = useState<ItemUsageType>("WORK");
@@ -190,11 +221,11 @@ export default function NewItemRoute() {
 
   const receiptAttachments = useMemo(
     () => attachments.filter((attachment) => attachment.type === "RECEIPT"),
-    [attachments]
+    [attachments],
   );
   const extraPhotos = useMemo(
     () => attachments.filter((attachment) => attachment.type === "PHOTO"),
-    [attachments]
+    [attachments],
   );
   const attachmentFingerprint = useMemo(() => {
     return attachments
@@ -203,7 +234,10 @@ export default function NewItemRoute() {
       .join("||");
   }, [attachments]);
 
-  const parsedTotalCents = useMemo(() => parseEuroInputToCents(totalPrice), [totalPrice]);
+  const parsedTotalCents = useMemo(
+    () => parseEuroInputToCents(totalPrice),
+    [totalPrice],
+  );
   const parsedWorkPercent = useMemo(() => {
     const trimmed = workPercent.trim();
     if (trimmed.length === 0) {
@@ -243,7 +277,10 @@ export default function NewItemRoute() {
     if (trimmed.length === 0) {
       return null;
     }
-    if (parsedUsefulLifeMonthsOverride === null || parsedUsefulLifeMonthsOverride <= 0) {
+    if (
+      parsedUsefulLifeMonthsOverride === null ||
+      parsedUsefulLifeMonthsOverride <= 0
+    ) {
       return "Useful life override must be a positive number of months.";
     }
     return null;
@@ -258,7 +295,14 @@ export default function NewItemRoute() {
       workPercent: parsedWorkPercent,
       warrantyMonths: parsedWarrantyMonths,
     });
-  }, [title, purchaseDate, parsedTotalCents, usageType, parsedWorkPercent, parsedWarrantyMonths]);
+  }, [
+    title,
+    purchaseDate,
+    parsedTotalCents,
+    usageType,
+    parsedWorkPercent,
+    parsedWarrantyMonths,
+  ]);
 
   const fieldErrors = useMemo(() => {
     const grouped: Record<string, string> = {};
@@ -278,20 +322,27 @@ export default function NewItemRoute() {
           ? requiredFieldMessages.purchaseDate
           : fieldErrors.purchaseDate
         : undefined,
-      totalCents: fieldErrors.totalCents ? requiredFieldMessages.totalCents : undefined,
+      totalCents: fieldErrors.totalCents
+        ? requiredFieldMessages.totalCents
+        : undefined,
       workPercent: fieldErrors.workPercent,
       warrantyMonths: fieldErrors.warrantyMonths,
     };
   }, [fieldErrors, purchaseDate]);
 
-  const isFormValid = validation.valid && usefulLifeMonthsOverrideError === null;
-  const isSaveDisabled = (submitAttempted && !isFormValid) || isSavingItem || isBusy;
+  const isFormValid =
+    validation.valid && usefulLifeMonthsOverrideError === null;
+  const isSaveDisabled =
+    (submitAttempted && !isFormValid) || isSavingItem || isBusy;
 
   const selectedCategoryName = useMemo(() => {
     if (!categoryId) {
       return "No category selected";
     }
-    return categories.find((entry) => entry.id === categoryId)?.name ?? "Unknown category";
+    return (
+      categories.find((entry) => entry.id === categoryId)?.name ??
+      "Unknown category"
+    );
   }, [categories, categoryId]);
 
   const warrantyUntilDate = useMemo(() => {
@@ -348,12 +399,14 @@ export default function NewItemRoute() {
   }, []);
 
   const shouldShowFieldError = useCallback(
-    (field: FieldKey) => Boolean((submitAttempted || touchedFields[field]) && fieldErrors[field]),
-    [fieldErrors, submitAttempted, touchedFields]
+    (field: FieldKey) =>
+      Boolean((submitAttempted || touchedFields[field]) && fieldErrors[field]),
+    [fieldErrors, submitAttempted, touchedFields],
   );
 
   const showUsefulLifeError = Boolean(
-    (submitAttempted || touchedFields.usefulLifeMonthsOverride) && usefulLifeMonthsOverrideError
+    (submitAttempted || touchedFields.usefulLifeMonthsOverride) &&
+    usefulLifeMonthsOverrideError,
   );
 
   const reloadDraftAttachments = useCallback((id: string) => {
@@ -368,7 +421,10 @@ export default function NewItemRoute() {
       setCategories(loaded);
       if (loaded.length === 0) {
         setCategoryId(null);
-      } else if (categoryId && !loaded.some((category) => category.id === categoryId)) {
+      } else if (
+        categoryId &&
+        !loaded.some((category) => category.id === categoryId)
+      ) {
         setCategoryId(null);
       }
     } catch (error) {
@@ -393,7 +449,11 @@ export default function NewItemRoute() {
   }, [activeDraftId, loadCategories, reloadDraftAttachments]);
 
   useEffect(() => {
-    if (isInitializing || !activeDraftId || initialSnapshotCapturedRef.current) {
+    if (
+      isInitializing ||
+      !activeDraftId ||
+      initialSnapshotCapturedRef.current
+    ) {
       return;
     }
 
@@ -494,7 +554,10 @@ export default function NewItemRoute() {
   useEffect(() => {
     const navigationWithOptions = navigation as {
       setOptions?: (options: {
-        headerLeft?: (props: { canGoBack?: boolean; tintColor?: string }) => React.ReactNode;
+        headerLeft?: (props: {
+          canGoBack?: boolean;
+          tintColor?: string;
+        }) => React.ReactNode;
       }) => void;
     };
     if (typeof navigationWithOptions.setOptions !== "function") {
@@ -517,45 +580,53 @@ export default function NewItemRoute() {
 
   useFocusEffect(
     useCallback(() => {
-      const unsubscribe = navigation.addListener("beforeRemove", (event: any) => {
-        if (allowNavigationExitRef.current) {
-          return;
-        }
+      const unsubscribe = navigation.addListener(
+        "beforeRemove",
+        (event: any) => {
+          if (allowNavigationExitRef.current) {
+            return;
+          }
 
-        event.preventDefault();
-        if (isDirtyRef.current) {
-          pendingNavigationActionRef.current = event?.data?.action ?? null;
-          setIsDiscardModalOpen(true);
-          return;
-        }
+          event.preventDefault();
+          if (isDirtyRef.current) {
+            pendingNavigationActionRef.current = event?.data?.action ?? null;
+            setIsDiscardModalOpen(true);
+            return;
+          }
 
-        goBackFromAddFlow();
-      });
+          goBackFromAddFlow();
+        },
+      );
 
-      const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
-        pendingNavigationActionRef.current = null;
-        if (isDiscardModalOpenRef.current) {
-          closeDiscardModal();
+      const subscription = BackHandler.addEventListener(
+        "hardwareBackPress",
+        () => {
+          pendingNavigationActionRef.current = null;
+          if (isDiscardModalOpenRef.current) {
+            closeDiscardModal();
+            return true;
+          }
+          if (isDirtyRef.current) {
+            setIsDiscardModalOpen(true);
+            return true;
+          }
+          goBackFromAddFlow();
           return true;
-        }
-        if (isDirtyRef.current) {
-          setIsDiscardModalOpen(true);
-          return true;
-        }
-        goBackFromAddFlow();
-        return true;
-      });
+        },
+      );
 
       return () => {
         unsubscribe();
         subscription.remove();
       };
-    }, [closeDiscardModal, goBackFromAddFlow, navigation])
+    }, [closeDiscardModal, goBackFromAddFlow, navigation]),
   );
 
   useEffect(() => {
-    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
-    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+    const showEvent =
+      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent =
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
 
     const showSubscription = Keyboard.addListener(showEvent, () => {
       setIsKeyboardOpen(true);
@@ -574,7 +645,9 @@ export default function NewItemRoute() {
     try {
       await Linking.openSettings();
     } catch {
-      setErrorMessage("Could not open device settings. Open system settings manually.");
+      setErrorMessage(
+        "Could not open device settings. Open system settings manually.",
+      );
       setShowOpenSettingsAction(false);
     }
   }, []);
@@ -594,7 +667,7 @@ export default function NewItemRoute() {
         setActionableError(error, "Could not open PDF attachment.");
       }
     },
-    [clearError, setActionableError]
+    [clearError, setActionableError],
   );
 
   const openAttachmentPreview = useCallback(
@@ -605,7 +678,7 @@ export default function NewItemRoute() {
       }
       setPreviewAttachment(attachment);
     },
-    [handleOpenPdfAttachment]
+    [handleOpenPdfAttachment],
   );
 
   const addReceiptFromCamera = async () => {
@@ -789,7 +862,8 @@ export default function NewItemRoute() {
         warrantyMonths: parsedWarrantyMonths,
         notes: notes.trim().length > 0 ? notes.trim() : null,
         usefulLifeMonthsOverride:
-          parsedUsefulLifeMonthsOverride !== null && parsedUsefulLifeMonthsOverride > 0
+          parsedUsefulLifeMonthsOverride !== null &&
+          parsedUsefulLifeMonthsOverride > 0
             ? parsedUsefulLifeMonthsOverride
             : null,
       });
@@ -824,8 +898,14 @@ export default function NewItemRoute() {
 
   if (isInitializing) {
     return (
-      <SafeAreaView style={{ flex: 1 }} edges={["bottom"]}>
-        <GBox flex={1} alignItems="center" justifyContent="center" px="$5" py="$6">
+      <SafeAreaView style={{ flex: 1 }} edges={["top", "bottom"]}>
+        <GBox
+          flex={1}
+          alignItems="center"
+          justifyContent="center"
+          px="$5"
+          py="$6"
+        >
           <GVStack space="md" alignItems="center">
             <GSpinner size="large" />
             <GText size="sm">Preparing item draft...</GText>
@@ -835,11 +915,11 @@ export default function NewItemRoute() {
     );
   }
 
-  const actionBarBottomInset = Math.max(insets.bottom, 12);
+  const actionBarBottomInset = Math.max(insets.bottom, 4);
   const actionBarEstimatedHeight = 80 + actionBarBottomInset;
 
   return (
-    <SafeAreaView style={{ flex: 1 }} edges={["bottom"]}>
+    <SafeAreaView style={{ flex: 1 }} edges={["top", "bottom"]}>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -861,14 +941,19 @@ export default function NewItemRoute() {
             <GVStack space="lg">
               <GVStack space="xs">
                 <GHeading size="xl">Add Item</GHeading>
-                <GText size="sm">Capture purchase data and receipts in one clean flow.</GText>
+                <GText size="sm">
+                  Capture purchase data and receipts in one clean flow.
+                </GText>
               </GVStack>
 
               {errorMessage && (
                 <GCard
                   borderWidth="$1"
                   borderColor="$error300"
-                  style={{ backgroundColor: theme.backgroundElement, borderRadius: 14 }}
+                  style={{
+                    backgroundColor: theme.backgroundElement,
+                    borderRadius: 14,
+                  }}
                 >
                   <GVStack space="sm">
                     <GText size="sm">{errorMessage}</GText>
@@ -891,7 +976,10 @@ export default function NewItemRoute() {
               <GCard
                 borderWidth="$1"
                 borderColor="$border200"
-                style={{ backgroundColor: theme.backgroundElement, borderRadius: 16 }}
+                style={{
+                  backgroundColor: theme.backgroundElement,
+                  borderRadius: 16,
+                }}
               >
                 <GVStack space="md">
                   <GHeading size="md">Attachments</GHeading>
@@ -935,27 +1023,39 @@ export default function NewItemRoute() {
                     testID="additem-btn-addextraphto"
                     accessibilityLabel="Add extra photo"
                   >
-                    <GButtonText>{isBusy ? "Working..." : "Add extra photo"}</GButtonText>
+                    <GButtonText>
+                      {isBusy ? "Working..." : "Add extra photo"}
+                    </GButtonText>
                   </GButton>
 
                   <GText size="xs" color="$textLight500">
-                    Receipts: {receiptAttachments.length} | Extra photos: {extraPhotos.length}
+                    Receipts: {receiptAttachments.length} | Extra photos:{" "}
+                    {extraPhotos.length}
                   </GText>
 
                   {attachments.length === 0 ? (
                     <GText size="sm" color="$textLight500">
-                      No attachments yet. You can still save and add files later.
+                      No attachments yet. You can still save and add files
+                      later.
                     </GText>
                   ) : (
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                    >
                       <GHStack space="sm">
                         {attachments.map((attachment, index) => {
-                          const attachmentId = toAttachmentTestId(attachment, index);
+                          const attachmentId = toAttachmentTestId(
+                            attachment,
+                            index,
+                          );
                           const pdf = isPdfAttachment(attachment);
                           return (
                             <GBox key={attachment.filePath} width={136}>
                               <Pressable
-                                onPress={() => openAttachmentPreview(attachment)}
+                                onPress={() =>
+                                  openAttachmentPreview(attachment)
+                                }
                                 testID={`additem-attachment-preview-${attachmentId}`}
                                 accessibilityLabel={`Preview attachment ${attachment.originalFileName ?? "file"}`}
                               >
@@ -980,24 +1080,32 @@ export default function NewItemRoute() {
                                         overflow: "hidden",
                                         justifyContent: "center",
                                         alignItems: "center",
-                                        backgroundColor: theme.backgroundElement,
+                                        backgroundColor:
+                                          theme.backgroundElement,
                                       }}
                                     >
                                       {pdf ? (
                                         <GVStack space="xs" alignItems="center">
-                                          <FileText size={20} color={theme.textSecondary} />
+                                          <FileText
+                                            size={20}
+                                            color={theme.textSecondary}
+                                          />
                                           <GText size="xs">PDF</GText>
                                         </GVStack>
                                       ) : (
                                         <Image
                                           source={{ uri: attachment.filePath }}
-                                          style={{ width: "100%", height: "100%" }}
+                                          style={{
+                                            width: "100%",
+                                            height: "100%",
+                                          }}
                                           resizeMode="cover"
                                         />
                                       )}
                                     </GBox>
                                     <GText size="xs" numberOfLines={1}>
-                                      {attachment.originalFileName ?? "Unnamed file"}
+                                      {attachment.originalFileName ??
+                                        "Unnamed file"}
                                     </GText>
                                     <GText size="xs" color="$textLight500">
                                       {formatFileSize(attachment.fileSizeBytes)}
@@ -1006,7 +1114,9 @@ export default function NewItemRoute() {
                                 </GCard>
                               </Pressable>
                               <Pressable
-                                onPress={() => void removeAttachment(attachment.filePath)}
+                                onPress={() =>
+                                  void removeAttachment(attachment.filePath)
+                                }
                                 testID={`additem-attachment-remove-${attachmentId}`}
                                 accessibilityLabel={`Remove attachment ${attachment.originalFileName ?? "file"}`}
                                 style={{
@@ -1046,7 +1156,10 @@ export default function NewItemRoute() {
               <GCard
                 borderWidth="$1"
                 borderColor="$border200"
-                style={{ backgroundColor: theme.backgroundElement, borderRadius: 16 }}
+                style={{
+                  backgroundColor: theme.backgroundElement,
+                  borderRadius: 16,
+                }}
               >
                 <GVStack space="md">
                   <GHeading size="md">Required</GHeading>
@@ -1062,7 +1175,11 @@ export default function NewItemRoute() {
                       </GText>
                       <GInput
                         variant="outline"
-                        borderColor={shouldShowFieldError("title") ? "$error600" : "$border200"}
+                        borderColor={
+                          shouldShowFieldError("title")
+                            ? "$error600"
+                            : "$border200"
+                        }
                       >
                         <GInputField
                           ref={(node) => {
@@ -1075,7 +1192,7 @@ export default function NewItemRoute() {
                           testID="additem-input-title"
                           accessibilityLabel="Item title"
                           accessibilityState={
-                            ({ invalid: shouldShowFieldError("title") } as any)
+                            { invalid: shouldShowFieldError("title") } as any
                           }
                         />
                       </GInput>
@@ -1094,11 +1211,15 @@ export default function NewItemRoute() {
 
                   <GBox
                     onLayout={(event) => {
-                      fieldYRef.current.purchaseDate = event.nativeEvent.layout.y;
+                      fieldYRef.current.purchaseDate =
+                        event.nativeEvent.layout.y;
                     }}
                   >
                     <GVStack space="xs">
-                      <GHStack justifyContent="space-between" alignItems="center">
+                      <GHStack
+                        justifyContent="space-between"
+                        alignItems="center"
+                      >
                         <GText bold size="sm">
                           Purchase date
                         </GText>
@@ -1106,7 +1227,9 @@ export default function NewItemRoute() {
                           size="xs"
                           variant="outline"
                           action="secondary"
-                          onPress={() => setPurchaseDate(formatYmdFromDateLocal(new Date()))}
+                          onPress={() =>
+                            setPurchaseDate(formatYmdFromDateLocal(new Date()))
+                          }
                           testID="additem-btn-settoday"
                           accessibilityLabel="Set purchase date to today"
                         >
@@ -1115,11 +1238,16 @@ export default function NewItemRoute() {
                       </GHStack>
                       <GInput
                         variant="outline"
-                        borderColor={shouldShowFieldError("purchaseDate") ? "$error600" : "$border200"}
+                        borderColor={
+                          shouldShowFieldError("purchaseDate")
+                            ? "$error600"
+                            : "$border200"
+                        }
                       >
                         <GInputField
                           ref={(node) => {
-                            inputRef.current.purchaseDate = node as FocusTarget | null;
+                            inputRef.current.purchaseDate =
+                              node as FocusTarget | null;
                           }}
                           value={purchaseDate}
                           onChangeText={setPurchaseDate}
@@ -1129,7 +1257,9 @@ export default function NewItemRoute() {
                           testID="additem-input-purchaseDate"
                           accessibilityLabel="Purchase date"
                           accessibilityState={
-                            ({ invalid: shouldShowFieldError("purchaseDate") } as any)
+                            {
+                              invalid: shouldShowFieldError("purchaseDate"),
+                            } as any
                           }
                         />
                       </GInput>
@@ -1157,11 +1287,16 @@ export default function NewItemRoute() {
                       </GText>
                       <GInput
                         variant="outline"
-                        borderColor={shouldShowFieldError("totalCents") ? "$error600" : "$border200"}
+                        borderColor={
+                          shouldShowFieldError("totalCents")
+                            ? "$error600"
+                            : "$border200"
+                        }
                       >
                         <GInputField
                           ref={(node) => {
-                            inputRef.current.totalCents = node as FocusTarget | null;
+                            inputRef.current.totalCents =
+                              node as FocusTarget | null;
                           }}
                           value={totalPrice}
                           onChangeText={setTotalPrice}
@@ -1171,7 +1306,9 @@ export default function NewItemRoute() {
                           testID="additem-input-price"
                           accessibilityLabel="Price in euros"
                           accessibilityState={
-                            ({ invalid: shouldShowFieldError("totalCents") } as any)
+                            {
+                              invalid: shouldShowFieldError("totalCents"),
+                            } as any
                           }
                         />
                       </GInput>
@@ -1233,7 +1370,9 @@ export default function NewItemRoute() {
                         testID="additem-btn-addcategory"
                         accessibilityLabel="Add category"
                       >
-                        <GButtonText>{isCreatingCategory ? "Adding..." : "Add"}</GButtonText>
+                        <GButtonText>
+                          {isCreatingCategory ? "Adding..." : "Add"}
+                        </GButtonText>
                       </GButton>
                     </GHStack>
                   </GVStack>
@@ -1247,8 +1386,12 @@ export default function NewItemRoute() {
                         <GButton
                           key={option.value}
                           size="sm"
-                          variant={usageType === option.value ? "solid" : "outline"}
-                          action={usageType === option.value ? "primary" : "secondary"}
+                          variant={
+                            usageType === option.value ? "solid" : "outline"
+                          }
+                          action={
+                            usageType === option.value ? "primary" : "secondary"
+                          }
                           onPress={() => setUsageType(option.value)}
                           testID={`additem-seg-usage-${option.key}`}
                           accessibilityLabel={`Usage type ${option.label}`}
@@ -1262,7 +1405,8 @@ export default function NewItemRoute() {
                   {usageType === "MIXED" && (
                     <GBox
                       onLayout={(event) => {
-                        fieldYRef.current.workPercent = event.nativeEvent.layout.y;
+                        fieldYRef.current.workPercent =
+                          event.nativeEvent.layout.y;
                       }}
                     >
                       <GVStack space="xs">
@@ -1271,11 +1415,16 @@ export default function NewItemRoute() {
                         </GText>
                         <GInput
                           variant="outline"
-                          borderColor={shouldShowFieldError("workPercent") ? "$error600" : "$border200"}
+                          borderColor={
+                            shouldShowFieldError("workPercent")
+                              ? "$error600"
+                              : "$border200"
+                          }
                         >
                           <GInputField
                             ref={(node) => {
-                              inputRef.current.workPercent = node as FocusTarget | null;
+                              inputRef.current.workPercent =
+                                node as FocusTarget | null;
                             }}
                             value={workPercent}
                             onChangeText={setWorkPercent}
@@ -1285,7 +1434,9 @@ export default function NewItemRoute() {
                             testID="additem-input-workpercent"
                             accessibilityLabel="Work percent"
                             accessibilityState={
-                              ({ invalid: shouldShowFieldError("workPercent") } as any)
+                              {
+                                invalid: shouldShowFieldError("workPercent"),
+                              } as any
                             }
                           />
                         </GInput>
@@ -1311,7 +1462,10 @@ export default function NewItemRoute() {
               <GCard
                 borderWidth="$1"
                 borderColor="$border200"
-                style={{ backgroundColor: theme.backgroundElement, borderRadius: 16 }}
+                style={{
+                  backgroundColor: theme.backgroundElement,
+                  borderRadius: 16,
+                }}
               >
                 <GVStack space="md">
                   <GHeading size="md">Optional</GHeading>
@@ -1336,7 +1490,8 @@ export default function NewItemRoute() {
 
                   <GBox
                     onLayout={(event) => {
-                      fieldYRef.current.warrantyMonths = event.nativeEvent.layout.y;
+                      fieldYRef.current.warrantyMonths =
+                        event.nativeEvent.layout.y;
                     }}
                   >
                     <GVStack space="xs">
@@ -1345,11 +1500,16 @@ export default function NewItemRoute() {
                       </GText>
                       <GInput
                         variant="outline"
-                        borderColor={shouldShowFieldError("warrantyMonths") ? "$error600" : "$border200"}
+                        borderColor={
+                          shouldShowFieldError("warrantyMonths")
+                            ? "$error600"
+                            : "$border200"
+                        }
                       >
                         <GInputField
                           ref={(node) => {
-                            inputRef.current.warrantyMonths = node as FocusTarget | null;
+                            inputRef.current.warrantyMonths =
+                              node as FocusTarget | null;
                           }}
                           value={warrantyMonths}
                           onChangeText={setWarrantyMonths}
@@ -1359,7 +1519,9 @@ export default function NewItemRoute() {
                           testID="additem-input-warrantymonths"
                           accessibilityLabel="Warranty months"
                           accessibilityState={
-                            ({ invalid: shouldShowFieldError("warrantyMonths") } as any)
+                            {
+                              invalid: shouldShowFieldError("warrantyMonths"),
+                            } as any
                           }
                         />
                       </GInput>
@@ -1399,7 +1561,10 @@ export default function NewItemRoute() {
               <GCard
                 borderWidth="$1"
                 borderColor="$border200"
-                style={{ backgroundColor: theme.backgroundElement, borderRadius: 16 }}
+                style={{
+                  backgroundColor: theme.backgroundElement,
+                  borderRadius: 16,
+                }}
               >
                 <GVStack space="md">
                   <GHStack alignItems="center" justifyContent="space-between">
@@ -1412,14 +1577,17 @@ export default function NewItemRoute() {
                       testID="additem-advanced-toggle"
                       accessibilityLabel="Toggle advanced fields"
                     >
-                      <GButtonText>{isAdvancedOpen ? "Hide" : "Show"}</GButtonText>
+                      <GButtonText>
+                        {isAdvancedOpen ? "Hide" : "Show"}
+                      </GButtonText>
                     </GButton>
                   </GHStack>
 
                   {isAdvancedOpen && (
                     <GBox
                       onLayout={(event) => {
-                        fieldYRef.current.usefulLifeMonthsOverride = event.nativeEvent.layout.y;
+                        fieldYRef.current.usefulLifeMonthsOverride =
+                          event.nativeEvent.layout.y;
                       }}
                     >
                       <GVStack space="xs">
@@ -1428,26 +1596,32 @@ export default function NewItemRoute() {
                         </GText>
                         <GInput
                           variant="outline"
-                          borderColor={showUsefulLifeError ? "$error600" : "$border200"}
+                          borderColor={
+                            showUsefulLifeError ? "$error600" : "$border200"
+                          }
                         >
                           <GInputField
                             ref={(node) => {
-                              inputRef.current.usefulLifeMonthsOverride = node as FocusTarget | null;
+                              inputRef.current.usefulLifeMonthsOverride =
+                                node as FocusTarget | null;
                             }}
                             value={usefulLifeMonthsOverride}
                             onChangeText={setUsefulLifeMonthsOverride}
                             keyboardType="number-pad"
                             placeholder="Optional, e.g. 36"
-                            onBlur={() => setFieldTouched("usefulLifeMonthsOverride")}
+                            onBlur={() =>
+                              setFieldTouched("usefulLifeMonthsOverride")
+                            }
                             testID="additem-input-usefullife"
                             accessibilityLabel="Useful life override in months"
                             accessibilityState={
-                              ({ invalid: showUsefulLifeError } as any)
+                              { invalid: showUsefulLifeError } as any
                             }
                           />
                         </GInput>
                         <GText size="xs" color="$textLight500">
-                          Overrides automatic useful-life mapping for this item only.
+                          Overrides automatic useful-life mapping for this item
+                          only.
                         </GText>
                         {showUsefulLifeError && (
                           <GText
@@ -1467,7 +1641,10 @@ export default function NewItemRoute() {
             </GVStack>
           </ScrollView>
 
-          <GText testID="additem-keyboard-open-state" style={{ position: "absolute", opacity: 0 }}>
+          <GText
+            testID="additem-keyboard-open-state"
+            style={{ position: "absolute", opacity: 0 }}
+          >
             {isKeyboardOpen ? "open" : "closed"}
           </GText>
 
@@ -1477,7 +1654,11 @@ export default function NewItemRoute() {
               borderColor="$border200"
               bg="$background0"
               testID="additem-bottom-bar"
-              style={{ paddingTop: 12, paddingBottom: actionBarBottomInset, paddingHorizontal: 20 }}
+              style={{
+                paddingTop: 12,
+                paddingBottom: actionBarBottomInset,
+                paddingHorizontal: 20,
+              }}
             >
               <GVStack space="xs">
                 {saveFeedbackMessage && (
@@ -1490,7 +1671,11 @@ export default function NewItemRoute() {
                     {saveFeedbackMessage}
                   </GText>
                 )}
-                <GHStack justifyContent="space-between" alignItems="center" space="sm">
+                <GHStack
+                  justifyContent="space-between"
+                  alignItems="center"
+                  space="sm"
+                >
                   <GButton
                     flex={1}
                     variant="outline"
@@ -1511,7 +1696,9 @@ export default function NewItemRoute() {
                       testID="additem-btn-save"
                       accessibilityLabel="Save item"
                     >
-                      <GButtonText testID="action-add-item">{isSavingItem ? "Saving..." : "Save Item"}</GButtonText>
+                      <GButtonText testID="action-add-item">
+                        {isSavingItem ? "Saving..." : "Save Item"}
+                      </GButtonText>
                     </GButton>
                   </GBox>
                 </GHStack>
@@ -1519,7 +1706,10 @@ export default function NewItemRoute() {
             </GBox>
           )}
 
-          <GActionsheet isOpen={isCategorySheetOpen} onClose={() => setIsCategorySheetOpen(false)}>
+          <GActionsheet
+            isOpen={isCategorySheetOpen}
+            onClose={() => setIsCategorySheetOpen(false)}
+          >
             <GActionsheetBackdrop />
             <GActionsheetContent>
               <GActionsheetDragIndicatorWrapper>
@@ -1531,7 +1721,9 @@ export default function NewItemRoute() {
                   setIsCategorySheetOpen(false);
                 }}
               >
-                <GActionsheetItemText>No category selected</GActionsheetItemText>
+                <GActionsheetItemText>
+                  No category selected
+                </GActionsheetItemText>
               </GActionsheetItem>
               {categories.map((category) => (
                 <GActionsheetItem
@@ -1582,7 +1774,11 @@ export default function NewItemRoute() {
                 resizeMode="contain"
                 style={{ width: "100%", height: 380, borderRadius: 10 }}
               />
-              <GHStack justifyContent="space-between" alignItems="center" mt="$3">
+              <GHStack
+                justifyContent="space-between"
+                alignItems="center"
+                mt="$3"
+              >
                 <GButton
                   size="sm"
                   variant="outline"
@@ -1596,7 +1792,9 @@ export default function NewItemRoute() {
                   size="sm"
                   variant="outline"
                   action="secondary"
-                  onPress={() => void removeAttachment(previewAttachment.filePath)}
+                  onPress={() =>
+                    void removeAttachment(previewAttachment.filePath)
+                  }
                   accessibilityLabel="Delete attachment"
                 >
                   <GButtonText>Delete</GButtonText>
@@ -1631,7 +1829,9 @@ export default function NewItemRoute() {
             <GVStack space="md">
               <GVStack space="xs">
                 <GHeading size="md">Discard changes?</GHeading>
-                <GText size="sm">Your changes and draft attachments will be lost.</GText>
+                <GText size="sm">
+                  Your changes and draft attachments will be lost.
+                </GText>
               </GVStack>
               <GHStack justifyContent="flex-end" space="sm">
                 <GButton
@@ -1642,7 +1842,9 @@ export default function NewItemRoute() {
                   testID="keep-editing"
                   accessibilityLabel="Keep editing"
                 >
-                  <GButtonText testID="additem-discard-keepediting">Keep editing</GButtonText>
+                  <GButtonText testID="additem-discard-keepediting">
+                    Keep editing
+                  </GButtonText>
                 </GButton>
                 <GButton
                   size="sm"
@@ -1651,7 +1853,9 @@ export default function NewItemRoute() {
                   testID="discard-confirm"
                   accessibilityLabel="Discard changes"
                 >
-                  <GButtonText testID="additem-discard-confirm">Discard</GButtonText>
+                  <GButtonText testID="additem-discard-confirm">
+                    Discard
+                  </GButtonText>
                 </GButton>
               </GHStack>
             </GVStack>
