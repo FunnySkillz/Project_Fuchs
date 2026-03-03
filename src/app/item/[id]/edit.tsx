@@ -3,7 +3,7 @@ import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { HeaderBackButton } from "@react-navigation/elements";
 import { Image } from "expo-image";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { BackHandler, Linking, Modal, ScrollView } from "react-native";
+import { BackHandler, Linking, Modal, Platform, Pressable, ScrollView } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   Actionsheet,
@@ -29,6 +29,10 @@ import {
   TextareaInput,
   VStack,
 } from "@gluestack-ui/themed";
+import DateTimePicker, {
+  type DateTimePickerEvent,
+} from "@react-native-community/datetimepicker";
+import { Calendar } from "lucide-react-native";
 
 import type { Attachment } from "@/models/attachment";
 import type { Category } from "@/models/category";
@@ -52,8 +56,9 @@ import {
   isUserCancellationError,
   shouldOfferOpenSettingsForError,
 } from "@/services/friendly-errors";
+import { useTheme } from "@/hooks/use-theme";
 import { validateItemInput } from "@/domain/item-validation";
-import { addMonthsToYmd, formatYmdFromDateLocal } from "@/utils/date";
+import { addMonthsToYmd, formatYmdFromDateLocal, parseYmd } from "@/utils/date";
 import { parseEuroInputToCents } from "@/utils/money";
 
 function toSingleParam(value: string | string[] | undefined): string | undefined {
@@ -82,6 +87,14 @@ function withType(
   type: "RECEIPT" | "PHOTO"
 ): StoredAttachmentFile {
   return { ...attachment, type };
+}
+
+function toLocalDateFromYmd(value: string): Date {
+  const parsed = parseYmd(value);
+  if (!parsed) {
+    return new Date();
+  }
+  return new Date(parsed.year, parsed.month - 1, parsed.day);
 }
 
 const usageOptions: { value: ItemUsageType; label: string }[] = [
@@ -125,6 +138,7 @@ type FocusTarget = {
 export default function ItemEditRoute() {
   const router = useRouter();
   const navigation = useNavigation<any>();
+  const theme = useTheme();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ id?: string | string[] }>();
   const itemId = toSingleParam(params.id);
@@ -156,6 +170,8 @@ export default function ItemEditRoute() {
 
   const [title, setTitle] = useState("");
   const [purchaseDate, setPurchaseDate] = useState(formatYmdFromDateLocal(new Date()));
+  const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
+  const [datePickerValue, setDatePickerValue] = useState<Date>(new Date());
   const [totalPrice, setTotalPrice] = useState("");
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [usageType, setUsageType] = useState<ItemUsageType>("WORK");
@@ -449,6 +465,56 @@ export default function ItemEditRoute() {
   const closeDiscardModal = useCallback(() => {
     setIsDiscardModalOpen(false);
   }, []);
+
+  const openPurchaseDatePicker = useCallback(() => {
+    setFieldTouched("purchaseDate");
+    setDatePickerValue(toLocalDateFromYmd(purchaseDate));
+
+    if (Platform.OS === "web") {
+      const next = globalThis.prompt?.(
+        "Enter purchase date (YYYY-MM-DD)",
+        purchaseDate
+      );
+      if (!next) {
+        return;
+      }
+      const normalized = next.trim();
+      if (parseYmd(normalized)) {
+        setPurchaseDate(normalized);
+      }
+      return;
+    }
+
+    setIsDatePickerOpen(true);
+  }, [purchaseDate, setFieldTouched]);
+
+  const onPurchaseDatePickerChange = useCallback(
+    (event: DateTimePickerEvent, selectedDate?: Date) => {
+      if (Platform.OS === "android") {
+        setIsDatePickerOpen(false);
+        if (event.type !== "set" || !selectedDate) {
+          return;
+        }
+        setDatePickerValue(selectedDate);
+        setPurchaseDate(formatYmdFromDateLocal(selectedDate));
+        return;
+      }
+
+      if (selectedDate) {
+        setDatePickerValue(selectedDate);
+      }
+    },
+    []
+  );
+
+  const closePurchaseDatePicker = useCallback(() => {
+    setIsDatePickerOpen(false);
+  }, []);
+
+  const confirmPurchaseDatePicker = useCallback(() => {
+    setPurchaseDate(formatYmdFromDateLocal(datePickerValue));
+    setIsDatePickerOpen(false);
+  }, [datePickerValue]);
 
   useEffect(() => {
     const navigationWithOptions = navigation as {
@@ -838,26 +904,32 @@ export default function ItemEditRoute() {
                   Purchase date *
                 </Text>
                 <HStack space="sm" flexWrap="wrap" alignItems="center">
-                  <Input
-                    variant="outline"
-                    flex={1}
-                    minWidth={180}
-                    borderColor={shouldShowFieldError("purchaseDate") ? "$error600" : "$border200"}
+                  <Pressable
+                    onPress={openPurchaseDatePicker}
+                    testID="item-edit-purchase-date-input"
+                    accessibilityRole="button"
+                    accessibilityLabel="Purchase date"
+                    accessibilityState={
+                      ({ invalid: shouldShowFieldError("purchaseDate") } as any)
+                    }
+                    style={{ flex: 1, minWidth: 180 }}
                   >
-                    <InputField
-                      ref={(node) => {
-                        inputRef.current.purchaseDate = node as FocusTarget | null;
+                    <Box
+                      borderWidth="$1"
+                      borderColor={shouldShowFieldError("purchaseDate") ? "$error600" : "$border200"}
+                      style={{
+                        borderRadius: 8,
+                        minHeight: 44,
+                        paddingHorizontal: 12,
+                        justifyContent: "center",
                       }}
-                      value={purchaseDate}
-                      onChangeText={setPurchaseDate}
-                      placeholder="YYYY-MM-DD"
-                      onBlur={() => setFieldTouched("purchaseDate")}
-                      testID="item-edit-purchase-date-input"
-                      accessibilityState={
-                        ({ invalid: shouldShowFieldError("purchaseDate") } as any)
-                      }
-                    />
-                  </Input>
+                    >
+                      <HStack justifyContent="space-between" alignItems="center" space="sm">
+                        <Text>{purchaseDate}</Text>
+                        <Calendar size={18} color={theme.textSecondary} />
+                      </HStack>
+                    </Box>
+                  </Pressable>
                   <Button
                     variant="outline"
                     action="secondary"
@@ -1251,6 +1323,68 @@ export default function ItemEditRoute() {
           </HStack>
           </VStack>
         </ScrollView>
+
+        {Platform.OS === "android" && isDatePickerOpen && (
+          <DateTimePicker
+            mode="date"
+            value={datePickerValue}
+            display="default"
+            onChange={onPurchaseDatePickerChange}
+          />
+        )}
+
+        {Platform.OS === "ios" && (
+          <Modal
+            visible={isDatePickerOpen}
+            transparent
+            animationType="fade"
+            onRequestClose={closePurchaseDatePicker}
+          >
+            <Box
+              flex={1}
+              alignItems="center"
+              justifyContent="center"
+              px="$5"
+              style={{ backgroundColor: "rgba(0,0,0,0.45)" }}
+            >
+              <Card
+                borderWidth="$1"
+                borderColor="$border200"
+                width="$full"
+                maxWidth={420}
+                style={{ backgroundColor: theme.background, borderRadius: 16 }}
+              >
+                <VStack space="md">
+                  <Heading size="md">Select purchase date</Heading>
+                  <DateTimePicker
+                    mode="date"
+                    value={datePickerValue}
+                    display="spinner"
+                    onChange={onPurchaseDatePickerChange}
+                  />
+                  <HStack justifyContent="flex-end" space="sm">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      action="secondary"
+                      onPress={closePurchaseDatePicker}
+                      accessibilityLabel="Cancel date selection"
+                    >
+                      <ButtonText>Cancel</ButtonText>
+                    </Button>
+                    <Button
+                      size="sm"
+                      onPress={confirmPurchaseDatePicker}
+                      accessibilityLabel="Confirm date selection"
+                    >
+                      <ButtonText>Done</ButtonText>
+                    </Button>
+                  </HStack>
+                </VStack>
+              </Card>
+            </Box>
+          </Modal>
+        )}
 
         <Actionsheet isOpen={isCategorySheetOpen} onClose={() => setIsCategorySheetOpen(false)}>
           <ActionsheetBackdrop />

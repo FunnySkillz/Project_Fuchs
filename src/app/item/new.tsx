@@ -44,7 +44,10 @@ import {
   TextareaInput as GTextareaInput,
   VStack as GVStack,
 } from "@gluestack-ui/themed";
-import { FileText, Plus, Upload, X } from "lucide-react-native";
+import DateTimePicker, {
+  type DateTimePickerEvent,
+} from "@react-native-community/datetimepicker";
+import { Calendar, FileText, Plus, Upload, X } from "lucide-react-native";
 import * as Sharing from "expo-sharing";
 
 import { validateItemInput } from "@/domain/item-validation";
@@ -71,7 +74,7 @@ import {
   isUserCancellationError,
   shouldOfferOpenSettingsForError,
 } from "@/services/friendly-errors";
-import { addMonthsToYmd, formatYmdFromDateLocal } from "@/utils/date";
+import { addMonthsToYmd, formatYmdFromDateLocal, parseYmd } from "@/utils/date";
 import { parseEuroInputToCents } from "@/utils/money";
 
 function toSingleParam(
@@ -116,6 +119,14 @@ function isPdfAttachment(attachment: StoredAttachmentFile): boolean {
   const mime = attachment.mimeType?.toLowerCase() ?? "";
   const name = attachment.originalFileName?.toLowerCase() ?? "";
   return mime.includes("pdf") || name.endsWith(".pdf");
+}
+
+function toLocalDateFromYmd(value: string): Date {
+  const parsed = parseYmd(value);
+  if (!parsed) {
+    return new Date();
+  }
+  return new Date(parsed.year, parsed.month - 1, parsed.day);
 }
 
 const usageOptions: { value: ItemUsageType; label: string; key: string }[] = [
@@ -203,6 +214,8 @@ export default function NewItemRoute() {
   const [purchaseDate, setPurchaseDate] = useState(
     formatYmdFromDateLocal(new Date()),
   );
+  const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
+  const [datePickerValue, setDatePickerValue] = useState<Date>(new Date());
   const [totalPrice, setTotalPrice] = useState("");
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [usageType, setUsageType] = useState<ItemUsageType>("WORK");
@@ -538,6 +551,56 @@ export default function NewItemRoute() {
     pendingNavigationActionRef.current = null;
     setIsDiscardModalOpen(false);
   }, []);
+
+  const openPurchaseDatePicker = useCallback(() => {
+    setFieldTouched("purchaseDate");
+    setDatePickerValue(toLocalDateFromYmd(purchaseDate));
+
+    if (Platform.OS === "web") {
+      const next = globalThis.prompt?.(
+        "Enter purchase date (YYYY-MM-DD)",
+        purchaseDate,
+      );
+      if (!next) {
+        return;
+      }
+      const normalized = next.trim();
+      if (parseYmd(normalized)) {
+        setPurchaseDate(normalized);
+      }
+      return;
+    }
+
+    setIsDatePickerOpen(true);
+  }, [purchaseDate, setFieldTouched]);
+
+  const onPurchaseDatePickerChange = useCallback(
+    (event: DateTimePickerEvent, selectedDate?: Date) => {
+      if (Platform.OS === "android") {
+        setIsDatePickerOpen(false);
+        if (event.type !== "set" || !selectedDate) {
+          return;
+        }
+        setDatePickerValue(selectedDate);
+        setPurchaseDate(formatYmdFromDateLocal(selectedDate));
+        return;
+      }
+
+      if (selectedDate) {
+        setDatePickerValue(selectedDate);
+      }
+    },
+    [],
+  );
+
+  const closePurchaseDatePicker = useCallback(() => {
+    setIsDatePickerOpen(false);
+  }, []);
+
+  const confirmPurchaseDatePicker = useCallback(() => {
+    setPurchaseDate(formatYmdFromDateLocal(datePickerValue));
+    setIsDatePickerOpen(false);
+  }, [datePickerValue]);
 
   useEffect(() => {
     return () => {
@@ -1214,33 +1277,41 @@ export default function NewItemRoute() {
                           <GButtonText>Set today</GButtonText>
                         </GButton>
                       </GHStack>
-                      <GInput
-                        variant="outline"
-                        borderColor={
-                          shouldShowFieldError("purchaseDate")
-                            ? "$error600"
-                            : "$border200"
+                      <Pressable
+                        onPress={openPurchaseDatePicker}
+                        testID="additem-input-purchaseDate"
+                        accessibilityRole="button"
+                        accessibilityLabel="Purchase date"
+                        accessibilityState={
+                          {
+                            invalid: shouldShowFieldError("purchaseDate"),
+                          } as any
                         }
                       >
-                        <GInputField
-                          ref={(node) => {
-                            inputRef.current.purchaseDate =
-                              node as FocusTarget | null;
-                          }}
-                          value={purchaseDate}
-                          onChangeText={setPurchaseDate}
-                          placeholder="YYYY-MM-DD"
-                          autoCapitalize="none"
-                          onBlur={() => setFieldTouched("purchaseDate")}
-                          testID="additem-input-purchaseDate"
-                          accessibilityLabel="Purchase date"
-                          accessibilityState={
-                            {
-                              invalid: shouldShowFieldError("purchaseDate"),
-                            } as any
+                        <GBox
+                          borderWidth="$1"
+                          borderColor={
+                            shouldShowFieldError("purchaseDate")
+                              ? "$error600"
+                              : "$border200"
                           }
-                        />
-                      </GInput>
+                          style={{
+                            borderRadius: 8,
+                            minHeight: 44,
+                            paddingHorizontal: 12,
+                            justifyContent: "center",
+                          }}
+                        >
+                          <GHStack
+                            justifyContent="space-between"
+                            alignItems="center"
+                            space="sm"
+                          >
+                            <GText>{purchaseDate}</GText>
+                            <Calendar size={18} color={theme.textSecondary} />
+                          </GHStack>
+                        </GBox>
+                      </Pressable>
                       {shouldShowFieldError("purchaseDate") && (
                         <GText
                           size="xs"
@@ -1656,6 +1727,68 @@ export default function NewItemRoute() {
               </GVStack>
             </GVStack>
           </ScrollView>
+
+          {Platform.OS === "android" && isDatePickerOpen && (
+            <DateTimePicker
+              mode="date"
+              value={datePickerValue}
+              display="default"
+              onChange={onPurchaseDatePickerChange}
+            />
+          )}
+
+          {Platform.OS === "ios" && (
+            <Modal
+              visible={isDatePickerOpen}
+              transparent
+              animationType="fade"
+              onRequestClose={closePurchaseDatePicker}
+            >
+              <GBox
+                flex={1}
+                alignItems="center"
+                justifyContent="center"
+                px="$5"
+                style={{ backgroundColor: "rgba(0,0,0,0.45)" }}
+              >
+                <GCard
+                  borderWidth="$1"
+                  borderColor="$border200"
+                  width="$full"
+                  maxWidth={420}
+                  style={{ backgroundColor: theme.background, borderRadius: 16 }}
+                >
+                  <GVStack space="md">
+                    <GHeading size="md">Select purchase date</GHeading>
+                    <DateTimePicker
+                      mode="date"
+                      value={datePickerValue}
+                      display="spinner"
+                      onChange={onPurchaseDatePickerChange}
+                    />
+                    <GHStack justifyContent="flex-end" space="sm">
+                      <GButton
+                        size="sm"
+                        variant="outline"
+                        action="secondary"
+                        onPress={closePurchaseDatePicker}
+                        accessibilityLabel="Cancel date selection"
+                      >
+                        <GButtonText>Cancel</GButtonText>
+                      </GButton>
+                      <GButton
+                        size="sm"
+                        onPress={confirmPurchaseDatePicker}
+                        accessibilityLabel="Confirm date selection"
+                      >
+                        <GButtonText>Done</GButtonText>
+                      </GButton>
+                    </GHStack>
+                  </GVStack>
+                </GCard>
+              </GBox>
+            </Modal>
+          )}
 
           <GActionsheet
             isOpen={isCategorySheetOpen}

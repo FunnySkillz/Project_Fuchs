@@ -68,7 +68,8 @@
           "photosPermission": "Allow access to photos/files so you can attach receipt images or PDFs."
         }
       ],
-      "expo-sqlite"
+      "expo-sqlite",
+      "@react-native-community/datetimepicker"
     ],
     "experiments": {
       "typedRoutes": true,
