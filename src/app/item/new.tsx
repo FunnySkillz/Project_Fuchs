@@ -77,14 +77,24 @@ import {
 import { addMonthsToYmd, formatYmdFromDateLocal, parseYmd } from "@/utils/date";
 import { parseEuroInputToCents } from "@/utils/money";
 
-const iosSwiftUI = Platform.OS === "ios"
-  ? {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      ...require("@expo/ui/swift-ui"),
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      ...require("@expo/ui/swift-ui/modifiers"),
-    }
-  : null;
+const iosSwiftUI = (() => {
+  if (Platform.OS !== "ios") {
+    return null;
+  }
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const swiftUI = require("@expo/ui/swift-ui");
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const modifiers = require("@expo/ui/swift-ui/modifiers");
+    return {
+      Host: swiftUI.Host,
+      DatePicker: swiftUI.DatePicker,
+      datePickerStyle: modifiers.datePickerStyle,
+    };
+  } catch {
+    return null;
+  }
+})();
 
 function toSingleParam(
   value: string | string[] | undefined,
@@ -605,6 +615,15 @@ export default function NewItemRoute() {
   const onIosPurchaseDateChange = useCallback((selectedDate: Date) => {
     setDatePickerValue(selectedDate);
   }, []);
+
+  const onIosFallbackPurchaseDatePickerChange = useCallback(
+    (_event: DateTimePickerEvent, selectedDate?: Date) => {
+      if (selectedDate) {
+        setDatePickerValue(selectedDate);
+      }
+    },
+    []
+  );
 
   const closePurchaseDatePicker = useCallback(() => {
     setIsDatePickerOpen(false);
@@ -1351,6 +1370,41 @@ export default function NewItemRoute() {
                                 onDateChange={onIosPurchaseDateChange}
                               />
                             </iosSwiftUI.Host>
+                            <GHStack justifyContent="flex-end" space="sm">
+                              <GButton
+                                size="sm"
+                                variant="outline"
+                                action="secondary"
+                                onPress={closePurchaseDatePicker}
+                                accessibilityLabel="Cancel date selection"
+                              >
+                                <GButtonText>Cancel</GButtonText>
+                              </GButton>
+                              <GButton
+                                size="sm"
+                                onPress={confirmPurchaseDatePicker}
+                                accessibilityLabel="Confirm date selection"
+                              >
+                                <GButtonText>Done</GButtonText>
+                              </GButton>
+                            </GHStack>
+                          </GVStack>
+                        </GCard>
+                      )}
+                      {Platform.OS === "ios" && isDatePickerOpen && !iosSwiftUI && (
+                        <GCard
+                          borderWidth="$1"
+                          borderColor="$border200"
+                          style={{ backgroundColor: theme.background }}
+                        >
+                          <GVStack space="sm">
+                            <GHeading size="sm">Select purchase date</GHeading>
+                            <DateTimePicker
+                              mode="date"
+                              value={datePickerValue}
+                              display="spinner"
+                              onChange={onIosFallbackPurchaseDatePickerChange}
+                            />
                             <GHStack justifyContent="flex-end" space="sm">
                               <GButton
                                 size="sm"
