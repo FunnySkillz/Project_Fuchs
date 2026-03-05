@@ -162,6 +162,7 @@ export default function ItemEditRoute() {
   const params = useLocalSearchParams<{ id?: string | string[] }>();
   const itemId = toSingleParam(params.id);
   const allowNavigationExitRef = useRef(false);
+  const pendingNavigationActionRef = useRef<any | null>(null);
   const isDirtyRef = useRef(false);
   const isDiscardModalOpenRef = useRef(false);
   const initialSnapshotRef = useRef<InitialSnapshot | null>(null);
@@ -464,6 +465,18 @@ export default function ItemEditRoute() {
   const goBackFromEditFlow = useCallback(() => {
     allowNavigationExitRef.current = true;
     setIsDiscardModalOpen(false);
+    const pendingAction = pendingNavigationActionRef.current;
+    pendingNavigationActionRef.current = null;
+
+    if (pendingAction) {
+      navigation.dispatch(pendingAction);
+      return;
+    }
+
+    if (typeof navigation.canGoBack === "function" && navigation.canGoBack()) {
+      navigation.goBack();
+      return;
+    }
 
     if (itemId) {
       router.replace(`/item/${itemId}`);
@@ -471,17 +484,19 @@ export default function ItemEditRoute() {
     }
 
     router.replace("/(tabs)/items");
-  }, [itemId, router]);
+  }, [itemId, navigation, router]);
 
   const handleExitRequest = useCallback(() => {
     if (!isDirty) {
       goBackFromEditFlow();
       return;
     }
+    pendingNavigationActionRef.current = null;
     setIsDiscardModalOpen(true);
   }, [goBackFromEditFlow, isDirty]);
 
   const closeDiscardModal = useCallback(() => {
+    pendingNavigationActionRef.current = null;
     setIsDiscardModalOpen(false);
   }, []);
 
@@ -573,17 +588,13 @@ export default function ItemEditRoute() {
   useFocusEffect(
     useCallback(() => {
       const unsubscribe = navigation.addListener("beforeRemove", (event: any) => {
-        if (allowNavigationExitRef.current) {
+        if (allowNavigationExitRef.current || !isDirtyRef.current) {
           return;
         }
 
         event.preventDefault();
-        if (isDirtyRef.current) {
-          setIsDiscardModalOpen(true);
-          return;
-        }
-
-        goBackFromEditFlow();
+        pendingNavigationActionRef.current = event.data.action;
+        setIsDiscardModalOpen(true);
       });
 
       const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
@@ -592,6 +603,7 @@ export default function ItemEditRoute() {
           return true;
         }
         if (isDirtyRef.current) {
+          pendingNavigationActionRef.current = null;
           setIsDiscardModalOpen(true);
           return true;
         }
