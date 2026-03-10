@@ -334,7 +334,8 @@ export default function ItemEditRoute() {
   }, [isDiscardModalOpen]);
 
   const isFormValid = validation.valid && usefulLifeMonthsOverrideError === null;
-  const isSaveDisabled = (submitAttempted && !isFormValid) || isSaving;
+  const isActionBusy = isSaving || isAttachmentBusy || isCreatingCategory;
+  const isSaveDisabled = (submitAttempted && !isFormValid) || isActionBusy;
 
   const setFieldTouched = useCallback((field: FieldKey) => {
     setTouchedFields((current) => ({ ...current, [field]: true }));
@@ -1442,6 +1443,7 @@ export default function ItemEditRoute() {
                   variant="outline"
                   action="secondary"
                   onPress={handleExitRequest}
+                  disabled={isActionBusy}
                   testID="edititem-cancel"
                   accessibilityLabel="Cancel editing item"
                 >
