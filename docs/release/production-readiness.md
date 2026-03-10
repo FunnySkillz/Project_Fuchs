@@ -81,6 +81,9 @@ Define a binary release gate for V1. V1 ships only when all must-have checks are
 - [ ] Add flow cancel/back cleanup: no staged files remain after exit.
 - [ ] Item detail: calculations render, missing file placeholders do not crash.
 - [ ] Edit item: add/remove attachment works and remains consistent.
+- [ ] iOS stack-header spacing is consistent (no extra top gap below native header).
+- [ ] iOS swipe-back works on read-only/detail routes with history.
+- [ ] Unsaved edit/create flows require explicit discard confirmation before exit.
 - [ ] Delete attachment and delete item paths complete safely.
 - [ ] Export: PDF/ZIP generation and progress UI complete.
 - [ ] Settings: backup create, backup import overwrite confirmation, restore reinit.

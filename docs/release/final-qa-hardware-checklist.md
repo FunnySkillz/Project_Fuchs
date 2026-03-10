@@ -47,6 +47,7 @@ Devices:
 ### Edit item
 - [ ] Open item detail and edit key fields.
 - [ ] Save succeeds, values persist after reopen.
+- [ ] Unsaved changes block accidental back navigation and show discard confirmation.
 
 ### Delete item
 - [ ] Delete from list/detail succeeds.
@@ -66,6 +67,8 @@ Devices:
 - [ ] No crashes.
 - [ ] No ANRs / app freezes.
 - [ ] No navigation dead-ends.
+- [ ] iOS stack-header screens have no extra top gap (`Settings -> Appearance`, `Item Detail`, `Edit Item`).
+- [ ] iOS swipe-back works on read-only screens with navigation history.
 
 Observed issues:
 

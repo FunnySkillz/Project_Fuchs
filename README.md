@@ -283,6 +283,7 @@ Release checklist:
 - `docs/release-internal-testing-checklist.md`
 - `docs/release/build-versioning.md`
 - `docs/release/final-qa-hardware-checklist.md`
+- `docs/design/navigation-layout-qa.md`
 
 ## Security & Privacy
 
