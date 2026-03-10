@@ -1434,28 +1434,32 @@ export default function ItemEditRoute() {
             </VStack>
           </Card>
 
-          <HStack space="sm" flexWrap="wrap">
-            <Box testID="edititem-btn-cancel">
-              <Button
-                variant="outline"
-                action="secondary"
-                onPress={handleExitRequest}
-                testID="edititem-cancel"
-                accessibilityLabel="Cancel editing item"
-              >
-                <ButtonText testID="item-edit-cancel">Cancel</ButtonText>
-              </Button>
-            </Box>
-            <Box testID="edititem-btn-submit">
-              <Button
-                onPress={() => void saveChanges()}
-                disabled={isSaveDisabled}
-                testID="item-edit-save"
-              >
-                <ButtonText>{isSaving ? "Saving..." : "Save Changes"}</ButtonText>
-              </Button>
-            </Box>
-          </HStack>
+          <VStack space="xs">
+            <HStack justifyContent="space-between" alignItems="center" space="sm">
+              <Box flex={1} testID="edititem-btn-cancel">
+                <Button
+                  flex={1}
+                  variant="outline"
+                  action="secondary"
+                  onPress={handleExitRequest}
+                  testID="edititem-cancel"
+                  accessibilityLabel="Cancel editing item"
+                >
+                  <ButtonText testID="item-edit-cancel">Cancel</ButtonText>
+                </Button>
+              </Box>
+              <Box flex={1} testID="edititem-btn-submit">
+                <Button
+                  flex={1}
+                  onPress={() => void saveChanges()}
+                  disabled={isSaveDisabled}
+                  testID="item-edit-save"
+                >
+                  <ButtonText>{isSaving ? "Saving..." : "Save Changes"}</ButtonText>
+                </Button>
+              </Box>
+            </HStack>
+          </VStack>
           </VStack>
         </ScrollView>
 
