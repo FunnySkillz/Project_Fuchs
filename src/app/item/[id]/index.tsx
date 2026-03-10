@@ -1,7 +1,8 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Image } from "expo-image";
+import { useNavigation } from "@react-navigation/native";
 import React, { useCallback, useMemo, useState } from "react";
-import { ScrollView } from "react-native";
+import { Pressable as RNPressable, ScrollView, Text as RNText } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   AlertDialog as GAlertDialog,
@@ -27,7 +28,6 @@ import {
   Text as GText,
   VStack as GVStack,
 } from "@gluestack-ui/themed";
-import { Settings } from "lucide-react-native";
 
 import { estimateTaxImpact } from "@/domain/calculation-engine";
 import { useTheme } from "@/hooks/use-theme";
@@ -109,6 +109,7 @@ function InfoRow({ label, value }: InfoRowProps) {
 
 export default function ItemDetailRoute() {
   const router = useRouter();
+  const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
   const theme = useTheme();
   const params = useLocalSearchParams<{ id?: string | string[] }>();
@@ -190,6 +191,41 @@ export default function ItemDetailRoute() {
     void loadItem();
   }, [loadItem]);
 
+  React.useEffect(() => {
+    const navigationWithOptions = navigation as {
+      setOptions?: (options: { headerRight?: () => React.ReactNode }) => void;
+    };
+    if (typeof navigationWithOptions.setOptions !== "function") {
+      return;
+    }
+
+    if (!item) {
+      navigationWithOptions.setOptions({ headerRight: undefined });
+      return;
+    }
+
+    navigationWithOptions.setOptions({
+      headerRight: () => (
+        <RNPressable
+          onPress={() => router.push(`/item/${item.id}/edit`)}
+          accessibilityRole="button"
+          accessibilityLabel="Edit item"
+          hitSlop={8}
+          testID="item-detail-header-edit"
+          style={({ pressed }) => ({
+            paddingHorizontal: 8,
+            paddingVertical: 4,
+            opacity: pressed ? 0.65 : 1,
+          })}
+        >
+          <RNText style={{ color: theme.primary, fontSize: 17, fontWeight: "600" }}>
+            Edit
+          </RNText>
+        </RNPressable>
+      ),
+    });
+  }, [item, navigation, router, theme.primary]);
+
   const categoryMap = useMemo(
     () => new Map(categories.map((category) => [category.id, category])),
     [categories]
@@ -251,14 +287,6 @@ export default function ItemDetailRoute() {
     }
   };
 
-  const handleBackNavigation = () => {
-    if (canGoBack) {
-      router.back();
-      return;
-    }
-    router.replace("/(tabs)/items");
-  };
-
   if (isLoading) {
     return (
       <SafeAreaView style={{ flex: 1 }} edges={["bottom"]}>
@@ -310,186 +338,158 @@ export default function ItemDetailRoute() {
           }}
         >
           <GVStack space="lg">
-          <GHStack justifyContent="space-between" alignItems="center">
-            <GButton
-              variant="link"
-              action="secondary"
-              onPress={handleBackNavigation}
-              testID="item-detail-back"
-            >
-              <GButtonText>{"\u2039 Back"}</GButtonText>
-            </GButton>
-            <GPressable
-              onPress={() => router.push(`/item/${item.id}/edit`)}
-              testID="action-edit-item"
-              accessibilityLabel="Edit item"
-              style={{
-                width: 44,
-                height: 44,
-                borderRadius: 22,
-                alignItems: "center",
-                justifyContent: "center",
-                borderWidth: 1,
-                borderColor: theme.border,
-                backgroundColor: theme.backgroundElement,
-              }}
-            >
-              <Settings size={18} color={theme.text} />
-            </GPressable>
-          </GHStack>
+            {!canGoBack && (
+              <GButton
+                variant="outline"
+                action="secondary"
+                onPress={() => router.replace("/(tabs)/items")}
+                alignSelf="flex-start"
+                testID="item-detail-back-to-items"
+              >
+                <GButtonText>Back to Items</GButtonText>
+              </GButton>
+            )}
 
-          {!canGoBack && (
-            <GButton
-              variant="outline"
-              action="secondary"
-              onPress={() => router.replace("/(tabs)/items")}
-              alignSelf="flex-start"
-              testID="item-detail-back-to-items"
-            >
-              <GButtonText>Back to Items</GButtonText>
-            </GButton>
-          )}
+            <GVStack space="xs" flex={1}>
+              <GHeading size="2xl">{item.title}</GHeading>
+              <GBadge
+                size="sm"
+                variant="outline"
+                action="muted"
+                alignSelf="flex-start"
+                testID="item-usage-badge"
+              >
+                <GBadgeText>{item.usageType}</GBadgeText>
+              </GBadge>
+              <GText size="sm">Purchase date: {item.purchaseDate}</GText>
+            </GVStack>
 
-          <GVStack space="xs" flex={1}>
-            <GHeading size="2xl">{item.title}</GHeading>
-            <GBadge
-              size="sm"
-              variant="outline"
-              action="muted"
-              alignSelf="flex-start"
-              testID="item-usage-badge"
-            >
-              <GBadgeText>{item.usageType}</GBadgeText>
-            </GBadge>
-            <GText size="sm">Purchase date: {item.purchaseDate}</GText>
-          </GVStack>
+            {loadError && (
+              <GCard borderWidth="$1" borderColor="$error300">
+                <GText size="sm">{loadError}</GText>
+              </GCard>
+            )}
 
-          {loadError && (
-            <GCard borderWidth="$1" borderColor="$error300">
-              <GText size="sm">{loadError}</GText>
+            <GCard borderWidth="$1" borderColor="$border200">
+              <GVStack space="md">
+                <GHeading size="md">Attachment gallery</GHeading>
+                {attachments.length === 0 ? (
+                  <GText size="sm">No attachments available.</GText>
+                ) : (
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                    <GHStack space="sm" pr="$2">
+                      {attachments.map((attachment) => {
+                        const missing = missingAttachmentIds.has(attachment.id);
+                        const tile = (
+                          <GCard width={200} borderWidth="$1" borderColor={missing ? "$warning300" : "$border200"}>
+                            <GVStack space="sm">
+                              {missing ? (
+                                <GBox height={120} alignItems="center" justifyContent="center">
+                                  <GText size="sm">File unavailable</GText>
+                                </GBox>
+                              ) : isImageAttachment(attachment) ? (
+                                <Image
+                                  source={{ uri: attachmentPreviewUris[attachment.id] ?? attachment.filePath }}
+                                  style={{ width: "100%", height: 120, borderRadius: 8 }}
+                                  contentFit="cover"
+                                />
+                              ) : (
+                                <GBox height={120} alignItems="center" justifyContent="center">
+                                  <GText bold size="md">
+                                    PDF
+                                  </GText>
+                                </GBox>
+                              )}
+                              <GText size="sm" numberOfLines={1}>
+                                {attachment.originalFileName ?? attachment.type}
+                              </GText>
+                              {missing && (
+                                <GBadge size="sm" action="warning" variant="outline" alignSelf="flex-start">
+                                  <GBadgeText>Missing file</GBadgeText>
+                                </GBadge>
+                              )}
+                            </GVStack>
+                          </GCard>
+                        );
+
+                        if (missing) {
+                          return <GBox key={attachment.id}>{tile}</GBox>;
+                        }
+
+                        return (
+                          <GPressable key={attachment.id} onPress={() => setSelectedAttachment(attachment)}>
+                            {tile}
+                          </GPressable>
+                        );
+                      })}
+                    </GHStack>
+                  </ScrollView>
+                )}
+              </GVStack>
             </GCard>
-          )}
 
-          <GCard borderWidth="$1" borderColor="$border200">
-            <GVStack space="md">
-              <GHeading size="md">Attachment gallery</GHeading>
-              {attachments.length === 0 ? (
-                <GText size="sm">No attachments available.</GText>
-              ) : (
-                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                  <GHStack space="sm" pr="$2">
-                    {attachments.map((attachment) => {
-                      const missing = missingAttachmentIds.has(attachment.id);
-                      const tile = (
-                        <GCard width={200} borderWidth="$1" borderColor={missing ? "$warning300" : "$border200"}>
-                          <GVStack space="sm">
-                            {missing ? (
-                              <GBox height={120} alignItems="center" justifyContent="center">
-                                <GText size="sm">File unavailable</GText>
-                              </GBox>
-                            ) : isImageAttachment(attachment) ? (
-                              <Image
-                                source={{ uri: attachmentPreviewUris[attachment.id] ?? attachment.filePath }}
-                                style={{ width: "100%", height: 120, borderRadius: 8 }}
-                                contentFit="cover"
-                              />
-                            ) : (
-                              <GBox height={120} alignItems="center" justifyContent="center">
-                                <GText bold size="md">
-                                  PDF
-                                </GText>
-                              </GBox>
-                            )}
-                            <GText size="sm" numberOfLines={1}>
-                              {attachment.originalFileName ?? attachment.type}
+            <GCard borderWidth="$1" borderColor="$border200">
+              <GVStack space="sm">
+                <GHeading size="md">Info</GHeading>
+                <InfoRow label="Title" value={item.title} />
+                <InfoRow label="Category" value={categoryName} />
+                <InfoRow label="Purchase date" value={item.purchaseDate} />
+                <InfoRow label="Vendor" value={item.vendor?.trim() ? item.vendor : "-"} />
+                <InfoRow label="Warranty until" value={warrantyUntilDate ?? "n/a"} />
+              </GVStack>
+            </GCard>
+
+            <GCard borderWidth="$1" borderColor="$border200">
+              <GVStack space="sm">
+                <GHeading size="md">Calculation</GHeading>
+                {calculationBreakdown ? (
+                  <>
+                    <InfoRow
+                      label="Deductible base"
+                      value={formatCents(calculationBreakdown.workRelevantCents)}
+                    />
+                    <InfoRow
+                      label="Deductible this year"
+                      value={formatCents(calculationBreakdown.deductibleThisYearCents)}
+                    />
+                    <InfoRow
+                      label="Estimated refund impact"
+                      value={formatCents(calculationBreakdown.estimatedRefundCents)}
+                    />
+                    <GVStack space="xs" pt="$2">
+                      <GText bold size="sm">
+                        Schedule by year
+                      </GText>
+                      {calculationBreakdown.scheduleByYear.length === 0 ? (
+                        <GText size="sm">No deductible schedule available.</GText>
+                      ) : (
+                        calculationBreakdown.scheduleByYear.map((entry) => (
+                          <GHStack key={entry.year} justifyContent="space-between" alignItems="center">
+                            <GText size="sm">{entry.year}</GText>
+                            <GText size="sm" bold>
+                              {formatCents(entry.deductibleCents)}
                             </GText>
-                            {missing && (
-                              <GBadge size="sm" action="warning" variant="outline" alignSelf="flex-start">
-                                <GBadgeText>Missing file</GBadgeText>
-                              </GBadge>
-                            )}
-                          </GVStack>
-                        </GCard>
-                      );
+                          </GHStack>
+                        ))
+                      )}
+                    </GVStack>
+                  </>
+                ) : (
+                  <GText size="sm">Calculation data unavailable.</GText>
+                )}
+              </GVStack>
+            </GCard>
 
-                      if (missing) {
-                        return <GBox key={attachment.id}>{tile}</GBox>;
-                      }
-
-                      return (
-                        <GPressable key={attachment.id} onPress={() => setSelectedAttachment(attachment)}>
-                          {tile}
-                        </GPressable>
-                      );
-                    })}
-                  </GHStack>
-                </ScrollView>
-              )}
-            </GVStack>
-          </GCard>
-
-          <GCard borderWidth="$1" borderColor="$border200">
-            <GVStack space="sm">
-              <GHeading size="md">Info</GHeading>
-              <InfoRow label="Title" value={item.title} />
-              <InfoRow label="Category" value={categoryName} />
-              <InfoRow label="Purchase date" value={item.purchaseDate} />
-              <InfoRow label="Vendor" value={item.vendor?.trim() ? item.vendor : "-"} />
-              <InfoRow label="Warranty until" value={warrantyUntilDate ?? "n/a"} />
-            </GVStack>
-          </GCard>
-
-          <GCard borderWidth="$1" borderColor="$border200">
-            <GVStack space="sm">
-              <GHeading size="md">Calculation</GHeading>
-              {calculationBreakdown ? (
-                <>
-                  <InfoRow
-                    label="Deductible base"
-                    value={formatCents(calculationBreakdown.workRelevantCents)}
-                  />
-                  <InfoRow
-                    label="Deductible this year"
-                    value={formatCents(calculationBreakdown.deductibleThisYearCents)}
-                  />
-                  <InfoRow
-                    label="Estimated refund impact"
-                    value={formatCents(calculationBreakdown.estimatedRefundCents)}
-                  />
-                  <GVStack space="xs" pt="$2">
-                    <GText bold size="sm">
-                      Schedule by year
-                    </GText>
-                    {calculationBreakdown.scheduleByYear.length === 0 ? (
-                      <GText size="sm">No deductible schedule available.</GText>
-                    ) : (
-                      calculationBreakdown.scheduleByYear.map((entry) => (
-                        <GHStack key={entry.year} justifyContent="space-between" alignItems="center">
-                          <GText size="sm">{entry.year}</GText>
-                          <GText size="sm" bold>
-                            {formatCents(entry.deductibleCents)}
-                          </GText>
-                        </GHStack>
-                      ))
-                    )}
-                  </GVStack>
-                </>
-              ) : (
-                <GText size="sm">Calculation data unavailable.</GText>
-              )}
-            </GVStack>
-          </GCard>
-
-          <GButton
-            variant="outline"
-            action="negative"
-            onPress={() => setIsDeleteDialogOpen(true)}
-            disabled={isDeleting}
-            alignSelf="flex-start"
-            testID="item-detail-delete"
-          >
-            <GButtonText>{isDeleting ? "Deleting..." : "Delete"}</GButtonText>
-          </GButton>
+            <GButton
+              variant="outline"
+              action="negative"
+              onPress={() => setIsDeleteDialogOpen(true)}
+              disabled={isDeleting}
+              alignSelf="flex-start"
+              testID="item-detail-delete"
+            >
+              <GButtonText>{isDeleting ? "Deleting..." : "Delete"}</GButtonText>
+            </GButton>
           </GVStack>
         </ScrollView>
 

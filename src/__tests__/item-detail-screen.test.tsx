@@ -5,7 +5,6 @@ import ItemDetailRoute from "@/app/item/[id]";
 
 const mockPush = jest.fn();
 const mockReplace = jest.fn();
-const mockBack = jest.fn();
 let mockCanGoBack = true;
 const mockGetById = jest.fn();
 const mockSoftDelete = jest.fn();
@@ -16,6 +15,7 @@ const mockEstimateTaxImpact = jest.fn();
 const mockAttachmentFileExists = jest.fn();
 const mockResolveAttachmentPreviewUri = jest.fn();
 const mockDeleteAttachment = jest.fn();
+const mockNavigationSetOptions = jest.fn();
 
 jest.mock("@gluestack-ui/themed", () => {
   const {
@@ -69,10 +69,15 @@ jest.mock("expo-router", () => ({
   useRouter: () => ({
     push: mockPush,
     replace: mockReplace,
-    back: mockBack,
     canGoBack: () => mockCanGoBack,
   }),
   useLocalSearchParams: () => ({ id: "item-1" }),
+}));
+
+jest.mock("@react-navigation/native", () => ({
+  useNavigation: () => ({
+    setOptions: mockNavigationSetOptions,
+  }),
 }));
 
 jest.mock("@/domain/calculation-engine", () => ({
@@ -125,7 +130,7 @@ describe("ItemDetailRoute", () => {
   beforeEach(() => {
     mockPush.mockReset();
     mockReplace.mockReset();
-    mockBack.mockReset();
+    mockNavigationSetOptions.mockReset();
     mockCanGoBack = true;
     mockGetById.mockReset();
     mockSoftDelete.mockReset();
@@ -238,26 +243,27 @@ describe("ItemDetailRoute", () => {
     expect(screen.getByText("2026")).toBeTruthy();
   });
 
-  it("navigates to edit screen from header icon action", async () => {
+  it("wires edit action into native header and navigates to edit screen", async () => {
     render(<ItemDetailRoute />);
 
     expect((await screen.findAllByText("Work laptop")).length).toBeGreaterThan(0);
-    fireEvent.press(screen.getByTestId("action-edit-item"));
+    await waitFor(() => {
+      expect(mockNavigationSetOptions).toHaveBeenCalledWith(
+        expect.objectContaining({ headerRight: expect.any(Function) })
+      );
+    });
+
+    const options = mockNavigationSetOptions.mock.calls[
+      mockNavigationSetOptions.mock.calls.length - 1
+    ][0] as { headerRight?: () => React.ReactElement };
+
+    const headerRight = options.headerRight?.() as
+      | React.ReactElement<{ testID?: string; onPress?: () => void }>
+      | undefined;
+    expect(headerRight?.props.testID).toBe("item-detail-header-edit");
+    headerRight?.props.onPress?.();
 
     expect(mockPush).toHaveBeenCalledWith("/item/item-1/edit");
-  });
-
-  it("uses router back for back action when history exists", async () => {
-    mockCanGoBack = true;
-    render(<ItemDetailRoute />);
-
-    expect((await screen.findAllByText("Work laptop")).length).toBeGreaterThan(0);
-    fireEvent.press(screen.getByTestId("item-detail-back"));
-
-    await waitFor(() => {
-      expect(mockBack).toHaveBeenCalled();
-      expect(mockReplace).not.toHaveBeenCalledWith("/(tabs)/items");
-    });
   });
 
   it("deletes item after confirmation dialog", async () => {
@@ -288,7 +294,6 @@ describe("ItemDetailRoute", () => {
 
     await waitFor(() => {
       expect(mockReplace).toHaveBeenCalledWith("/(tabs)/items");
-      expect(mockBack).not.toHaveBeenCalled();
     });
   });
 });
