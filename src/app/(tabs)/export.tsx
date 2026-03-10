@@ -1,6 +1,6 @@
 import { useFocusEffect } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ScrollView } from "react-native";
+import { Platform, ScrollView } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   Actionsheet,
@@ -37,6 +37,15 @@ import {
   getItemRepository,
 } from "@/repositories/create-core-repositories";
 import { getProfileSettingsRepository } from "@/repositories/create-profile-settings-repository";
+import {
+  clearSavedExportDirectoryUri,
+  formatDirectoryUriForDisplay,
+  getLocalExportDirectoryUri,
+  getSavedExportDirectoryUri,
+  isExportDirectoryPickerSupported,
+  pickAndPersistExportDirectory,
+  saveExportCopyToDirectory,
+} from "@/services/export-destination";
 import {
   getExportSelectionSessionState,
   updateExportSelectionSessionState,
@@ -183,6 +192,13 @@ export default function ExportRoute() {
   const [selectedFormat, setSelectedFormat] = useState<ExportFormat>("PDF");
   const [isGenerating, setIsGenerating] = useState(false);
   const [latestGeneratedFileName, setLatestGeneratedFileName] = useState<string | null>(null);
+  const [latestGeneratedFileUri, setLatestGeneratedFileUri] = useState<string | null>(null);
+  const [latestGeneratedFormat, setLatestGeneratedFormat] = useState<ExportFormat | null>(null);
+  const [savedDirectoryUri, setSavedDirectoryUri] = useState<string | null>(null);
+  const [latestSavedDirectoryFileUri, setLatestSavedDirectoryFileUri] = useState<string | null>(
+    null
+  );
+  const [directorySaveError, setDirectorySaveError] = useState<string | null>(null);
   const [zipProgress, setZipProgress] = useState<ZipExportProgress | null>(null);
   const [isSelectionOpen, setIsSelectionOpen] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
@@ -210,6 +226,17 @@ export default function ExportRoute() {
   const categoryChipLabel = categoryId
     ? `Category: ${categoryMap.get(categoryId)?.name ?? "Unknown"}`
     : "Category: all";
+  const supportsDirectoryPicker = useMemo(() => isExportDirectoryPickerSupported(), []);
+  const localExportDirectoryUri = useMemo(() => {
+    try {
+      return getLocalExportDirectoryUri();
+    } catch {
+      return "Unavailable";
+    }
+  }, []);
+  const savedDirectoryLabel = savedDirectoryUri
+    ? formatDirectoryUriForDisplay(savedDirectoryUri)
+    : "Not selected";
 
   useEffect(() => {
     updateExportSelectionSessionState({
@@ -222,6 +249,27 @@ export default function ExportRoute() {
       selectedItemIds: Array.from(selectedItemIds),
     });
   }, [categoryId, missingNotes, missingReceipt, search, selectedItemIds, taxYear, usageType]);
+
+  useEffect(() => {
+    if (!supportsDirectoryPicker) {
+      return;
+    }
+    let active = true;
+    const loadSavedDirectory = async () => {
+      try {
+        const savedUri = await getSavedExportDirectoryUri();
+        if (active) {
+          setSavedDirectoryUri(savedUri);
+        }
+      } catch (error) {
+        console.error("Failed to load saved export directory", error);
+      }
+    };
+    void loadSavedDirectory();
+    return () => {
+      active = false;
+    };
+  }, [supportsDirectoryPicker]);
 
   const loadData = useCallback(async () => {
     setIsLoading(true);
@@ -404,6 +452,82 @@ export default function ExportRoute() {
     focusField("taxYear");
   }, [focusField, scrollToField, taxYearError]);
 
+  const saveCopyToSelectedDirectory = useCallback(
+    async (input: { fileUri: string; fileName: string; format: ExportFormat }) => {
+      if (!supportsDirectoryPicker || !savedDirectoryUri) {
+        setLatestSavedDirectoryFileUri(null);
+        return;
+      }
+
+      try {
+        const result = await saveExportCopyToDirectory({
+          sourceFileUri: input.fileUri,
+          sourceFileName: input.fileName,
+          mimeType: input.format === "PDF" ? "application/pdf" : "application/zip",
+          directoryUri: savedDirectoryUri,
+        });
+        setLatestSavedDirectoryFileUri(result.fileUri);
+        setDirectorySaveError(null);
+      } catch (error) {
+        console.error("Failed to copy export into selected directory", error);
+        setLatestSavedDirectoryFileUri(null);
+        setDirectorySaveError(
+          friendlyFileErrorMessage(
+            error,
+            "Export was created, but copying it to the selected folder failed."
+          )
+        );
+      }
+    },
+    [savedDirectoryUri, supportsDirectoryPicker]
+  );
+
+  const handlePickExportDirectory = useCallback(async () => {
+    if (!supportsDirectoryPicker) {
+      return;
+    }
+
+    try {
+      const result = await pickAndPersistExportDirectory(savedDirectoryUri);
+      if (!result.granted || !result.directoryUri) {
+        return;
+      }
+      setSavedDirectoryUri(result.directoryUri);
+      setDirectorySaveError(null);
+    } catch (error) {
+      console.error("Failed to select export directory", error);
+      setLoadError(friendlyFileErrorMessage(error, "Could not choose export folder."));
+    }
+  }, [savedDirectoryUri, supportsDirectoryPicker]);
+
+  const handleClearExportDirectory = useCallback(async () => {
+    try {
+      await clearSavedExportDirectoryUri();
+      setSavedDirectoryUri(null);
+      setLatestSavedDirectoryFileUri(null);
+      setDirectorySaveError(null);
+    } catch (error) {
+      console.error("Failed to clear saved export directory", error);
+      setLoadError(friendlyFileErrorMessage(error, "Could not clear selected export folder."));
+    }
+  }, []);
+
+  const handleShareLatestGeneratedExport = useCallback(async () => {
+    if (!latestGeneratedFileUri || !latestGeneratedFormat) {
+      return;
+    }
+    try {
+      if (latestGeneratedFormat === "PDF") {
+        await shareExportPdf(latestGeneratedFileUri);
+      } else {
+        await shareExportZip(latestGeneratedFileUri);
+      }
+    } catch (error) {
+      console.error("Failed to share latest generated export", error);
+      setLoadError(friendlyFileErrorMessage(error, "Could not share latest export file."));
+    }
+  }, [latestGeneratedFileUri, latestGeneratedFormat]);
+
   const handleGenerateExport = async () => {
     setSubmitAttempted(true);
     if (!isGenerateFormValid || !settings || selectedItems.length === 0 || isGenerating) {
@@ -415,6 +539,7 @@ export default function ExportRoute() {
 
     setIsGenerating(true);
     setZipProgress(null);
+    setDirectorySaveError(null);
     setLoadError(null);
     try {
       if (selectedFormat === "PDF") {
@@ -426,6 +551,13 @@ export default function ExportRoute() {
           includeDetailPages,
         });
         setLatestGeneratedFileName(result.fileName);
+        setLatestGeneratedFileUri(result.fileUri);
+        setLatestGeneratedFormat("PDF");
+        await saveCopyToSelectedDirectory({
+          fileUri: result.fileUri,
+          fileName: result.fileName,
+          format: "PDF",
+        });
 
         const exportRunRepository = await getExportRunRepository();
         const run = await exportRunRepository.create({
@@ -449,6 +581,13 @@ export default function ExportRoute() {
         onProgress: (progress) => setZipProgress(progress),
       });
       setLatestGeneratedFileName(result.fileName);
+      setLatestGeneratedFileUri(result.fileUri);
+      setLatestGeneratedFormat("ZIP");
+      await saveCopyToSelectedDirectory({
+        fileUri: result.fileUri,
+        fileName: result.fileName,
+        format: "ZIP",
+      });
 
       const exportRunRepository = await getExportRunRepository();
       const run = await exportRunRepository.create({
@@ -754,9 +893,82 @@ export default function ExportRoute() {
                 </Box>
 
                 {latestGeneratedFileName && <Text size="sm">Last export: {latestGeneratedFileName}</Text>}
+                {latestGeneratedFileUri && (
+                  <Text size="sm" testID="export-last-local-file-uri">
+                    Local file: {latestGeneratedFileUri}
+                  </Text>
+                )}
+                {latestGeneratedFileUri && latestGeneratedFormat && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    action="secondary"
+                    onPress={() => void handleShareLatestGeneratedExport()}
+                    testID="export-share-latest"
+                  >
+                    <ButtonText>Share latest</ButtonText>
+                  </Button>
+                )}
                 {zipProgress && (
                   <Text size="sm">
                     ZIP progress: {zipProgress.percent}% - {zipProgress.message}
+                  </Text>
+                )}
+              </VStack>
+            </Card>
+
+            <Card borderWidth="$1" borderColor="$border200">
+              <VStack space="md">
+                <Heading size="md">Save destination</Heading>
+                <Text size="sm">App storage (always): {localExportDirectoryUri}</Text>
+
+                {supportsDirectoryPicker ? (
+                  <>
+                    <Text size="sm">Selected folder: {savedDirectoryLabel}</Text>
+                    <HStack space="sm" flexWrap="wrap">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        action="secondary"
+                        onPress={() => void handlePickExportDirectory()}
+                        testID="export-select-folder"
+                      >
+                        <ButtonText>
+                          {savedDirectoryUri ? "Change folder" : "Choose folder"}
+                        </ButtonText>
+                      </Button>
+                      {savedDirectoryUri && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          action="secondary"
+                          onPress={() => void handleClearExportDirectory()}
+                          testID="export-clear-folder"
+                        >
+                          <ButtonText>Clear folder</ButtonText>
+                        </Button>
+                      )}
+                    </HStack>
+                    <Text size="xs">
+                      Android: choose a folder once, and each new export is copied there.
+                    </Text>
+                  </>
+                ) : (
+                  <Text size="xs">
+                    {Platform.OS === "ios"
+                      ? "iOS: use Share latest or Share again and save the file to Files."
+                      : "Folder selection is unavailable on this platform. Use Share latest or Share again."}
+                  </Text>
+                )}
+
+                {latestSavedDirectoryFileUri && (
+                  <Text size="sm" testID="export-last-folder-file-uri">
+                    Folder copy: {latestSavedDirectoryFileUri}
+                  </Text>
+                )}
+                {directorySaveError && (
+                  <Text size="sm" color="$error600" testID="export-folder-save-error">
+                    {directorySaveError}
                   </Text>
                 )}
               </VStack>

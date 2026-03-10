@@ -16,6 +16,13 @@ const mockGeneratePdfExport = jest.fn();
 const mockShareExportPdf = jest.fn();
 const mockGenerateZipExport = jest.fn();
 const mockShareExportZip = jest.fn();
+const mockGetSavedExportDirectoryUri = jest.fn();
+const mockPickAndPersistExportDirectory = jest.fn();
+const mockClearSavedExportDirectoryUri = jest.fn();
+const mockSaveExportCopyToDirectory = jest.fn();
+const mockIsExportDirectoryPickerSupported = jest.fn();
+const mockGetLocalExportDirectoryUri = jest.fn();
+const mockFormatDirectoryUriForDisplay = jest.fn();
 
 jest.mock("@gluestack-ui/themed", () => {
   const {
@@ -115,6 +122,17 @@ jest.mock("@/services/zip-export", () => ({
   shareExportZip: (fileUri: string) => mockShareExportZip(fileUri),
 }));
 
+jest.mock("@/services/export-destination", () => ({
+  getSavedExportDirectoryUri: () => mockGetSavedExportDirectoryUri(),
+  pickAndPersistExportDirectory: (initialDirectoryUri?: string | null) =>
+    mockPickAndPersistExportDirectory(initialDirectoryUri),
+  clearSavedExportDirectoryUri: () => mockClearSavedExportDirectoryUri(),
+  saveExportCopyToDirectory: (input: unknown) => mockSaveExportCopyToDirectory(input),
+  isExportDirectoryPickerSupported: () => mockIsExportDirectoryPickerSupported(),
+  getLocalExportDirectoryUri: () => mockGetLocalExportDirectoryUri(),
+  formatDirectoryUriForDisplay: (uri: string) => mockFormatDirectoryUriForDisplay(uri),
+}));
+
 describe("ExportRoute", () => {
   beforeEach(() => {
     mockListItems.mockReset();
@@ -130,6 +148,13 @@ describe("ExportRoute", () => {
     mockShareExportPdf.mockReset();
     mockGenerateZipExport.mockReset();
     mockShareExportZip.mockReset();
+    mockGetSavedExportDirectoryUri.mockReset();
+    mockPickAndPersistExportDirectory.mockReset();
+    mockClearSavedExportDirectoryUri.mockReset();
+    mockSaveExportCopyToDirectory.mockReset();
+    mockIsExportDirectoryPickerSupported.mockReset();
+    mockGetLocalExportDirectoryUri.mockReset();
+    mockFormatDirectoryUriForDisplay.mockReset();
 
     mockGetExportSelectionSessionState.mockReturnValue({
       taxYear: "",
@@ -213,6 +238,19 @@ describe("ExportRoute", () => {
     });
     mockShareExportPdf.mockResolvedValue(undefined);
     mockShareExportZip.mockResolvedValue(undefined);
+    mockGetSavedExportDirectoryUri.mockResolvedValue(null);
+    mockPickAndPersistExportDirectory.mockResolvedValue({
+      granted: true,
+      directoryUri: "content://tree/primary%3ADownload%2FSteuerFuchs",
+    });
+    mockClearSavedExportDirectoryUri.mockResolvedValue(undefined);
+    mockSaveExportCopyToDirectory.mockResolvedValue({
+      directoryUri: "content://tree/primary%3ADownload%2FSteuerFuchs",
+      fileUri: "content://document/primary%3ADownload%2FSteuerFuchs%2Fexport-2026.pdf",
+    });
+    mockIsExportDirectoryPickerSupported.mockReturnValue(false);
+    mockGetLocalExportDirectoryUri.mockReturnValue("file:///app/exports");
+    mockFormatDirectoryUriForDisplay.mockImplementation((uri: string) => uri);
   });
 
   it("uses a staged flow and generates selected format with one primary action", async () => {
@@ -267,6 +305,53 @@ describe("ExportRoute", () => {
     expect(screen.getByText("ZIP progress: 60% - Building archive")).toBeTruthy();
     expect(screen.getByText("Last export: export-2026.zip")).toBeTruthy();
     expect(screen.getByText("2 run(s) in selected tax year")).toBeTruthy();
+  });
+
+  it("can share the latest generated export without opening history", async () => {
+    render(<ExportRoute />);
+    expect(await screen.findByText("Export")).toBeTruthy();
+
+    fireEvent.press(screen.getByTestId("export-selection-toggle"));
+    fireEvent.press(screen.getByTestId("export-row-toggle-item-1"));
+    fireEvent.press(screen.getByTestId("export-generate"));
+
+    await waitFor(() => {
+      expect(screen.getByText("Last export: export-2026.pdf")).toBeTruthy();
+      expect(screen.getByTestId("export-last-local-file-uri")).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByTestId("export-share-latest"));
+
+    await waitFor(() => {
+      expect(mockShareExportPdf).toHaveBeenCalledWith("file:///exports/export-2026.pdf");
+    });
+  });
+
+  it("copies exports into the selected Android folder", async () => {
+    mockIsExportDirectoryPickerSupported.mockReturnValue(true);
+    mockGetSavedExportDirectoryUri.mockResolvedValue(
+      "content://com.android.externalstorage.documents/tree/primary%3ADownload%2FSteuerFuchs"
+    );
+    mockFormatDirectoryUriForDisplay.mockReturnValue("Internal storage/Download/SteuerFuchs");
+
+    render(<ExportRoute />);
+    expect(await screen.findByText("Export")).toBeTruthy();
+    expect(await screen.findByText("Selected folder: Internal storage/Download/SteuerFuchs")).toBeTruthy();
+
+    fireEvent.press(screen.getByTestId("export-selection-toggle"));
+    fireEvent.press(screen.getByTestId("export-row-toggle-item-1"));
+    fireEvent.press(screen.getByTestId("export-generate"));
+
+    await waitFor(() => {
+      expect(mockSaveExportCopyToDirectory).toHaveBeenCalledWith(
+        expect.objectContaining({
+          sourceFileUri: "file:///exports/export-2026.pdf",
+          sourceFileName: "export-2026.pdf",
+          mimeType: "application/pdf",
+        })
+      );
+      expect(screen.getByTestId("export-last-folder-file-uri")).toBeTruthy();
+    });
   });
 
   it("shows empty-state copy when no items match once selection is expanded", async () => {
