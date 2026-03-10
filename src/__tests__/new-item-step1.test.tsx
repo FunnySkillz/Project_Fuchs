@@ -80,6 +80,7 @@ jest.mock("expo-router", () => ({
   useLocalSearchParams: () => ({
     draftId: "draft-1",
   }),
+  useSegments: () => ["item"],
 }));
 
 jest.mock("@/hooks/use-theme", () => ({
@@ -314,11 +315,12 @@ describe("NewItemRoute attachments and cancel behavior", () => {
 
     await waitFor(() => {
       expect(mockClearItemDraft).toHaveBeenCalledWith("draft-1");
-      expect(mockRouterReplace).toHaveBeenCalledWith("/(tabs)/items");
+      expect(mockNavigationDispatch).toHaveBeenCalledWith({ type: "GO_BACK" });
+      expect(mockRouterReplace).not.toHaveBeenCalledWith("/(tabs)/items");
     });
   });
 
-  it("uses safe replace on cancel-discard even when history exists", async () => {
+  it("uses navigation goBack on cancel-discard when history exists", async () => {
     mockNavigationCanGoBack = true;
     mockSaveFromCamera.mockResolvedValue({
       filePath: "/tmp/receipt-backstack.jpg",
@@ -342,13 +344,13 @@ describe("NewItemRoute attachments and cancel behavior", () => {
 
     await waitFor(() => {
       expect(mockClearItemDraft).toHaveBeenCalledWith("draft-1");
-      expect(mockNavigationGoBack).not.toHaveBeenCalled();
-      expect(mockRouterReplace).toHaveBeenCalledWith("/(tabs)/items");
+      expect(mockNavigationGoBack).toHaveBeenCalled();
+      expect(mockRouterReplace).not.toHaveBeenCalledWith("/(tabs)/items");
       expect(mockRouterBack).not.toHaveBeenCalled();
     });
   });
 
-  it("allows clean navigation back without opening discard modal", async () => {
+  it("allows clean navigation back without intercepting remove", async () => {
     mockRouterCanGoBack = false;
     mockNavigationCanGoBack = false;
     render(<NewItemRoute />);
@@ -365,8 +367,8 @@ describe("NewItemRoute attachments and cancel behavior", () => {
       });
     });
 
-    expect(preventDefault).toHaveBeenCalledTimes(1);
-    expect(mockRouterReplace).toHaveBeenCalledWith("/(tabs)/items");
+    expect(preventDefault).not.toHaveBeenCalled();
+    expect(mockRouterReplace).not.toHaveBeenCalled();
     expect(screen.queryByTestId("discard-modal")).toBeNull();
   });
 });

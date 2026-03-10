@@ -531,10 +531,31 @@ export default function NewItemRoute() {
 
   const goBackFromAddFlow = useCallback(() => {
     allowNavigationExitRef.current = true;
-    pendingNavigationActionRef.current = null;
     setIsDiscardModalOpen(false);
+    const pendingAction = pendingNavigationActionRef.current;
+    pendingNavigationActionRef.current = null;
+
+    if (pendingAction) {
+      navigation.dispatch(pendingAction);
+      return;
+    }
+
+    if (typeof navigation.canGoBack === "function" && navigation.canGoBack()) {
+      navigation.goBack();
+      return;
+    }
+
+    const routerWithBack = router as {
+      canGoBack?: () => boolean;
+      back?: () => void;
+    };
+    if (typeof routerWithBack.canGoBack === "function" && routerWithBack.canGoBack()) {
+      routerWithBack.back?.();
+      return;
+    }
+
     router.replace("/(tabs)/items");
-  }, [router]);
+  }, [navigation, router]);
 
   const exitAfterDiscard = useCallback(async () => {
     if (!activeDraftId) {
@@ -678,18 +699,13 @@ export default function NewItemRoute() {
       const unsubscribe = navigation.addListener(
         "beforeRemove",
         (event: any) => {
-          if (allowNavigationExitRef.current) {
+          if (allowNavigationExitRef.current || !isDirtyRef.current) {
             return;
           }
 
           event.preventDefault();
-          if (isDirtyRef.current) {
-            pendingNavigationActionRef.current = event?.data?.action ?? null;
-            setIsDiscardModalOpen(true);
-            return;
-          }
-
-          goBackFromAddFlow();
+          pendingNavigationActionRef.current = event?.data?.action ?? null;
+          setIsDiscardModalOpen(true);
         },
       );
 

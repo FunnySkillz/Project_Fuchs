@@ -1,10 +1,5 @@
-import { useIsFocused } from "@react-navigation/native";
-import NewItemRoute from "@/app/item/new";
+import { Redirect } from "expo-router";
 
 export default function AddTabRoute() {
-  const isFocused = useIsFocused();
-  if (!isFocused) {
-    return null;
-  }
-  return <NewItemRoute />;
+  return <Redirect href="/item/new" />;
 }
