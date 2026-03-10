@@ -4,6 +4,7 @@ import { useNavigation } from "@react-navigation/native";
 import React, { useCallback, useMemo, useState } from "react";
 import { Pressable as RNPressable, ScrollView, Text as RNText } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { Trash2 } from "lucide-react-native";
 import {
   AlertDialog as GAlertDialog,
   AlertDialogBackdrop as GAlertDialogBackdrop,
@@ -487,8 +488,14 @@ export default function ItemDetailRoute() {
               disabled={isDeleting}
               alignSelf="flex-start"
               testID="item-detail-delete"
+              accessibilityLabel={isDeleting ? "Deleting item" : "Delete item"}
+              accessibilityHint="Opens a confirmation dialog."
             >
-              <GButtonText>{isDeleting ? "Deleting..." : "Delete"}</GButtonText>
+              <Trash2
+                size={18}
+                strokeWidth={2}
+                color={isDeleting ? theme.textSecondary : theme.danger}
+              />
             </GButton>
           </GVStack>
         </ScrollView>

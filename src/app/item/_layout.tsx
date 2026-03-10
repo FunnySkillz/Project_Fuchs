@@ -36,6 +36,8 @@ export default function ItemStackLayout() {
         name="[id]/index"
         options={{
           title: "Item Detail",
+          headerLeft: (props) =>
+            props.canGoBack ? <HeaderBackButton {...props} testID="itemdetail-header-back" /> : null,
         }}
       />
       <Stack.Screen
