@@ -391,8 +391,9 @@ export default function ExportRoute() {
       estimatedRefundCents,
     };
   }, [deductibleByItemId, selectedItems, settings]);
+  const hasSelectedItems = selectedItems.length > 0;
   const isGenerateDisabled =
-    selectedItems.length === 0 || isGenerating || (submitAttempted && !isGenerateFormValid);
+    !hasSelectedItems || isGenerating || (submitAttempted && !isGenerateFormValid);
 
   const toggleItemSelection = (itemId: string) => {
     setSelectedItemIds((current) => {
@@ -891,6 +892,11 @@ export default function ExportRoute() {
                     </ButtonText>
                   </Button>
                 </Box>
+                {!hasSelectedItems && (
+                  <Text size="sm" color="$text500" testID="export-no-items-hint">
+                    Select at least one item in the "Select items" section to generate an export.
+                  </Text>
+                )}
 
                 {latestGeneratedFileName && <Text size="sm">Last export: {latestGeneratedFileName}</Text>}
                 {latestGeneratedFileUri && (

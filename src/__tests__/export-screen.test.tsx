@@ -261,6 +261,8 @@ describe("ExportRoute", () => {
     expect(screen.getByText("Totals summary")).toBeTruthy();
     expect(screen.getByText("Export history")).toBeTruthy();
     expect(screen.getByText("Selected items: 0")).toBeTruthy();
+    expect(screen.getByTestId("export-generate").props.accessibilityState?.disabled).toBe(true);
+    expect(screen.getByTestId("export-no-items-hint")).toBeTruthy();
     expect(screen.queryByText("Work laptop")).toBeNull();
 
     fireEvent.press(screen.getByTestId("export-selection-toggle"));
@@ -268,6 +270,7 @@ describe("ExportRoute", () => {
 
     fireEvent.press(screen.getByTestId("export-row-toggle-item-1"));
     expect(screen.getByText("Selected items: 1")).toBeTruthy();
+    expect(screen.queryByTestId("export-no-items-hint")).toBeNull();
 
     fireEvent.press(screen.getByTestId("export-generate"));
     await waitFor(() => {
