@@ -247,7 +247,7 @@ describe("ItemDetailRoute", () => {
     expect(mockPush).toHaveBeenCalledWith("/item/item-1/edit");
   });
 
-  it("uses safe replace for back action even when history exists", async () => {
+  it("uses router back for back action when history exists", async () => {
     mockCanGoBack = true;
     render(<ItemDetailRoute />);
 
@@ -255,8 +255,8 @@ describe("ItemDetailRoute", () => {
     fireEvent.press(screen.getByTestId("item-detail-back"));
 
     await waitFor(() => {
-      expect(mockReplace).toHaveBeenCalledWith("/(tabs)/items");
-      expect(mockBack).not.toHaveBeenCalled();
+      expect(mockBack).toHaveBeenCalled();
+      expect(mockReplace).not.toHaveBeenCalledWith("/(tabs)/items");
     });
   });
 

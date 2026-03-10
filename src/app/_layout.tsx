@@ -1,6 +1,6 @@
 import { DarkTheme, DefaultTheme, ThemeProvider } from "@react-navigation/native";
 import * as LocalAuthentication from "expo-local-authentication";
-import { Redirect, Slot, useSegments } from "expo-router";
+import { Redirect, Stack, useSegments } from "expo-router";
 import React, { useCallback, useEffect, useRef } from "react";
 import { AppState, type AppStateStatus, LogBox, useColorScheme } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -411,7 +411,9 @@ export default function RootLayout() {
             <AnimatedSplashOverlay />
             {bootstrapState === "ready" && !hasProfile && !inOnboarding && <Redirect href="/(onboarding)/welcome" />}
             {bootstrapState === "ready" && hasProfile && inOnboarding && <Redirect href="/(tabs)/home" />}
-            {bootstrapState === "ready" && (!appLockEnabled || isUnlocked || !hasProfile) && <Slot />}
+            {bootstrapState === "ready" && (!appLockEnabled || isUnlocked || !hasProfile) && (
+              <Stack screenOptions={{ headerShown: false }} />
+            )}
             {bootstrapState === "ready" && appLockEnabled && !isUnlocked && (
               <AppLockGate
                 isAuthenticating={isAuthenticating}

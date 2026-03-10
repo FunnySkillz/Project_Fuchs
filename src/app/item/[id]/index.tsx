@@ -252,6 +252,10 @@ export default function ItemDetailRoute() {
   };
 
   const handleBackNavigation = () => {
+    if (canGoBack) {
+      router.back();
+      return;
+    }
     router.replace("/(tabs)/items");
   };
 

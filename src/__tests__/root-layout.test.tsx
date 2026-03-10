@@ -29,7 +29,7 @@ jest.mock("expo-router", () => {
   const { Text } = require("react-native");
   return {
     Redirect: ({ href }: { href: string }) => <Text>{`redirect:${href}`}</Text>,
-    Slot: () => <Text testID="root-slot">slot</Text>,
+    Stack: () => <Text testID="root-slot">stack</Text>,
     useSegments: () => mockUseSegments(),
   };
 });
