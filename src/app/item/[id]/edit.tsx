@@ -864,13 +864,16 @@ export default function ItemEditRoute() {
 
   return (
     <SafeAreaView style={{ flex: 1 }} edges={["bottom"]}>
-      <Box flex={1} px="$5" py="$6">
+      <Box flex={1} px="$5">
         <ScrollView
           ref={scrollRef}
+          contentInsetAdjustmentBehavior="never"
+          automaticallyAdjustContentInsets={false}
           contentContainerStyle={{
             width: "100%",
             maxWidth: 860,
             alignSelf: "center",
+            paddingTop: 24,
             paddingBottom: insets.bottom + 24,
           }}
         >
