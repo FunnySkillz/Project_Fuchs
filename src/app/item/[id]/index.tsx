@@ -2,9 +2,9 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { Image } from "expo-image";
 import { useNavigation } from "@react-navigation/native";
 import React, { useCallback, useMemo, useState } from "react";
-import { Pressable as RNPressable, ScrollView, Text as RNText } from "react-native";
+import { Pressable as RNPressable, ScrollView } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-import { Trash2 } from "lucide-react-native";
+import { Pencil, Trash2 } from "lucide-react-native";
 import {
   AlertDialog as GAlertDialog,
   AlertDialogBackdrop as GAlertDialogBackdrop,
@@ -219,9 +219,7 @@ export default function ItemDetailRoute() {
             opacity: pressed ? 0.65 : 1,
           })}
         >
-          <RNText style={{ color: theme.primary, fontSize: 17, fontWeight: "600" }}>
-            Edit
-          </RNText>
+          <Pencil size={18} strokeWidth={2} color={theme.primary} />
         </RNPressable>
       ),
     });
@@ -491,11 +489,14 @@ export default function ItemDetailRoute() {
               accessibilityLabel={isDeleting ? "Deleting item" : "Delete item"}
               accessibilityHint="Opens a confirmation dialog."
             >
-              <Trash2
-                size={18}
-                strokeWidth={2}
-                color={isDeleting ? theme.textSecondary : theme.danger}
-              />
+              <GHStack space="xs" alignItems="center">
+                <Trash2
+                  size={18}
+                  strokeWidth={2}
+                  color={isDeleting ? theme.textSecondary : theme.danger}
+                />
+                <GButtonText>{isDeleting ? "Deleting..." : "Delete"}</GButtonText>
+              </GHStack>
             </GButton>
           </GVStack>
         </ScrollView>

@@ -37,7 +37,9 @@ export default function ItemStackLayout() {
         options={{
           title: "Item Detail",
           headerLeft: (props) =>
-            props.canGoBack ? <HeaderBackButton {...props} testID="itemdetail-header-back" /> : null,
+            props.canGoBack ? (
+              <HeaderBackButton {...props} displayMode="minimal" testID="itemdetail-header-back" />
+            ) : null,
         }}
       />
       <Stack.Screen

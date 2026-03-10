@@ -47,7 +47,15 @@ import {
 import DateTimePicker, {
   type DateTimePickerEvent,
 } from "@react-native-community/datetimepicker";
-import { Calendar, FileText, Plus, Upload, X } from "lucide-react-native";
+import {
+  Calendar,
+  ChevronDown,
+  ChevronRight,
+  FileText,
+  Plus,
+  Upload,
+  X,
+} from "lucide-react-native";
 import * as Sharing from "expo-sharing";
 
 import { validateItemInput } from "@/domain/item-validation";
@@ -246,6 +254,7 @@ export default function NewItemRoute() {
   const [isLoadingCategories, setIsLoadingCategories] = useState(false);
   const [isCreatingCategory, setIsCreatingCategory] = useState(false);
   const [isCategorySheetOpen, setIsCategorySheetOpen] = useState(false);
+  const [isOptionalOpen, setIsOptionalOpen] = useState(true);
   const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
 
@@ -1029,7 +1038,6 @@ export default function NewItemRoute() {
           >
             <GVStack space="lg">
               <GVStack space="xs">
-                <GHeading size="xl">Add Item</GHeading>
                 <GText size="sm">
                   Capture purchase data and receipts in one clean flow.
                 </GText>
@@ -1637,93 +1645,117 @@ export default function NewItemRoute() {
                 }}
               >
                 <GVStack space="md">
-                  <GHeading size="md">Optional</GHeading>
-
-                  <GVStack space="xs">
-                    <GText bold size="sm">
-                      Notes
-                    </GText>
-                    <GTextarea>
-                      <GTextareaInput
-                        value={notes}
-                        onChangeText={setNotes}
-                        placeholder="Optional context for invoice or audit trail"
-                        testID="additem-input-notes"
-                        accessibilityLabel="Notes"
-                      />
-                    </GTextarea>
-                    <GText size="xs" color="$textLight500">
-                      Optional. Missing notes may be flagged later.
-                    </GText>
-                  </GVStack>
-
-                  <GBox
-                    onLayout={(event) => {
-                      fieldYRef.current.warrantyMonths =
-                        event.nativeEvent.layout.y;
-                    }}
+                  <Pressable
+                    onPress={() => setIsOptionalOpen((current) => !current)}
+                    testID="additem-optional-toggle"
+                    accessibilityRole="button"
+                    accessibilityLabel="Toggle optional fields"
+                    accessibilityState={{ expanded: isOptionalOpen }}
                   >
-                    <GVStack space="xs">
-                      <GText bold size="sm">
-                        Warranty months
-                      </GText>
-                      <GInput
-                        variant="outline"
-                        borderColor={
-                          shouldShowFieldError("warrantyMonths")
-                            ? "$error600"
-                            : "$border200"
-                        }
-                      >
-                        <GInputField
-                          ref={(node) => {
-                            inputRef.current.warrantyMonths =
-                              node as FocusTarget | null;
-                          }}
-                          value={warrantyMonths}
-                          onChangeText={setWarrantyMonths}
-                          keyboardType="number-pad"
-                          placeholder="Optional"
-                          onBlur={() => setFieldTouched("warrantyMonths")}
-                          testID="additem-input-warrantymonths"
-                          accessibilityLabel="Warranty months"
-                          accessibilityState={
-                            {
-                              invalid: shouldShowFieldError("warrantyMonths"),
-                            } as any
-                          }
-                        />
-                      </GInput>
-                      {shouldShowFieldError("warrantyMonths") && (
-                        <GText
-                          size="xs"
-                          color="$error600"
-                          accessibilityLiveRegion="polite"
-                          testID="additem-error-warrantymonths"
-                        >
-                          {validationMessages.warrantyMonths}
-                        </GText>
-                      )}
+                    <GHStack alignItems="center" justifyContent="space-between">
+                      <GHStack alignItems="center" space="sm">
+                        {isOptionalOpen ? (
+                          <ChevronDown size={16} color={theme.textSecondary} />
+                        ) : (
+                          <ChevronRight size={16} color={theme.textSecondary} />
+                        )}
+                        <GHeading size="md">Optional</GHeading>
+                      </GHStack>
                       <GText size="xs" color="$textLight500">
-                        Warranty until: {warrantyUntilDate ?? "n/a"}
+                        {isOptionalOpen ? "Hide" : "Show"}
                       </GText>
-                    </GVStack>
-                  </GBox>
+                    </GHStack>
+                  </Pressable>
 
-                  <GVStack space="xs">
-                    <GText bold size="sm">
-                      Vendor
-                    </GText>
-                    <GInput variant="outline">
-                      <GInputField
-                        value={vendor}
-                        onChangeText={setVendor}
-                        placeholder="Optional vendor/store"
-                        testID="additem-input-vendor"
-                        accessibilityLabel="Vendor"
-                      />
-                    </GInput>
-                  </GVStack>
+                  {isOptionalOpen && (
+                    <GVStack space="md">
+                      <GVStack space="xs">
+                        <GText bold size="sm">
+                          Notes
+                        </GText>
+                        <GTextarea>
+                          <GTextareaInput
+                            value={notes}
+                            onChangeText={setNotes}
+                            placeholder="Optional context for invoice or audit trail"
+                            testID="additem-input-notes"
+                            accessibilityLabel="Notes"
+                          />
+                        </GTextarea>
+                        <GText size="xs" color="$textLight500">
+                          Optional. Missing notes may be flagged later.
+                        </GText>
+                      </GVStack>
+
+                      <GBox
+                        onLayout={(event) => {
+                          fieldYRef.current.warrantyMonths =
+                            event.nativeEvent.layout.y;
+                        }}
+                      >
+                        <GVStack space="xs">
+                          <GText bold size="sm">
+                            Warranty months
+                          </GText>
+                          <GInput
+                            variant="outline"
+                            borderColor={
+                              shouldShowFieldError("warrantyMonths")
+                                ? "$error600"
+                                : "$border200"
+                            }
+                          >
+                            <GInputField
+                              ref={(node) => {
+                                inputRef.current.warrantyMonths =
+                                  node as FocusTarget | null;
+                              }}
+                              value={warrantyMonths}
+                              onChangeText={setWarrantyMonths}
+                              keyboardType="number-pad"
+                              placeholder="Optional"
+                              onBlur={() => setFieldTouched("warrantyMonths")}
+                              testID="additem-input-warrantymonths"
+                              accessibilityLabel="Warranty months"
+                              accessibilityState={
+                                {
+                                  invalid: shouldShowFieldError("warrantyMonths"),
+                                } as any
+                              }
+                            />
+                          </GInput>
+                          {shouldShowFieldError("warrantyMonths") && (
+                            <GText
+                              size="xs"
+                              color="$error600"
+                              accessibilityLiveRegion="polite"
+                              testID="additem-error-warrantymonths"
+                            >
+                              {validationMessages.warrantyMonths}
+                            </GText>
+                          )}
+                          <GText size="xs" color="$textLight500">
+                            Warranty until: {warrantyUntilDate ?? "n/a"}
+                          </GText>
+                        </GVStack>
+                      </GBox>
+
+                      <GVStack space="xs">
+                        <GText bold size="sm">
+                          Vendor
+                        </GText>
+                        <GInput variant="outline">
+                          <GInputField
+                            value={vendor}
+                            onChangeText={setVendor}
+                            placeholder="Optional vendor/store"
+                            testID="additem-input-vendor"
+                            accessibilityLabel="Vendor"
+                          />
+                        </GInput>
+                      </GVStack>
+                    </GVStack>
+                  )}
                 </GVStack>
               </GCard>
 
@@ -1736,21 +1768,27 @@ export default function NewItemRoute() {
                 }}
               >
                 <GVStack space="md">
-                  <GHStack alignItems="center" justifyContent="space-between">
-                    <GHeading size="md">Advanced</GHeading>
-                    <GButton
-                      size="sm"
-                      variant="outline"
-                      action="secondary"
-                      onPress={() => setIsAdvancedOpen((current) => !current)}
-                      testID="additem-advanced-toggle"
-                      accessibilityLabel="Toggle advanced fields"
-                    >
-                      <GButtonText>
+                  <Pressable
+                    onPress={() => setIsAdvancedOpen((current) => !current)}
+                    testID="additem-advanced-toggle"
+                    accessibilityRole="button"
+                    accessibilityLabel="Toggle advanced fields"
+                    accessibilityState={{ expanded: isAdvancedOpen }}
+                  >
+                    <GHStack alignItems="center" justifyContent="space-between">
+                      <GHStack alignItems="center" space="sm">
+                        {isAdvancedOpen ? (
+                          <ChevronDown size={16} color={theme.textSecondary} />
+                        ) : (
+                          <ChevronRight size={16} color={theme.textSecondary} />
+                        )}
+                        <GHeading size="md">Advanced</GHeading>
+                      </GHStack>
+                      <GText size="xs" color="$textLight500">
                         {isAdvancedOpen ? "Hide" : "Show"}
-                      </GButtonText>
-                    </GButton>
-                  </GHStack>
+                      </GText>
+                    </GHStack>
+                  </Pressable>
 
                   {isAdvancedOpen && (
                     <GBox

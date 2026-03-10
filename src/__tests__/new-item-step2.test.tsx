@@ -1,6 +1,6 @@
 import React from "react";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react-native";
-import { Keyboard, Platform, ScrollView } from "react-native";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react-native";
+import { Keyboard, ScrollView } from "react-native";
 
 import NewItemRoute from "@/app/item/new";
 
@@ -95,6 +95,10 @@ jest.mock("@/hooks/use-theme", () => ({
 }));
 
 jest.mock("@react-navigation/native", () => ({
+  useFocusEffect: (callback: () => void | (() => void)) => {
+    const ReactModule = require("react");
+    ReactModule.useEffect(() => callback(), [callback]);
+  },
   useNavigation: () => ({
     addListener: mockNavigationAddListener,
     dispatch: mockNavigationDispatch,
@@ -177,7 +181,7 @@ describe("NewItemRoute save and validation", () => {
     });
 
     render(<NewItemRoute />);
-    expect(await screen.findByText("Add Item")).toBeTruthy();
+    expect(await screen.findByText("Attachments")).toBeTruthy();
 
     fireEvent.press(screen.getByTestId("additem-btn-takephoto"));
 
@@ -220,7 +224,7 @@ describe("NewItemRoute save and validation", () => {
   it("shows price required error after submit attempt when price is empty", async () => {
     render(<NewItemRoute />);
 
-    expect(await screen.findByText("Add Item")).toBeTruthy();
+    expect(await screen.findByText("Attachments")).toBeTruthy();
 
     const saveButton = screen.getByTestId("additem-btn-save");
     expect(saveButton.props.accessibilityState?.disabled).not.toBe(true);
@@ -239,7 +243,7 @@ describe("NewItemRoute save and validation", () => {
   it("shows price required error when price is 0", async () => {
     render(<NewItemRoute />);
 
-    expect(await screen.findByText("Add Item")).toBeTruthy();
+    expect(await screen.findByText("Attachments")).toBeTruthy();
     fireEvent.changeText(screen.getByTestId("additem-input-title"), "Desk Lamp");
     fireEvent.changeText(screen.getByTestId("additem-input-price"), "0");
 
@@ -255,7 +259,7 @@ describe("NewItemRoute save and validation", () => {
   it("removes price error and enables save when price becomes valid", async () => {
     render(<NewItemRoute />);
 
-    expect(await screen.findByText("Add Item")).toBeTruthy();
+    expect(await screen.findByText("Attachments")).toBeTruthy();
     fireEvent.changeText(screen.getByTestId("additem-input-title"), "Desk Lamp");
 
     fireEvent.press(screen.getByTestId("additem-btn-save"));
@@ -275,7 +279,7 @@ describe("NewItemRoute save and validation", () => {
   it("requires work percent for MIXED usage before enabling save", async () => {
     render(<NewItemRoute />);
 
-    expect(await screen.findByText("Add Item")).toBeTruthy();
+    expect(await screen.findByText("Attachments")).toBeTruthy();
 
     fireEvent.changeText(screen.getByTestId("additem-input-title"), "Mixed use tablet");
     fireEvent.changeText(screen.getByTestId("additem-input-price"), "899.00");
@@ -296,63 +300,20 @@ describe("NewItemRoute save and validation", () => {
     });
   });
 
-  it("hides the bottom action bar while keyboard is open and does not scroll to top on warranty focus", async () => {
-    const keyboardListeners = new Map<string, Set<() => void>>();
-    const addListenerSpy = jest.spyOn(Keyboard, "addListener").mockImplementation((eventName: any, callback: any) => {
-      const listeners = keyboardListeners.get(eventName) ?? new Set<() => void>();
-      listeners.add(callback);
-      keyboardListeners.set(eventName, listeners);
-
-      return {
-        remove: () => {
-          const current = keyboardListeners.get(eventName);
-          if (!current) {
-            return;
-          }
-          current.delete(callback);
-          if (current.size === 0) {
-            keyboardListeners.delete(eventName);
-          }
-        },
-      } as any;
-    });
+  it("does not scroll to top on warranty focus", async () => {
+    const addListenerSpy = jest.spyOn(Keyboard, "addListener");
 
     const scrollViewProto = ScrollView.prototype as ScrollView & { scrollTo?: (...args: unknown[]) => void };
     const originalScrollTo = scrollViewProto.scrollTo;
     const scrollToMock = jest.fn();
     scrollViewProto.scrollTo = scrollToMock;
 
-    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
-    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
-    const emitKeyboard = (eventName: string) => {
-      keyboardListeners.get(eventName)?.forEach((listener) => listener());
-    };
-
     try {
       render(<NewItemRoute />);
-      expect(await screen.findByText("Add Item")).toBeTruthy();
-      expect(screen.getByTestId("additem-bottom-bar")).toBeTruthy();
+      expect(await screen.findByText("Attachments")).toBeTruthy();
 
       fireEvent(screen.getByTestId("additem-input-warrantymonths"), "focus");
       expect(scrollToMock).not.toHaveBeenCalled();
-
-      act(() => {
-        emitKeyboard(showEvent);
-      });
-
-      await waitFor(() => {
-        expect(screen.queryByTestId("additem-bottom-bar")).toBeNull();
-        expect(screen.getByTestId("additem-keyboard-open-state").props.children).toBe("open");
-      });
-
-      act(() => {
-        emitKeyboard(hideEvent);
-      });
-
-      await waitFor(() => {
-        expect(screen.getByTestId("additem-bottom-bar")).toBeTruthy();
-        expect(screen.getByTestId("additem-keyboard-open-state").props.children).toBe("closed");
-      });
     } finally {
       scrollViewProto.scrollTo = originalScrollTo;
       addListenerSpy.mockRestore();
