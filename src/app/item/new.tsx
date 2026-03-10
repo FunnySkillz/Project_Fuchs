@@ -1,4 +1,4 @@
-import { useLocalSearchParams, useRouter, useSegments } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { HeaderBackButton } from "@react-navigation/elements";
 import React, {
@@ -192,11 +192,9 @@ type FocusTarget = {
 
 export default function NewItemRoute() {
   const router = useRouter();
-  const segments = useSegments();
   const navigation = useNavigation<any>();
   const theme = useTheme();
   const insets = useSafeAreaInsets();
-  const inTabsContext = segments[0] === "(tabs)";
   const params = useLocalSearchParams<{ draftId?: string | string[] }>();
   const draftId = toSingleParam(params.draftId);
   const [generatedDraftId, setGeneratedDraftId] = useState<string | null>(null);
@@ -990,7 +988,7 @@ export default function NewItemRoute() {
 
   if (isInitializing) {
     return (
-      <SafeAreaView style={{ flex: 1 }} edges={inTabsContext ? ["top"] : ["top", "bottom"]}>
+      <SafeAreaView style={{ flex: 1 }} edges={["bottom"]}>
         <GBox
           flex={1}
           alignItems="center"
@@ -1008,7 +1006,7 @@ export default function NewItemRoute() {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1 }} edges={inTabsContext ? ["top"] : ["top", "bottom"]}>
+    <SafeAreaView style={{ flex: 1 }} edges={["bottom"]}>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -1018,12 +1016,14 @@ export default function NewItemRoute() {
           <ScrollView
             ref={scrollRef}
             keyboardShouldPersistTaps="handled"
+            contentInsetAdjustmentBehavior="never"
+            automaticallyAdjustContentInsets={false}
             contentContainerStyle={{
               width: "100%",
               maxWidth: 860,
               alignSelf: "center",
               paddingHorizontal: 20,
-              paddingTop: 20,
+              paddingTop: 24,
               paddingBottom: insets.bottom + 24,
             }}
           >

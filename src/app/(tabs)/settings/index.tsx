@@ -49,13 +49,16 @@ export default function TabSettingsRoute() {
   const insets = useSafeAreaInsets();
 
   return (
-    <SafeAreaView style={{ flex: 1 }} edges={["top"]}>
-      <Box flex={1} px="$5" py="$6">
+    <SafeAreaView style={{ flex: 1 }} edges={["bottom"]}>
+      <Box flex={1} px="$5">
         <ScrollView
+          contentInsetAdjustmentBehavior="never"
+          automaticallyAdjustContentInsets={false}
           contentContainerStyle={{
             maxWidth: 860,
             width: "100%",
             alignSelf: "center",
+            paddingTop: 24,
             paddingBottom: insets.bottom + 24,
           }}
         >

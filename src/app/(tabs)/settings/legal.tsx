@@ -14,12 +14,15 @@ export default function SettingsLegalRoute() {
 
   return (
     <SafeAreaView style={{ flex: 1 }} edges={["bottom"]}>
-      <Box flex={1} px="$5" py="$6">
+      <Box flex={1} px="$5">
         <ScrollView
+          contentInsetAdjustmentBehavior="never"
+          automaticallyAdjustContentInsets={false}
           contentContainerStyle={{
             maxWidth: 860,
             width: "100%",
             alignSelf: "center",
+            paddingTop: 24,
             paddingBottom: insets.bottom + 24,
           }}
         >

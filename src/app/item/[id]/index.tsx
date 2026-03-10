@@ -261,7 +261,7 @@ export default function ItemDetailRoute() {
 
   if (isLoading) {
     return (
-      <SafeAreaView style={{ flex: 1 }} edges={["top"]}>
+      <SafeAreaView style={{ flex: 1 }} edges={["bottom"]}>
         <GBox flex={1} px="$5" py="$6" alignItems="center" justifyContent="center">
           <GVStack space="md" alignItems="center">
             <GSpinner size="large" />
@@ -274,7 +274,7 @@ export default function ItemDetailRoute() {
 
   if (!item) {
     return (
-      <SafeAreaView style={{ flex: 1 }} edges={["top"]}>
+      <SafeAreaView style={{ flex: 1 }} edges={["bottom"]}>
         <GBox flex={1} px="$5" py="$6">
           <GVStack maxWidth={860} width="$full" alignSelf="center" space="lg">
             <GHeading size="xl">Item Detail</GHeading>
@@ -296,13 +296,16 @@ export default function ItemDetailRoute() {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1 }} edges={["top"]}>
-      <GBox flex={1} px="$5" py="$6">
+    <SafeAreaView style={{ flex: 1 }} edges={["bottom"]}>
+      <GBox flex={1} px="$5">
         <ScrollView
+          contentInsetAdjustmentBehavior="never"
+          automaticallyAdjustContentInsets={false}
           contentContainerStyle={{
             width: "100%",
             maxWidth: 860,
             alignSelf: "center",
+            paddingTop: 24,
             paddingBottom: insets.bottom + 24,
           }}
         >
