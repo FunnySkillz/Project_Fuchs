@@ -58,6 +58,7 @@ import {
   shareExportZip,
   type ZipExportProgress,
 } from "@/services/zip-export";
+import { useTheme } from "@/hooks/use-theme";
 
 type FilterSheetKind = "usageType" | "category" | null;
 type ExportFormat = "PDF" | "ZIP";
@@ -122,20 +123,24 @@ const ExportItemRow = React.memo(function ExportItemRow({
   missingNotes,
   onToggle,
 }: ExportItemRowProps) {
+  const theme = useTheme();
+
   return (
     <Card borderWidth="$1" borderColor="$border200" mb="$3">
       <VStack space="sm">
         <HStack justifyContent="space-between" alignItems="flex-start" space="md">
           <VStack space="xs" flex={1}>
-            <Text bold size="md">
+            <Text bold size="md" color={theme.text}>
               {item.title}
             </Text>
-            <Text size="sm">
+            <Text size="sm" color={theme.textSecondary}>
               {categoryName} | {item.purchaseDate}
             </Text>
-            <Text size="sm">Deductible this year: {formatCents(deductibleThisYearCents)}</Text>
+            <Text size="sm" color={theme.textSecondary}>
+              Deductible this year: {formatCents(deductibleThisYearCents)}
+            </Text>
           </VStack>
-          <Text bold size="md">
+          <Text bold size="md" color={theme.text}>
             {formatCents(item.totalCents)}
           </Text>
         </HStack>
@@ -174,6 +179,7 @@ const ExportItemRow = React.memo(function ExportItemRow({
 
 export default function ExportRoute() {
   const insets = useSafeAreaInsets();
+  const theme = useTheme();
   const sessionDefaults = useMemo(() => getExportSelectionSessionState(), []);
   const fieldYRef = useRef<Partial<Record<ExportFieldKey, number>>>({});
   const scrollRef = useRef<ScrollView | null>(null);
@@ -394,6 +400,16 @@ export default function ExportRoute() {
   const hasSelectedItems = selectedItems.length > 0;
   const isGenerateDisabled =
     !hasSelectedItems || isGenerating || (submitAttempted && !isGenerateFormValid);
+  const generateButtonStyle = useMemo(
+    () => ({
+      backgroundColor: isGenerateDisabled ? theme.backgroundElement : theme.primary,
+      borderColor: isGenerateDisabled ? theme.border : theme.primary,
+      borderWidth: 1,
+      opacity: isGenerateDisabled ? 0.72 : 1,
+    }),
+    [isGenerateDisabled, theme.backgroundElement, theme.border, theme.primary]
+  );
+  const generateButtonTextColor = isGenerateDisabled ? theme.textMuted : theme.textOnPrimary;
 
   const toggleItemSelection = (itemId: string) => {
     setSelectedItemIds((current) => {
@@ -637,17 +653,21 @@ export default function ExportRoute() {
           ref={scrollRef}
           contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
         >
-          <VStack space="lg" maxWidth={900} width="$full" alignSelf="center">
-            <VStack space="xs">
-              <Heading size="2xl">Export</Heading>
-              <Text size="sm">Select, review, then generate a clean export package.</Text>
-            </VStack>
-
-            <Card borderWidth="$1" borderColor="$border200">
-              <VStack space="sm">
-                <Text bold size="sm">
-                  Tax year
+            <VStack space="lg" maxWidth={900} width="$full" alignSelf="center">
+              <VStack space="xs">
+                <Heading size="2xl" color={theme.text}>
+                  Export
+                </Heading>
+                <Text size="sm" color={theme.textSecondary}>
+                  Select, review, then generate a clean export package.
                 </Text>
+              </VStack>
+
+              <Card borderWidth="$1" borderColor="$border200">
+                <VStack space="sm">
+                  <Text bold size="sm" color={theme.text}>
+                    Tax year
+                  </Text>
                 <Box
                   testID="export-input-taxYear"
                   onLayout={(event) => {
@@ -679,7 +699,7 @@ export default function ExportRoute() {
                 {shouldShowTaxYearError ? (
                   <Text
                     size="xs"
-                    color="$error600"
+                    color={theme.danger}
                     testID="export-error-taxYear"
                     accessibilityLiveRegion="polite"
                   >
@@ -693,8 +713,12 @@ export default function ExportRoute() {
               <VStack space="md">
                 <HStack justifyContent="space-between" alignItems="center" space="sm">
                   <VStack space="xs" flex={1}>
-                    <Heading size="md">Select items</Heading>
-                    <Text size="sm">Selected items: {selectedItems.length}</Text>
+                    <Heading size="md" color={theme.text}>
+                      Select items
+                    </Heading>
+                    <Text size="sm" color={theme.textSecondary}>
+                      Selected items: {selectedItems.length}
+                    </Text>
                   </VStack>
                   <Button
                     size="sm"
@@ -710,7 +734,7 @@ export default function ExportRoute() {
                 {isSelectionOpen && (
                   <VStack space="md">
                     <VStack space="xs">
-                      <Text bold size="sm">
+                      <Text bold size="sm" color={theme.text}>
                         Search
                       </Text>
                       <Input variant="outline" size="md">
@@ -794,12 +818,14 @@ export default function ExportRoute() {
                       <Card borderWidth="$1" borderColor="$border200">
                         <HStack alignItems="center" space="sm">
                           <Spinner size="small" />
-                          <Text>Loading export items...</Text>
+                          <Text color={theme.textSecondary}>Loading export items...</Text>
                         </HStack>
                       </Card>
                     ) : filteredItems.length === 0 ? (
                       <Card borderWidth="$1" borderColor="$border200" testID="export-empty-state">
-                        <Text>No items found. Adjust filters or add a new item.</Text>
+                        <Text color={theme.textSecondary}>
+                          No items found. Adjust filters or add a new item.
+                        </Text>
                       </Card>
                     ) : (
                       filteredItems.map((item) => {
@@ -828,25 +854,41 @@ export default function ExportRoute() {
 
             <Card borderWidth="$1" borderColor="$border200">
               <VStack space="md">
-                <Heading size="lg">Totals summary</Heading>
+                <Heading size="lg" color={theme.text}>
+                  Totals summary
+                </Heading>
 
                 <HStack justifyContent="space-between" alignItems="center" flexWrap="wrap" space="sm">
                   <VStack space="xs" minWidth={140}>
-                    <Text size="sm">Selected items</Text>
-                    <Heading size="xl">{selectedItems.length}</Heading>
+                    <Text size="sm" color={theme.textSecondary}>
+                      Selected items
+                    </Text>
+                    <Heading size="xl" color={theme.text}>
+                      {selectedItems.length}
+                    </Heading>
                   </VStack>
                   <VStack space="xs" minWidth={140}>
-                    <Text size="sm">Deductible this year</Text>
-                    <Heading size="xl">{formatCents(totals.deductibleThisYearCents)}</Heading>
+                    <Text size="sm" color={theme.textSecondary}>
+                      Deductible this year
+                    </Text>
+                    <Heading size="xl" color={theme.text}>
+                      {formatCents(totals.deductibleThisYearCents)}
+                    </Heading>
                   </VStack>
                   <VStack space="xs" minWidth={140}>
-                    <Text size="sm">Estimated refund</Text>
-                    <Heading size="xl">{formatCents(totals.estimatedRefundCents)}</Heading>
+                    <Text size="sm" color={theme.textSecondary}>
+                      Estimated refund
+                    </Text>
+                    <Heading size="xl" color={theme.text}>
+                      {formatCents(totals.estimatedRefundCents)}
+                    </Heading>
                   </VStack>
                 </HStack>
 
                 <HStack justifyContent="space-between" alignItems="center">
-                  <Text size="sm">Include detail pages</Text>
+                  <Text size="sm" color={theme.textSecondary}>
+                    Include detail pages
+                  </Text>
                   <Switch
                     value={includeDetailPages}
                     onValueChange={setIncludeDetailPages}
@@ -855,7 +897,7 @@ export default function ExportRoute() {
                 </HStack>
 
                 <VStack space="xs">
-                  <Text bold size="sm">
+                  <Text bold size="sm" color={theme.text}>
                     Format
                   </Text>
                   <HStack space="sm">
@@ -884,23 +926,28 @@ export default function ExportRoute() {
                   <Button
                     onPress={() => void handleGenerateExport()}
                     disabled={isGenerateDisabled}
+                    style={generateButtonStyle}
                     testID="export-generate"
                     accessibilityState={{ disabled: isGenerateDisabled }}
                   >
-                    <ButtonText>
+                    <ButtonText color={generateButtonTextColor}>
                       {isGenerating ? `Generating ${selectedFormat}...` : "Generate Export"}
                     </ButtonText>
                   </Button>
                 </Box>
                 {!hasSelectedItems && (
-                  <Text size="sm" color="$text500" testID="export-no-items-hint">
+                  <Text size="sm" color={theme.textSecondary} testID="export-no-items-hint">
                     Select at least one item in the Select items section to generate an export.
                   </Text>
                 )}
 
-                {latestGeneratedFileName && <Text size="sm">Last export: {latestGeneratedFileName}</Text>}
+                {latestGeneratedFileName && (
+                  <Text size="sm" color={theme.textSecondary}>
+                    Last export: {latestGeneratedFileName}
+                  </Text>
+                )}
                 {latestGeneratedFileUri && (
-                  <Text size="sm" testID="export-last-local-file-uri">
+                  <Text size="sm" color={theme.textMuted} testID="export-last-local-file-uri">
                     Local file: {latestGeneratedFileUri}
                   </Text>
                 )}
@@ -916,7 +963,7 @@ export default function ExportRoute() {
                   </Button>
                 )}
                 {zipProgress && (
-                  <Text size="sm">
+                  <Text size="sm" color={theme.textMuted}>
                     ZIP progress: {zipProgress.percent}% - {zipProgress.message}
                   </Text>
                 )}
@@ -925,12 +972,18 @@ export default function ExportRoute() {
 
             <Card borderWidth="$1" borderColor="$border200">
               <VStack space="md">
-                <Heading size="md">Save destination</Heading>
-                <Text size="sm">App storage (always): {localExportDirectoryUri}</Text>
+                <Heading size="md" color={theme.text}>
+                  Save destination
+                </Heading>
+                <Text size="sm" color={theme.textSecondary}>
+                  App storage (always): {localExportDirectoryUri}
+                </Text>
 
                 {supportsDirectoryPicker ? (
                   <>
-                    <Text size="sm">Selected folder: {savedDirectoryLabel}</Text>
+                    <Text size="sm" color={theme.textSecondary}>
+                      Selected folder: {savedDirectoryLabel}
+                    </Text>
                     <HStack space="sm" flexWrap="wrap">
                       <Button
                         size="sm"
@@ -955,12 +1008,12 @@ export default function ExportRoute() {
                         </Button>
                       )}
                     </HStack>
-                    <Text size="xs">
+                    <Text size="xs" color={theme.textMuted}>
                       Android: choose a folder once, and each new export is copied there.
                     </Text>
                   </>
                 ) : (
-                  <Text size="xs">
+                  <Text size="xs" color={theme.textMuted}>
                     {Platform.OS === "ios"
                       ? "iOS: use Share latest or Share again and save the file to Files."
                       : "Folder selection is unavailable on this platform. Use Share latest or Share again."}
@@ -968,12 +1021,12 @@ export default function ExportRoute() {
                 )}
 
                 {latestSavedDirectoryFileUri && (
-                  <Text size="sm" testID="export-last-folder-file-uri">
+                  <Text size="sm" color={theme.textMuted} testID="export-last-folder-file-uri">
                     Folder copy: {latestSavedDirectoryFileUri}
                   </Text>
                 )}
                 {directorySaveError && (
-                  <Text size="sm" color="$error600" testID="export-folder-save-error">
+                  <Text size="sm" color={theme.danger} testID="export-folder-save-error">
                     {directorySaveError}
                   </Text>
                 )}
@@ -984,8 +1037,12 @@ export default function ExportRoute() {
               <VStack space="md">
                 <HStack justifyContent="space-between" alignItems="center" space="sm">
                   <VStack space="xs" flex={1}>
-                    <Heading size="md">Export history</Heading>
-                    <Text size="sm">{exportHistory.length} run(s) in selected tax year</Text>
+                    <Heading size="md" color={theme.text}>
+                      Export history
+                    </Heading>
+                    <Text size="sm" color={theme.textSecondary}>
+                      {exportHistory.length} run(s) in selected tax year
+                    </Text>
                   </VStack>
                   <Button
                     size="sm"
@@ -1001,7 +1058,9 @@ export default function ExportRoute() {
                 {isHistoryOpen && (
                   <VStack space="sm">
                     {exportHistory.length === 0 ? (
-                      <Text size="sm">No exports recorded for this tax year yet.</Text>
+                      <Text size="sm" color={theme.textSecondary}>
+                        No exports recorded for this tax year yet.
+                      </Text>
                     ) : (
                       exportHistory.map((run) => (
                         <HStack
@@ -1012,13 +1071,13 @@ export default function ExportRoute() {
                           flexWrap="wrap"
                         >
                           <VStack space="xs" flex={1}>
-                            <Text bold size="sm">
+                            <Text bold size="sm" color={theme.text}>
                               {run.outputType}
                             </Text>
-                            <Text size="sm">
+                            <Text size="sm" color={theme.textSecondary}>
                               {run.createdAt} | Items: {run.itemCount}
                             </Text>
-                            <Text size="sm">
+                            <Text size="sm" color={theme.textSecondary}>
                               Deductible: {formatCents(run.totalDeductibleCents)} | Refund:{" "}
                               {formatCents(run.estimatedRefundCents)}
                             </Text>
@@ -1042,7 +1101,9 @@ export default function ExportRoute() {
             {loadError && (
               <Card borderWidth="$1" borderColor="$error300">
                 <HStack justifyContent="space-between" alignItems="center" space="md" flexWrap="wrap">
-                  <Text size="sm">{loadError}</Text>
+                  <Text size="sm" color={theme.danger}>
+                    {loadError}
+                  </Text>
                   <Button
                     size="sm"
                     variant="outline"

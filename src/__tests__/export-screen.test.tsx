@@ -23,6 +23,23 @@ const mockSaveExportCopyToDirectory = jest.fn();
 const mockIsExportDirectoryPickerSupported = jest.fn();
 const mockGetLocalExportDirectoryUri = jest.fn();
 const mockFormatDirectoryUriForDisplay = jest.fn();
+const mockTheme = {
+  text: "theme-text",
+  background: "theme-background",
+  backgroundElement: "theme-background-element",
+  backgroundSelected: "theme-background-selected",
+  textSecondary: "theme-text-secondary",
+  textMuted: "theme-text-muted",
+  border: "theme-border",
+  primary: "theme-primary",
+  danger: "theme-danger",
+  success: "theme-success",
+  textOnPrimary: "theme-text-on-primary",
+};
+
+jest.mock("@/hooks/use-theme", () => ({
+  useTheme: () => mockTheme,
+}));
 
 jest.mock("@gluestack-ui/themed", () => {
   const {
@@ -262,7 +279,17 @@ describe("ExportRoute", () => {
     expect(screen.getByText("Export history")).toBeTruthy();
     expect(screen.getByText("Selected items: 0")).toBeTruthy();
     expect(screen.getByTestId("export-generate").props.accessibilityState?.disabled).toBe(true);
+    expect(screen.getByTestId("export-generate").props.style).toEqual(
+      expect.objectContaining({
+        backgroundColor: mockTheme.backgroundElement,
+        borderColor: mockTheme.border,
+        borderWidth: 1,
+        opacity: 0.72,
+      })
+    );
+    expect(screen.getByText("Generate Export").props.color).toBe(mockTheme.textMuted);
     expect(screen.getByTestId("export-no-items-hint")).toBeTruthy();
+    expect(screen.getByTestId("export-no-items-hint").props.color).toBe(mockTheme.textSecondary);
     expect(screen.queryByText("Work laptop")).toBeNull();
 
     fireEvent.press(screen.getByTestId("export-selection-toggle"));
@@ -271,6 +298,14 @@ describe("ExportRoute", () => {
     fireEvent.press(screen.getByTestId("export-row-toggle-item-1"));
     expect(screen.getByText("Selected items: 1")).toBeTruthy();
     expect(screen.queryByTestId("export-no-items-hint")).toBeNull();
+    expect(screen.getByTestId("export-generate").props.style).toEqual(
+      expect.objectContaining({
+        backgroundColor: mockTheme.primary,
+        borderColor: mockTheme.primary,
+        borderWidth: 1,
+      })
+    );
+    expect(screen.getByText("Generate Export").props.color).toBe(mockTheme.textOnPrimary);
 
     fireEvent.press(screen.getByTestId("export-generate"));
     await waitFor(() => {
