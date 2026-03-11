@@ -80,7 +80,7 @@ export function AppLockGate({
                 disabled={isAuthenticating}
                 testID="app-lock-unlock"
               >
-                <ThemedText type="smallBold" themeColor="textOnPrimary">
+                <ThemedText type="default" themeColor="textOnPrimary">
                   Unlock
                 </ThemedText>
               </Pressable>
@@ -93,23 +93,47 @@ export function AppLockGate({
             </ThemedText>
           )}
 
+          {pinEnabled && (
+            <View style={styles.orRow}>
+              <View style={[styles.orLine, { backgroundColor: theme.border }]} />
+              <ThemedText type="small" themeColor="textSecondary">
+                OR
+              </ThemedText>
+              <View style={[styles.orLine, { backgroundColor: theme.border }]} />
+            </View>
+          )}
+
           <View style={styles.secondaryActions}>
             <Pressable
-              style={({ pressed }) => [styles.secondaryActionButton, (pressed || isAuthenticating) && styles.pressed]}
+              style={({ pressed }) => [
+                styles.secondaryActionButton,
+                {
+                  borderColor: theme.border,
+                  backgroundColor: theme.background,
+                },
+                (pressed || isAuthenticating) && styles.pressed,
+              ]}
               onPress={onUseBiometric}
               disabled={isAuthenticating}
               testID="app-lock-use-face-id"
             >
-              <ThemedText type="smallBold" themeColor="primary">
+              <ThemedText type="default" themeColor="text">
                 {isAuthenticating ? "Authenticating..." : "Use Face ID"}
               </ThemedText>
             </Pressable>
             <Pressable
-              style={({ pressed }) => [styles.secondaryActionButton, pressed && styles.pressed]}
+              style={({ pressed }) => [
+                styles.secondaryActionButton,
+                {
+                  borderColor: theme.border,
+                  backgroundColor: theme.background,
+                },
+                pressed && styles.pressed,
+              ]}
               onPress={onCancel}
               testID="app-lock-cancel"
             >
-              <ThemedText type="smallBold" themeColor="textSecondary">
+              <ThemedText type="default" themeColor="textSecondary">
                 Cancel
               </ThemedText>
             </Pressable>
@@ -139,18 +163,36 @@ const styles = StyleSheet.create({
   },
   primaryButton: {
     borderWidth: 1,
-    borderRadius: 10,
-    alignItems: "center",
-    paddingVertical: 12,
-  },
-  secondaryActions: {
-    marginTop: Spacing.two,
-    gap: Spacing.one,
-  },
-  secondaryActionButton: {
+    borderRadius: 12,
+    width: "100%",
+    minHeight: 54,
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+  },
+  orRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.two,
+    marginTop: Spacing.one,
+  },
+  orLine: {
+    flex: 1,
+    height: StyleSheet.hairlineWidth,
+  },
+  secondaryActions: {
+    gap: Spacing.two,
+  },
+  secondaryActionButton: {
+    width: "100%",
+    minHeight: 54,
+    borderWidth: 1,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 12,
+    paddingHorizontal: 16,
   },
   errorText: {
     textAlign: "left",
