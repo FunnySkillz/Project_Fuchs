@@ -1,4 +1,5 @@
 import { useRouter } from "expo-router";
+import * as LocalAuthentication from "expo-local-authentication";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ScrollView } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
@@ -38,6 +39,7 @@ export default function SettingsSecurityRoute() {
 
   const [isLoading, setIsLoading] = useState(true);
   const [isSavingAppLock, setIsSavingAppLock] = useState(false);
+  const [isConfirmingAppLock, setIsConfirmingAppLock] = useState(false);
   const [appLockEnabled, setAppLockEnabled] = useState(false);
   const [pinExists, setPinExists] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -57,6 +59,7 @@ export default function SettingsSecurityRoute() {
   const scrollRef = useRef<ScrollView | null>(null);
   const pinFieldYRef = useRef<Partial<Record<PinFieldKey, number>>>({});
   const pinInputRef = useRef<Partial<Record<PinFieldKey, FocusTarget | null>>>({});
+  const isAuthenticatingRef = useRef(false);
 
   const loadSettings = useCallback(async () => {
     setIsLoading(true);
@@ -81,15 +84,73 @@ export default function SettingsSecurityRoute() {
     void loadSettings();
   }, [loadSettings]);
 
+  const confirmEnableAppLock = useCallback(async () => {
+    if (isAuthenticatingRef.current) {
+      return false;
+    }
+
+    isAuthenticatingRef.current = true;
+    setIsConfirmingAppLock(true);
+    setSaveError(null);
+    try {
+      const [hasHardware, isEnrolled] = await Promise.all([
+        LocalAuthentication.hasHardwareAsync(),
+        LocalAuthentication.isEnrolledAsync(),
+      ]);
+
+      if (!hasHardware || !isEnrolled) {
+        setSaveError("Biometric authentication is not available on this device.");
+        return false;
+      }
+
+      const result = await LocalAuthentication.authenticateAsync({
+        promptMessage: "Confirm biometric unlock",
+        cancelLabel: "Cancel",
+        disableDeviceFallback: false,
+      });
+
+      if (!result.success) {
+        setSaveError(
+          result.error === "user_cancel"
+            ? "Biometric confirmation canceled."
+            : "Biometric confirmation failed. App lock remains disabled."
+        );
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      console.error("Failed to confirm biometric activation", error);
+      setSaveError("Could not verify biometric authentication.");
+      return false;
+    } finally {
+      isAuthenticatingRef.current = false;
+      setIsConfirmingAppLock(false);
+    }
+  }, []);
+
   const handleToggleAppLock = async (nextValue: boolean) => {
-    if (isSavingAppLock) {
+    if (isSavingAppLock || isConfirmingAppLock || isAuthenticatingRef.current) {
       return;
     }
 
     const previous = appLockEnabled;
-    setAppLockEnabled(nextValue);
+    if (nextValue === previous) {
+      return;
+    }
+
     setSaveError(null);
     setSaveSuccess(null);
+
+    if (nextValue) {
+      const confirmed = await confirmEnableAppLock();
+      if (!confirmed) {
+        setAppLockEnabled(previous);
+        return;
+      }
+    }
+
+    setAppLockEnabled(nextValue);
     setIsSavingAppLock(true);
 
     try {
@@ -272,7 +333,12 @@ export default function SettingsSecurityRoute() {
                 <Heading size="md">App lock</Heading>
                 <HStack justifyContent="space-between" alignItems="center">
                   <Text size="sm">Require biometric/PIN unlock on resume</Text>
-                  <Switch value={appLockEnabled} onValueChange={handleToggleAppLock} />
+                  <Switch
+                    value={appLockEnabled}
+                    onValueChange={handleToggleAppLock}
+                    isDisabled={isSavingAppLock || isConfirmingAppLock}
+                    testID="settings-security-app-lock-toggle"
+                  />
                 </HStack>
                 {saveError && <Text size="sm" color="$error600">{saveError}</Text>}
                 {saveSuccess && <Text size="sm" color="$success600">{saveSuccess}</Text>}

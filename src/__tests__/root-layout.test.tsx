@@ -15,6 +15,8 @@ const mockAuthenticateAsync = jest.fn();
 const mockDeleteAllLocalData = jest.fn();
 
 let localDataDeletedListener: (() => void) | null = null;
+let profileSettingsSavedListener: (() => void) | null = null;
+let appStateChangeHandler: ((nextState: ReactNative.AppStateStatus) => void) | null = null;
 
 jest.mock("../../global.css", () => ({}));
 
@@ -105,7 +107,10 @@ jest.mock("@/repositories/create-profile-settings-repository", () => ({
 jest.mock("@/services/app-events", () => ({
   emitLocalDataDeleted: jest.fn(),
   onDatabaseRestored: () => jest.fn(),
-  onProfileSettingsSaved: () => jest.fn(),
+  onProfileSettingsSaved: (listener: () => void) => {
+    profileSettingsSavedListener = listener;
+    return jest.fn();
+  },
   onLocalDataDeleted: (listener: () => void) => {
     localDataDeletedListener = listener;
     return jest.fn();
@@ -143,9 +148,16 @@ describe("RootLayout", () => {
     jest.spyOn(ReactNative, "useColorScheme").mockReturnValue("light");
     jest
       .spyOn(ReactNative.AppState, "addEventListener")
-      .mockReturnValue({ remove: jest.fn() } as unknown as { remove: () => void });
+      .mockImplementation((eventType, listener) => {
+        if (eventType === "change") {
+          appStateChangeHandler = listener as (nextState: ReactNative.AppStateStatus) => void;
+        }
+        return { remove: jest.fn() } as unknown as { remove: () => void };
+      });
 
     localDataDeletedListener = null;
+    profileSettingsSavedListener = null;
+    appStateChangeHandler = null;
     mockUseSegments.mockReturnValue([]);
     mockHasValidSettings.mockReset();
     mockGetSettings.mockReset();
@@ -193,6 +205,24 @@ describe("RootLayout", () => {
 
     expect(await screen.findByTestId("root-slot")).toBeTruthy();
     expect(screen.queryByText("redirect:/(onboarding)/welcome")).toBeNull();
+  });
+
+  it("does not remount app shell on profile-settings-saved lifecycle event", async () => {
+    render(<RootLayout />);
+    expect(await screen.findByTestId("root-slot")).toBeTruthy();
+
+    await waitFor(() => {
+      expect(profileSettingsSavedListener).not.toBeNull();
+    });
+
+    act(() => {
+      profileSettingsSavedListener?.();
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("root-slot")).toBeTruthy();
+      expect(screen.queryByText("redirect:/(onboarding)/welcome")).toBeNull();
+    });
   });
 
   it("shows PIN lockout countdown when biometric is unavailable and PIN verification fails with lockout", async () => {
@@ -258,6 +288,82 @@ describe("RootLayout", () => {
     await waitFor(() => {
       expect(mockAuthenticateAsync).toHaveBeenCalled();
       expect(screen.getByTestId("root-slot")).toBeTruthy();
+    });
+  });
+
+  it("does not retrigger lock auth on inactive to active transition", async () => {
+    mockGetSettings.mockResolvedValue({
+      taxYearDefault: 2026,
+      marginalRateBps: 4000,
+      defaultWorkPercent: 100,
+      gwgThresholdCents: 100000,
+      applyHalfYearRule: false,
+      appLockEnabled: true,
+      uploadToOneDriveAfterExport: false,
+      themeModePreference: "system",
+      currency: "EUR",
+    });
+    mockHasPinAsync.mockResolvedValue(false);
+    mockHasHardwareAsync.mockResolvedValue(true);
+    mockIsEnrolledAsync.mockResolvedValue(true);
+    mockAuthenticateAsync.mockResolvedValue({ success: true });
+
+    render(<RootLayout />);
+    expect(await screen.findByTestId("root-slot")).toBeTruthy();
+
+    await waitFor(() => {
+      expect(mockAuthenticateAsync).toHaveBeenCalledTimes(1);
+    });
+
+    mockAuthenticateAsync.mockClear();
+
+    act(() => {
+      appStateChangeHandler?.("inactive");
+    });
+    act(() => {
+      appStateChangeHandler?.("active");
+    });
+
+    await waitFor(() => {
+      expect(mockAuthenticateAsync).toHaveBeenCalledTimes(0);
+    });
+  });
+
+  it("re-authenticates on background to active transition when lock is enabled", async () => {
+    mockGetSettings.mockResolvedValue({
+      taxYearDefault: 2026,
+      marginalRateBps: 4000,
+      defaultWorkPercent: 100,
+      gwgThresholdCents: 100000,
+      applyHalfYearRule: false,
+      appLockEnabled: true,
+      uploadToOneDriveAfterExport: false,
+      themeModePreference: "system",
+      currency: "EUR",
+    });
+    mockHasPinAsync.mockResolvedValue(false);
+    mockHasHardwareAsync.mockResolvedValue(true);
+    mockIsEnrolledAsync.mockResolvedValue(true);
+    mockAuthenticateAsync.mockResolvedValue({ success: true });
+
+    render(<RootLayout />);
+    expect(await screen.findByTestId("root-slot")).toBeTruthy();
+
+    await waitFor(() => {
+      expect(mockAuthenticateAsync).toHaveBeenCalledTimes(1);
+    });
+
+    mockAuthenticateAsync.mockClear();
+
+    act(() => {
+      appStateChangeHandler?.("background");
+    });
+    act(() => {
+      appStateChangeHandler?.("active");
+    });
+
+    await waitFor(() => {
+      expect(mockAuthenticateAsync).toHaveBeenCalledTimes(1);
     });
   });
 

@@ -1,12 +1,16 @@
 import React from "react";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react-native";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 
 import SettingsSecurityRoute from "@/app/(tabs)/settings/security";
 
 const mockGetSettings = jest.fn();
+const mockUpsertSettings = jest.fn();
 const mockHasPinAsync = jest.fn();
 const mockVerifyPinAsync = jest.fn();
 const mockSetPinAsync = jest.fn();
+const mockHasHardwareAsync = jest.fn();
+const mockIsEnrolledAsync = jest.fn();
+const mockAuthenticateAsync = jest.fn();
 
 jest.mock("@gluestack-ui/themed", () => {
   const {
@@ -50,7 +54,7 @@ jest.mock("expo-router", () => ({
 jest.mock("@/repositories/create-profile-settings-repository", () => ({
   getProfileSettingsRepository: async () => ({
     getSettings: () => mockGetSettings(),
-    upsertSettings: jest.fn(),
+    upsertSettings: (input: unknown) => mockUpsertSettings(input),
   }),
 }));
 
@@ -65,12 +69,22 @@ jest.mock("@/services/pin-auth", () => ({
   verifyPinAsync: (pin: string) => mockVerifyPinAsync(pin),
 }));
 
+jest.mock("expo-local-authentication", () => ({
+  hasHardwareAsync: () => mockHasHardwareAsync(),
+  isEnrolledAsync: () => mockIsEnrolledAsync(),
+  authenticateAsync: (...args: unknown[]) => mockAuthenticateAsync(...args),
+}));
+
 describe("SettingsSecurityRoute validation UX", () => {
   beforeEach(() => {
     mockGetSettings.mockReset();
+    mockUpsertSettings.mockReset();
     mockHasPinAsync.mockReset();
     mockVerifyPinAsync.mockReset();
     mockSetPinAsync.mockReset();
+    mockHasHardwareAsync.mockReset();
+    mockIsEnrolledAsync.mockReset();
+    mockAuthenticateAsync.mockReset();
 
     mockGetSettings.mockResolvedValue({
       taxYearDefault: 2026,
@@ -83,6 +97,10 @@ describe("SettingsSecurityRoute validation UX", () => {
       themeModePreference: "system",
       currency: "EUR",
     });
+    mockUpsertSettings.mockResolvedValue(undefined);
+    mockHasHardwareAsync.mockResolvedValue(true);
+    mockIsEnrolledAsync.mockResolvedValue(true);
+    mockAuthenticateAsync.mockResolvedValue({ success: true });
   });
 
   it("shows inline PIN validation errors on submit and enables submit after fixing", async () => {
@@ -131,6 +149,36 @@ describe("SettingsSecurityRoute validation UX", () => {
     await waitFor(() => {
       expect(screen.getByTestId("settings-security-error-currentPin")).toBeTruthy();
       expect(mockVerifyPinAsync).not.toHaveBeenCalled();
+    });
+  });
+
+  it("authenticates once only when enabling app lock from one user action", async () => {
+    let resolveAuth: ((result: { success: boolean }) => void) | null = null;
+    mockHasPinAsync.mockResolvedValue(false);
+    mockAuthenticateAsync.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveAuth = resolve as (result: { success: boolean }) => void;
+        })
+    );
+
+    render(<SettingsSecurityRoute />);
+    expect(await screen.findByText("Security")).toBeTruthy();
+
+    const toggle = screen.getByTestId("settings-security-app-lock-toggle");
+    fireEvent(toggle, "valueChange", true);
+    fireEvent(toggle, "valueChange", true);
+
+    await waitFor(() => {
+      expect(mockAuthenticateAsync).toHaveBeenCalledTimes(1);
+    });
+
+    act(() => {
+      resolveAuth?.({ success: true });
+    });
+
+    await waitFor(() => {
+      expect(mockUpsertSettings).toHaveBeenCalledWith(expect.objectContaining({ appLockEnabled: true }));
     });
   });
 });

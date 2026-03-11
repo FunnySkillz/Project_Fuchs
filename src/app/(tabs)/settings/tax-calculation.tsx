@@ -48,6 +48,8 @@ type FocusTarget = {
   focus?: () => void;
 };
 
+type SaveButtonState = "idle" | "saving" | "saved";
+
 function formatPercent(value: number): string {
   const rounded = Math.round(value * 100) / 100;
   return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(2);
@@ -88,7 +90,7 @@ export default function SettingsTaxCalculationRoute() {
 
   const [formState, setFormState] = useState<TaxCalculationSettingsFormInput | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
+  const [saveButtonState, setSaveButtonState] = useState<SaveButtonState>("idle");
   const [isAdvancedDefaultsOpen, setIsAdvancedDefaultsOpen] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -99,6 +101,20 @@ export default function SettingsTaxCalculationRoute() {
   const scrollRef = useRef<ScrollView | null>(null);
   const fieldYRef = useRef<Partial<Record<FieldKey, number>>>({});
   const inputRef = useRef<Partial<Record<FieldKey, FocusTarget | null>>>({});
+  const saveStatusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearSaveStatusTimer = useCallback(() => {
+    if (saveStatusTimerRef.current !== null) {
+      clearTimeout(saveStatusTimerRef.current);
+      saveStatusTimerRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      clearSaveStatusTimer();
+    };
+  }, [clearSaveStatusTimer]);
 
   const loadSettings = useCallback(async () => {
     setIsLoading(true);
@@ -156,7 +172,7 @@ export default function SettingsTaxCalculationRoute() {
     [submitAttempted, touchedFields, validation.fieldErrors]
   );
 
-  const isSubmitDisabled = (submitAttempted && !validation.valid) || isSaving;
+  const isSubmitDisabled = (submitAttempted && !validation.valid) || saveButtonState !== "idle";
 
   const setFieldTouched = useCallback((field: FieldKey) => {
     setTouchedFields((current) => ({ ...current, [field]: true }));
@@ -197,18 +213,21 @@ export default function SettingsTaxCalculationRoute() {
     value: TaxCalculationSettingsFormInput[K]
   ) => {
     setFormState((current) => (current ? { ...current, [key]: value } : current));
+    clearSaveStatusTimer();
+    setSaveButtonState("idle");
     setSaveError(null);
     setSaveSuccess(null);
   };
 
   const handleSave = async () => {
     setSubmitAttempted(true);
-    if (!validation.valid || isSaving) {
+    if (!validation.valid || saveButtonState !== "idle") {
       focusAndScrollFirstInvalid();
       return;
     }
 
-    setIsSaving(true);
+    clearSaveStatusTimer();
+    setSaveButtonState("saving");
     setSaveError(null);
     setSaveSuccess(null);
     try {
@@ -228,11 +247,16 @@ export default function SettingsTaxCalculationRoute() {
       });
       setSaveSuccess("Tax and calculation settings saved.");
       emitProfileSettingsSaved();
+      setSaveButtonState("saved");
+      saveStatusTimerRef.current = setTimeout(() => {
+        setSaveButtonState("idle");
+        setSaveSuccess(null);
+        saveStatusTimerRef.current = null;
+      }, 1200);
     } catch (error) {
       console.error("Failed to save tax settings", error);
       setSaveError("Could not save tax settings. Please retry.");
-    } finally {
-      setIsSaving(false);
+      setSaveButtonState("idle");
     }
   };
 
@@ -636,7 +660,11 @@ export default function SettingsTaxCalculationRoute() {
                     accessibilityState={{ disabled: isSubmitDisabled }}
                   >
                     <ButtonText color={theme.textOnPrimary}>
-                      {isSaving ? "Saving..." : "Save Tax Settings"}
+                      {saveButtonState === "saving"
+                        ? "Saving..."
+                        : saveButtonState === "saved"
+                          ? "Saved"
+                          : "Save Tax Settings"}
                     </ButtonText>
                   </Button>
                 </Box>

@@ -94,6 +94,7 @@ export default function RootLayout() {
   const [themeMode, setThemeModeState] = React.useState<ThemeMode>("system");
   const authInFlightRef = useRef(false);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
+  const shouldAuthenticateOnNextActiveRef = useRef(false);
 
   useEffect(() => {
     LogBox.ignoreLogs([
@@ -184,6 +185,36 @@ export default function RootLayout() {
     return settings.appLockEnabled;
   }, []);
 
+  const syncProfileShellState = useCallback(async () => {
+    try {
+      const repository = await getProfileSettingsRepository();
+      const hasSettings = await repository.hasValidSettings();
+      if (!hasSettings) {
+        setHasProfile(false);
+        setAppLockEnabled(false);
+        setIsUnlocked(true);
+        setAuthError(null);
+        setShowPinEntry(false);
+        shouldAuthenticateOnNextActiveRef.current = false;
+        return;
+      }
+
+      const settings = await repository.getSettings();
+      setHasProfile(true);
+      setAppLockEnabled(settings.appLockEnabled);
+      await refreshPinAvailability();
+
+      if (!settings.appLockEnabled) {
+        setIsUnlocked(true);
+        setAuthError(null);
+        setShowPinEntry(false);
+        shouldAuthenticateOnNextActiveRef.current = false;
+      }
+    } catch (error) {
+      console.error("Failed to synchronize profile shell state", error);
+    }
+  }, [refreshPinAvailability]);
+
   const handlePinSubmit = useCallback(async () => {
     if (!pinAvailable) {
       setAuthError("PIN fallback is not configured.");
@@ -224,11 +255,12 @@ export default function RootLayout() {
       setPinAvailable(false);
       setThemeModeState("system");
       setInitErrorPayload(null);
+      shouldAuthenticateOnNextActiveRef.current = false;
     });
 
     const unsubscribeProfileSave = onProfileSettingsSaved(() => {
       setHasProfile(true);
-      setBootstrapState("loading");
+      void syncProfileShellState();
     });
     const unsubscribeDatabaseRestore = onDatabaseRestored(() => {
       setBootstrapState("loading");
@@ -239,7 +271,7 @@ export default function RootLayout() {
       unsubscribeProfileSave();
       unsubscribeDatabaseRestore();
     };
-  }, []);
+  }, [syncProfileShellState]);
 
   const retryInitialization = useCallback(() => {
     setBootstrapState("loading");
@@ -360,11 +392,22 @@ export default function RootLayout() {
 
   useEffect(() => {
     const subscription = AppState.addEventListener("change", (nextState) => {
-      const wasInBackground = appStateRef.current === "background" || appStateRef.current === "inactive";
       appStateRef.current = nextState;
-      if (!wasInBackground || nextState !== "active" || bootstrapState !== "ready" || !hasProfile) {
+
+      if (nextState === "background") {
+        shouldAuthenticateOnNextActiveRef.current = true;
         return;
       }
+
+      if (nextState !== "active" || bootstrapState !== "ready" || !hasProfile) {
+        return;
+      }
+
+      if (!shouldAuthenticateOnNextActiveRef.current) {
+        return;
+      }
+
+      shouldAuthenticateOnNextActiveRef.current = false;
 
       const checkAndMaybeAuthenticate = async () => {
         try {

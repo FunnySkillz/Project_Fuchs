@@ -1,10 +1,12 @@
 import React from "react";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react-native";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 
 import SettingsTaxCalculationRoute from "@/app/(tabs)/settings/tax-calculation";
 
 const mockUpsertSettings = jest.fn();
 const mockGetSettings = jest.fn();
+const mockReplace = jest.fn();
+const mockEmitProfileSettingsSaved = jest.fn();
 
 jest.mock("@gluestack-ui/themed", () => {
   const {
@@ -41,7 +43,7 @@ jest.mock("@gluestack-ui/themed", () => {
 jest.mock("expo-router", () => ({
   useRouter: () => ({
     canGoBack: () => true,
-    replace: jest.fn(),
+    replace: mockReplace,
   }),
 }));
 
@@ -69,13 +71,15 @@ jest.mock("@/repositories/create-profile-settings-repository", () => ({
 }));
 
 jest.mock("@/services/app-events", () => ({
-  emitProfileSettingsSaved: jest.fn(),
+  emitProfileSettingsSaved: () => mockEmitProfileSettingsSaved(),
 }));
 
 describe("SettingsTaxCalculationRoute", () => {
   beforeEach(() => {
     mockUpsertSettings.mockReset();
     mockGetSettings.mockReset();
+    mockReplace.mockReset();
+    mockEmitProfileSettingsSaved.mockReset();
 
     mockGetSettings.mockResolvedValue({
       taxYearDefault: 2026,
@@ -165,6 +169,42 @@ describe("SettingsTaxCalculationRoute", () => {
           werbungskostenPauschaleEnabled: true,
         })
       );
+    });
+  });
+
+  it("keeps user on tax settings screen and shows transient save success button state", async () => {
+    mockUpsertSettings.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          setTimeout(() => resolve(), 10);
+        })
+    );
+
+    render(<SettingsTaxCalculationRoute />);
+    expect(await screen.findByText("Tax profile")).toBeTruthy();
+
+    fireEvent.press(screen.getByTestId("settings-tax-save"));
+
+    expect(screen.getByText("Saving...")).toBeTruthy();
+    expect(screen.getByTestId("settings-tax-save").props.accessibilityState?.disabled).toBe(true);
+    expect(mockReplace).not.toHaveBeenCalled();
+
+    act(() => {
+      jest.advanceTimersByTime(10);
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("Saved")).toBeTruthy();
+      expect(mockEmitProfileSettingsSaved).toHaveBeenCalledTimes(1);
+      expect(mockReplace).not.toHaveBeenCalled();
+    });
+
+    act(() => {
+      jest.advanceTimersByTime(1200);
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("Save Tax Settings")).toBeTruthy();
     });
   });
 });
