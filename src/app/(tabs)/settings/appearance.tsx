@@ -4,6 +4,7 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import { Box, Button, ButtonText, Card, Heading, HStack, Text, VStack } from "@gluestack-ui/themed";
 
 import { useThemeMode } from "@/contexts/theme-mode-context";
+import { useTheme } from "@/hooks/use-theme";
 import type { ThemeMode } from "@/theme/theme-mode";
 
 const themeOptions: { label: string; value: ThemeMode }[] = [
@@ -15,6 +16,7 @@ const themeOptions: { label: string; value: ThemeMode }[] = [
 export default function SettingsAppearanceRoute() {
   const router = useRouter();
   const { mode, resolvedMode, setMode } = useThemeMode();
+  const theme = useTheme();
   const insets = useSafeAreaInsets();
   const canGoBack =
     typeof (router as { canGoBack?: () => boolean }).canGoBack === "function"
@@ -33,32 +35,42 @@ export default function SettingsAppearanceRoute() {
               onPress={() => router.replace("/(tabs)/settings")}
               testID="settings-back-to-main-fallback"
             >
-              <ButtonText>Back to Settings</ButtonText>
+              <ButtonText color={theme.text}>Back to Settings</ButtonText>
             </Button>
           )}
 
           <VStack space="xs">
-            <Heading size="xl">Appearance</Heading>
-            <Text size="sm">Choose how the app appearance should be resolved.</Text>
+            <Heading size="xl" color={theme.text}>Appearance</Heading>
+            <Text size="sm" color={theme.textSecondary}>Choose how the app appearance should be resolved.</Text>
           </VStack>
 
           <Card borderWidth="$1" borderColor="$border200">
             <VStack space="md">
               <HStack space="sm" flexWrap="wrap">
-                {themeOptions.map((option) => (
-                  <Button
-                    key={option.value}
-                    size="sm"
-                    variant={mode === option.value ? "solid" : "outline"}
-                    action={mode === option.value ? "primary" : "secondary"}
-                    onPress={() => setMode(option.value)}
-                    testID={`settings-theme-${option.value}`}
-                  >
-                    <ButtonText>{option.label}</ButtonText>
-                  </Button>
-                ))}
+                {themeOptions.map((option) => {
+                  const isSelected = mode === option.value;
+                  return (
+                    <Button
+                      key={option.value}
+                      size="sm"
+                      variant="outline"
+                      action="secondary"
+                      onPress={() => setMode(option.value)}
+                      testID={`settings-theme-${option.value}`}
+                      accessibilityState={{ selected: isSelected }}
+                      style={{
+                        backgroundColor: isSelected ? theme.primary : theme.backgroundElement,
+                        borderColor: isSelected ? theme.primary : theme.border,
+                      }}
+                    >
+                      <ButtonText color={isSelected ? theme.textOnPrimary : theme.text}>
+                        {option.label}
+                      </ButtonText>
+                    </Button>
+                  );
+                })}
               </HStack>
-              <Text size="sm">Resolved mode now: {resolvedMode}</Text>
+              <Text size="sm" color={theme.textSecondary}>Resolved mode now: {resolvedMode}</Text>
             </VStack>
           </Card>
         </VStack>

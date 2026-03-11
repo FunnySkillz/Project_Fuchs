@@ -44,6 +44,22 @@ jest.mock("@/contexts/theme-mode-context", () => ({
   }),
 }));
 
+jest.mock("@/hooks/use-theme", () => ({
+  useTheme: () => ({
+    text: "#111827",
+    textSecondary: "#6B7280",
+    textMuted: "#4B5563",
+    background: "#FFFFFF",
+    backgroundElement: "#F3F4F6",
+    backgroundSelected: "#E5E7EB",
+    border: "#D1D5DB",
+    primary: "#2563EB",
+    danger: "#DC2626",
+    success: "#059669",
+    textOnPrimary: "#FFFFFF",
+  }),
+}));
+
 jest.mock("expo-router", () => ({
   useRouter: () => ({
     push: mockPush,

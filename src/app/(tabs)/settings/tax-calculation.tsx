@@ -18,6 +18,7 @@ import {
 } from "@gluestack-ui/themed";
 
 import { estimateAustrianMarginalRateBpsFromAnnualGrossCents } from "@/domain/austrian-marginal-rate";
+import { useTheme } from "@/hooks/use-theme";
 import {
   buildTaxCalculationPreview,
   type TaxCalculationSettingsFormInput,
@@ -78,6 +79,7 @@ function createFormState(settings: ProfileSettings): TaxCalculationSettingsFormI
 
 export default function SettingsTaxCalculationRoute() {
   const router = useRouter();
+  const theme = useTheme();
   const insets = useSafeAreaInsets();
   const canGoBack =
     typeof (router as { canGoBack?: () => boolean }).canGoBack === "function"
@@ -240,7 +242,7 @@ export default function SettingsTaxCalculationRoute() {
         <Box flex={1} px="$5" py="$6" alignItems="center" justifyContent="center">
           <VStack space="md" alignItems="center">
             <Spinner size="large" />
-            <Text size="sm">Loading tax settings...</Text>
+            <Text size="sm" color={theme.textSecondary}>Loading tax settings...</Text>
           </VStack>
         </Box>
       </SafeAreaView>
@@ -271,26 +273,26 @@ export default function SettingsTaxCalculationRoute() {
                 onPress={() => router.replace("/(tabs)/settings")}
                 testID="settings-back-to-main-fallback"
               >
-                <ButtonText>Back to Settings</ButtonText>
+                <ButtonText color={theme.text}>Back to Settings</ButtonText>
               </Button>
             )}
 
             <VStack space="xs">
-              <Heading size="xl">Tax & Calculation</Heading>
-              <Text size="sm">
+              <Heading size="xl" color={theme.text}>Tax & Calculation</Heading>
+              <Text size="sm" color={theme.textSecondary}>
                 Set a simple Austrian tax profile and deduction defaults for estimate previews.
               </Text>
             </VStack>
 
             {loadError && (
               <Card borderWidth="$1" borderColor="$error300">
-                <Text size="sm">{loadError}</Text>
+                <Text size="sm" color={theme.danger}>{loadError}</Text>
               </Card>
             )}
 
             <Card borderWidth="$1" borderColor="$border200">
               <VStack space="md">
-                <Heading size="md">Tax profile</Heading>
+                <Heading size="md" color={theme.text}>Tax profile</Heading>
 
                 <VStack
                   space="xs"
@@ -299,7 +301,7 @@ export default function SettingsTaxCalculationRoute() {
                   }}
                   testID="settings-tax-input-taxYearDefault"
                 >
-                  <Text bold size="sm">Tax year default</Text>
+                  <Text bold size="sm" color={theme.textSecondary}>Tax year default</Text>
                   <Input
                     variant="outline"
                     borderColor={shouldShowFieldError("taxYearDefault") ? "$error600" : "$border200"}
@@ -321,7 +323,7 @@ export default function SettingsTaxCalculationRoute() {
                     />
                   </Input>
                   {shouldShowFieldError("taxYearDefault") && (
-                    <Text size="xs" color="$error600" testID="settings-tax-error-taxYearDefault">
+                    <Text size="xs" color={theme.danger} testID="settings-tax-error-taxYearDefault">
                       {validation.fieldErrors.taxYearDefault}
                     </Text>
                   )}
@@ -334,7 +336,7 @@ export default function SettingsTaxCalculationRoute() {
                   }}
                   testID="settings-tax-input-monthlyGrossIncomeEuros"
                 >
-                  <Text bold size="sm">Monthly gross income (EUR)</Text>
+                  <Text bold size="sm" color={theme.textSecondary}>Monthly gross income (EUR)</Text>
                   <Input
                     variant="outline"
                     borderColor={
@@ -357,14 +359,14 @@ export default function SettingsTaxCalculationRoute() {
                     />
                   </Input>
                   {shouldShowFieldError("monthlyGrossIncomeEuros") && (
-                    <Text size="xs" color="$error600" testID="settings-tax-error-monthlyGrossIncomeEuros">
+                    <Text size="xs" color={theme.danger} testID="settings-tax-error-monthlyGrossIncomeEuros">
                       {validation.fieldErrors.monthlyGrossIncomeEuros}
                     </Text>
                   )}
                 </VStack>
 
                 <VStack space="xs">
-                  <Text bold size="sm">Salary payments per year</Text>
+                  <Text bold size="sm" color={theme.textSecondary}>Salary payments per year</Text>
                   <HStack space="sm">
                     <Button
                       size="sm"
@@ -373,7 +375,9 @@ export default function SettingsTaxCalculationRoute() {
                       onPress={() => updateFormField("salaryPaymentsPerYear", 12)}
                       testID="settings-salary-payments-12"
                     >
-                      <ButtonText>12</ButtonText>
+                      <ButtonText color={formState.salaryPaymentsPerYear === 12 ? theme.textOnPrimary : theme.text}>
+                        12
+                      </ButtonText>
                     </Button>
                     <Button
                       size="sm"
@@ -382,32 +386,34 @@ export default function SettingsTaxCalculationRoute() {
                       onPress={() => updateFormField("salaryPaymentsPerYear", 14)}
                       testID="settings-salary-payments-14"
                     >
-                      <ButtonText>14</ButtonText>
+                      <ButtonText color={formState.salaryPaymentsPerYear === 14 ? theme.textOnPrimary : theme.text}>
+                        14
+                      </ButtonText>
                     </Button>
                   </HStack>
                 </VStack>
 
                 <VStack space="xs">
-                  <Text bold size="sm">Auto-calculated marginal tax rate (%)</Text>
-                  <Text size="sm" testID="settings-auto-marginal-rate">
+                  <Text bold size="sm" color={theme.textSecondary}>Auto-calculated marginal tax rate (%)</Text>
+                  <Text size="sm" color={theme.text} testID="settings-auto-marginal-rate">
                     {marginalRateEstimate
                       ? `${formatPercent(bpsToPercent(marginalRateEstimate.marginalRateBps))}%`
                       : "n/a"}
                   </Text>
                   {marginalRateEstimate && (
-                    <Text size="sm">
+                    <Text size="sm" color={theme.textSecondary}>
                       Estimated annual gross: {formatCents(marginalRateEstimate.annualGrossCents)}
                     </Text>
                   )}
-                  <Text size="xs" color="$text500">
+                  <Text size="xs" color={theme.textMuted}>
                     Estimate only. Uses Austrian bracket table for {marginalRateEstimate?.usedTaxYear ?? "selected year"}.
                   </Text>
                 </VStack>
 
                 <HStack justifyContent="space-between" alignItems="center">
                   <VStack space="xs" flex={1}>
-                    <Text size="sm">Manual override marginal tax rate</Text>
-                    <Text size="xs" color="$text500">
+                    <Text size="sm" color={theme.textSecondary}>Manual override marginal tax rate</Text>
+                    <Text size="xs" color={theme.textMuted}>
                       If enabled, manual value is used instead of auto estimate.
                     </Text>
                   </VStack>
@@ -426,7 +432,7 @@ export default function SettingsTaxCalculationRoute() {
                     }}
                     testID="settings-tax-input-manualMarginalRatePercent"
                   >
-                    <Text bold size="sm">Marginal tax rate (%)</Text>
+                    <Text bold size="sm" color={theme.textSecondary}>Marginal tax rate (%)</Text>
                     <Input
                       variant="outline"
                       borderColor={
@@ -451,7 +457,7 @@ export default function SettingsTaxCalculationRoute() {
                       />
                     </Input>
                     {shouldShowFieldError("manualMarginalRatePercent") && (
-                      <Text size="xs" color="$error600" testID="settings-tax-error-manualMarginalRatePercent">
+                      <Text size="xs" color={theme.danger} testID="settings-tax-error-manualMarginalRatePercent">
                         {validation.fieldErrors.manualMarginalRatePercent}
                       </Text>
                     )}
@@ -462,7 +468,7 @@ export default function SettingsTaxCalculationRoute() {
 
             <Card borderWidth="$1" borderColor="$border200">
               <VStack space="md">
-                <Heading size="md">Deduction rules</Heading>
+                <Heading size="md" color={theme.text}>Deduction rules</Heading>
 
                 <VStack
                   space="xs"
@@ -471,7 +477,7 @@ export default function SettingsTaxCalculationRoute() {
                   }}
                   testID="settings-tax-input-gwgThresholdEuros"
                 >
-                  <Text bold size="sm">GWG threshold (EUR)</Text>
+                  <Text bold size="sm" color={theme.textSecondary}>GWG threshold (EUR)</Text>
                   <Input
                     variant="outline"
                     borderColor={shouldShowFieldError("gwgThresholdEuros") ? "$error600" : "$border200"}
@@ -492,14 +498,14 @@ export default function SettingsTaxCalculationRoute() {
                     />
                   </Input>
                   {shouldShowFieldError("gwgThresholdEuros") && (
-                    <Text size="xs" color="$error600" testID="settings-tax-error-gwgThresholdEuros">
+                    <Text size="xs" color={theme.danger} testID="settings-tax-error-gwgThresholdEuros">
                       {validation.fieldErrors.gwgThresholdEuros}
                     </Text>
                   )}
                 </VStack>
 
                 <HStack justifyContent="space-between" alignItems="center">
-                  <Text size="sm">Apply half-year rule</Text>
+                  <Text size="sm" color={theme.textSecondary}>Apply half-year rule</Text>
                   <Switch
                     value={formState.applyHalfYearRule}
                     onValueChange={(value) => updateFormField("applyHalfYearRule", value)}
@@ -508,7 +514,7 @@ export default function SettingsTaxCalculationRoute() {
                 </HStack>
 
                 <HStack justifyContent="space-between" alignItems="center">
-                  <Text size="sm">Werbungskostenpauschale enabled</Text>
+                  <Text size="sm" color={theme.textSecondary}>Werbungskostenpauschale enabled</Text>
                   <Switch
                     value={formState.werbungskostenPauschaleEnabled}
                     onValueChange={(value) => updateFormField("werbungskostenPauschaleEnabled", value)}
@@ -517,7 +523,7 @@ export default function SettingsTaxCalculationRoute() {
                 </HStack>
 
                 {formState.werbungskostenPauschaleEnabled && (
-                  <Text size="xs" color="$text500" testID="settings-tax-werbung-info">
+                  <Text size="xs" color={theme.textMuted} testID="settings-tax-werbung-info">
                     Informational baseline only for now:{" "}
                     {formatCents(formState.werbungskostenPauschaleAmountCents)}. Refund logic is unchanged in this MVP step.
                   </Text>
@@ -528,7 +534,7 @@ export default function SettingsTaxCalculationRoute() {
             <Card borderWidth="$1" borderColor="$border200">
               <VStack space="md">
                 <HStack justifyContent="space-between" alignItems="center">
-                  <Heading size="md">Advanced defaults</Heading>
+                  <Heading size="md" color={theme.text}>Advanced defaults</Heading>
                   <Button
                     size="sm"
                     variant="outline"
@@ -536,7 +542,9 @@ export default function SettingsTaxCalculationRoute() {
                     onPress={() => setIsAdvancedDefaultsOpen((current) => !current)}
                     testID="settings-tax-advanced-toggle"
                   >
-                    <ButtonText>{isAdvancedDefaultsOpen ? "Collapse" : "Expand"}</ButtonText>
+                    <ButtonText color={theme.text}>
+                      {isAdvancedDefaultsOpen ? "Collapse" : "Expand"}
+                    </ButtonText>
                   </Button>
                 </HStack>
                 {isAdvancedDefaultsOpen && (
@@ -547,7 +555,7 @@ export default function SettingsTaxCalculationRoute() {
                     }}
                     testID="settings-tax-input-defaultWorkPercent"
                   >
-                    <Text bold size="sm">Default work percent for new items only</Text>
+                    <Text bold size="sm" color={theme.textSecondary}>Default work percent for new items only</Text>
                     <Input
                       variant="outline"
                       borderColor={shouldShowFieldError("defaultWorkPercent") ? "$error600" : "$border200"}
@@ -568,11 +576,11 @@ export default function SettingsTaxCalculationRoute() {
                       />
                     </Input>
                     {shouldShowFieldError("defaultWorkPercent") && (
-                      <Text size="xs" color="$error600" testID="settings-tax-error-defaultWorkPercent">
+                      <Text size="xs" color={theme.danger} testID="settings-tax-error-defaultWorkPercent">
                         {validation.fieldErrors.defaultWorkPercent}
                       </Text>
                     )}
-                    <Text size="xs" color="$text500">
+                    <Text size="xs" color={theme.textMuted}>
                       Convenience prefill for new items. This is not a legal tax rule.
                     </Text>
                   </VStack>
@@ -583,19 +591,19 @@ export default function SettingsTaxCalculationRoute() {
             {preview && (
               <Card borderWidth="$1" borderColor="$border200">
                 <VStack space="xs">
-                  <Heading size="sm">Calculation preview (sample item)</Heading>
-                  <Text size="sm">Sample item amount: {formatCents(preview.sampleItemCents)}</Text>
-                  <Text size="sm">Work-relevant amount: {formatCents(preview.workRelevantCents)}</Text>
-                  <Text size="sm">
+                  <Heading size="sm" color={theme.text}>Calculation preview (sample item)</Heading>
+                  <Text size="sm" color={theme.text}>Sample item amount: {formatCents(preview.sampleItemCents)}</Text>
+                  <Text size="sm" color={theme.text}>Work-relevant amount: {formatCents(preview.workRelevantCents)}</Text>
+                  <Text size="sm" color={theme.text}>
                     Deductible this year: {formatCents(preview.deductibleThisYearCents)}
                   </Text>
-                  <Text size="sm">Estimated refund: {formatCents(preview.estimatedRefundCents)}</Text>
-                  <Text size="sm">Mode: {preview.modeLabel}</Text>
-                  <Text size="sm">
+                  <Text size="sm" color={theme.text}>Estimated refund: {formatCents(preview.estimatedRefundCents)}</Text>
+                  <Text size="sm" color={theme.text}>Mode: {preview.modeLabel}</Text>
+                  <Text size="sm" color={theme.text}>
                     Marginal tax rate used: {formatPercent(bpsToPercent(preview.marginalRateUsedBps))}%
                   </Text>
                   {formState.werbungskostenPauschaleEnabled && (
-                    <Text size="xs" color="$text500">
+                    <Text size="xs" color={theme.textMuted}>
                       Werbungskostenpauschale is currently informational only in this preview.
                     </Text>
                   )}
@@ -605,21 +613,21 @@ export default function SettingsTaxCalculationRoute() {
 
             <Card borderWidth="$1" borderColor="$border200" testID="settings-tax-disclaimer-card">
               <VStack space="xs">
-                <Heading size="sm">Info</Heading>
-                <Text size="sm">
+                <Heading size="sm" color={theme.text}>Info</Heading>
+                <Text size="sm" color={theme.textSecondary}>
                   This result is an estimate and not a binding Finanzamt assessment.
                 </Text>
-                <Text size="sm">
+                <Text size="sm" color={theme.textSecondary}>
                   Actual refund depends on total income, taxes already paid, and additional deductions.
                 </Text>
-                <Text size="sm">Austrian tax law and rates may change by tax year.</Text>
+                <Text size="sm" color={theme.textSecondary}>Austrian tax law and rates may change by tax year.</Text>
               </VStack>
             </Card>
 
             <Card borderWidth="$1" borderColor="$border200">
               <VStack space="md">
-                {saveError && <Text size="sm" color="$error600">{saveError}</Text>}
-                {saveSuccess && <Text size="sm" color="$success600">{saveSuccess}</Text>}
+                {saveError && <Text size="sm" color={theme.danger}>{saveError}</Text>}
+                {saveSuccess && <Text size="sm" color={theme.success}>{saveSuccess}</Text>}
                 <Box testID="settings-tax-btn-submit">
                   <Button
                     onPress={() => void handleSave()}
@@ -627,7 +635,9 @@ export default function SettingsTaxCalculationRoute() {
                     testID="settings-tax-save"
                     accessibilityState={{ disabled: isSubmitDisabled }}
                   >
-                    <ButtonText>{isSaving ? "Saving..." : "Save Tax Settings"}</ButtonText>
+                    <ButtonText color={theme.textOnPrimary}>
+                      {isSaving ? "Saving..." : "Save Tax Settings"}
+                    </ButtonText>
                   </Button>
                 </Box>
               </VStack>
