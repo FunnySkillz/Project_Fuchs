@@ -1,6 +1,7 @@
 import React from "react";
-import { Pressable, StyleSheet, TextInput, View } from "react-native";
+import { StyleSheet, TextInput, View } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { Button, ButtonText } from "@gluestack-ui/themed";
 
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
@@ -67,23 +68,20 @@ export function AppLockGate({
                   {errorMessage}
                 </ThemedText>
               )}
-              <Pressable
-                style={({ pressed }) => [
+              <Button
+                onPress={onPinSubmit}
+                isDisabled={isAuthenticating}
+                testID="app-lock-unlock"
+                style={[
                   styles.primaryButton,
                   {
                     borderColor: theme.primary,
                     backgroundColor: theme.primary,
                   },
-                  (pressed || isAuthenticating) && styles.pressed,
                 ]}
-                onPress={onPinSubmit}
-                disabled={isAuthenticating}
-                testID="app-lock-unlock"
               >
-                <ThemedText type="default" themeColor="textOnPrimary">
-                  Unlock
-                </ThemedText>
-              </Pressable>
+                <ButtonText color={theme.textOnPrimary}>Unlock</ButtonText>
+              </Button>
             </>
           )}
 
@@ -104,39 +102,31 @@ export function AppLockGate({
           )}
 
           <View style={styles.secondaryActions}>
-            <Pressable
-              style={({ pressed }) => [
+            <Button
+              variant="outline"
+              action="secondary"
+              style={[
                 styles.secondaryActionButton,
                 {
                   borderColor: theme.border,
                   backgroundColor: theme.background,
                 },
-                (pressed || isAuthenticating) && styles.pressed,
               ]}
               onPress={onUseBiometric}
-              disabled={isAuthenticating}
+              isDisabled={isAuthenticating}
               testID="app-lock-use-face-id"
             >
-              <ThemedText type="default" themeColor="text">
-                {isAuthenticating ? "Authenticating..." : "Use Face ID"}
-              </ThemedText>
-            </Pressable>
-            <Pressable
-              style={({ pressed }) => [
-                styles.secondaryActionButton,
-                {
-                  borderColor: theme.border,
-                  backgroundColor: theme.background,
-                },
-                pressed && styles.pressed,
-              ]}
+              <ButtonText color={theme.text}>{isAuthenticating ? "Authenticating..." : "Use Face ID"}</ButtonText>
+            </Button>
+            <Button
+              variant="link"
+              action="secondary"
+              style={styles.tertiaryActionButton}
               onPress={onCancel}
               testID="app-lock-cancel"
             >
-              <ThemedText type="default" themeColor="textSecondary">
-                Cancel
-              </ThemedText>
-            </Pressable>
+              <ButtonText color={theme.textSecondary}>Cancel</ButtonText>
+            </Button>
           </View>
         </ThemedView>
       </View>
@@ -194,6 +184,12 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 16,
   },
+  tertiaryActionButton: {
+    width: "100%",
+    minHeight: 44,
+    borderWidth: 0,
+    justifyContent: "center",
+  },
   errorText: {
     textAlign: "left",
   },
@@ -203,8 +199,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 16,
-  },
-  pressed: {
-    opacity: 0.75,
   },
 });

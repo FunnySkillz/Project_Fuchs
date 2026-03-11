@@ -37,8 +37,20 @@ jest.mock("@/components/themed-view", () => {
   };
 });
 
+jest.mock("@gluestack-ui/themed", () => {
+  const { Pressable, Text } = require("react-native");
+  return {
+    Button: ({ children, onPress, testID, isDisabled, style, ...props }: any) => (
+      <Pressable testID={testID} onPress={onPress} disabled={isDisabled} style={style} {...props}>
+        {children}
+      </Pressable>
+    ),
+    ButtonText: ({ children, ...props }: any) => <Text {...props}>{children}</Text>,
+  };
+});
+
 describe("AppLockGate", () => {
-  it("shows Unlock as the primary action and removes Retry Authentication", () => {
+  it("shows primary, secondary, and tertiary actions and removes Retry Authentication", () => {
     render(
       <AppLockGate
         isAuthenticating={false}
@@ -54,6 +66,8 @@ describe("AppLockGate", () => {
 
     expect(screen.getByText("Unlock")).toBeTruthy();
     expect(screen.getByTestId("app-lock-unlock")).toBeTruthy();
+    expect(screen.getByTestId("app-lock-use-face-id")).toBeTruthy();
+    expect(screen.getByTestId("app-lock-cancel")).toBeTruthy();
     expect(screen.queryByText("Retry Authentication")).toBeNull();
   });
 
