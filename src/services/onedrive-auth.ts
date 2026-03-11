@@ -13,6 +13,8 @@ const TOKEN_KEY = "onedrive_oauth_tokens_v1";
 const FOLDER_SELECTION_KEY = "onedrive_export_folder_v1";
 const SCOPES = ["offline_access", "Files.ReadWrite"];
 const GRAPH_BASE_URL = "https://graph.microsoft.com/v1.0";
+const ONEDRIVE_NOT_CONFIGURED_ERROR =
+  "OneDrive OAuth is not configured. Set EXPO_PUBLIC_ONEDRIVE_CLIENT_ID.";
 
 export interface OneDriveTokenRecord {
   accessToken: string;
@@ -84,10 +86,14 @@ async function deleteSecureValue(key: string): Promise<void> {
 }
 
 function assertClientId(): string {
-  if (!CLIENT_ID || CLIENT_ID.trim().length === 0) {
-    throw new Error("OneDrive OAuth is not configured. Set EXPO_PUBLIC_ONEDRIVE_CLIENT_ID.");
+  if (!isOneDriveConfigured()) {
+    throw new Error(ONEDRIVE_NOT_CONFIGURED_ERROR);
   }
-  return CLIENT_ID;
+  return CLIENT_ID!.trim();
+}
+
+export function isOneDriveConfigured(): boolean {
+  return typeof CLIENT_ID === "string" && CLIENT_ID.trim().length > 0;
 }
 
 function isTokenExpired(record: OneDriveTokenRecord): boolean {

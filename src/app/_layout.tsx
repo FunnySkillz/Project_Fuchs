@@ -89,7 +89,7 @@ export default function RootLayout() {
   const [initError, setInitError] = React.useState<string | null>(null);
   const [initErrorPayload, setInitErrorPayload] = React.useState<InitErrorReportPayload | null>(null);
   const [pinAvailable, setPinAvailable] = React.useState(false);
-  const [showPinEntry, setShowPinEntry] = React.useState(false);
+  const [, setShowPinEntry] = React.useState(false);
   const [pinInput, setPinInput] = React.useState("");
   const [themeMode, setThemeModeState] = React.useState<ThemeMode>("system");
   const authInFlightRef = useRef(false);
@@ -153,7 +153,7 @@ export default function RootLayout() {
         setIsUnlocked(false);
         setAuthError(
           result.error === "user_cancel"
-            ? "Authentication canceled."
+            ? "Authentication canceled. Use Face ID again or enter your PIN."
             : "Authentication failed. Please retry."
         );
         if (hasPin) {
@@ -465,16 +465,13 @@ export default function RootLayout() {
                 pinValue={pinInput}
                 onPinValueChange={setPinInput}
                 onPinSubmit={() => void handlePinSubmit()}
-                onUsePin={() => setShowPinEntry(true)}
                 onUseBiometric={() => {
                   setShowPinEntry(false);
                   void authenticate();
                 }}
-                showPinEntry={showPinEntry}
-                onRetry={() => void authenticate()}
                 onCancel={() => {
                   setIsUnlocked(false);
-                  setAuthError("Authentication canceled.");
+                  setAuthError("Authentication canceled. Use Face ID again or enter your PIN.");
                   setShowPinEntry(false);
                 }}
               />

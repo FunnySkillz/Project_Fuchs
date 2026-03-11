@@ -1,5 +1,5 @@
 import React from "react";
-import { fireEvent, render, screen } from "@testing-library/react-native";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 
 import SettingsBackupSyncRoute from "@/app/(tabs)/settings/backup-sync";
 import SettingsDangerZoneRoute from "@/app/(tabs)/settings/danger-zone";
@@ -10,6 +10,9 @@ let mockCanGoBack = false;
 const mockGetSettings = jest.fn();
 const mockIsConnected = jest.fn();
 const mockGetSelectedOneDriveFolder = jest.fn();
+const mockConnectOneDrive = jest.fn();
+const mockDisconnectOneDrive = jest.fn();
+let mockOneDriveConfigured = true;
 
 jest.mock("@gluestack-ui/themed", () => {
   const {
@@ -89,14 +92,15 @@ jest.mock("@/services/local-data", () => ({
 jest.mock("@/services/auth/onedrive-auth-provider", () => ({
   getOneDriveAuthProvider: () => ({
     isConnected: () => mockIsConnected(),
-    connect: jest.fn(),
-    disconnect: jest.fn(),
+    connect: () => mockConnectOneDrive(),
+    disconnect: () => mockDisconnectOneDrive(),
   }),
 }));
 
 jest.mock("@/services/onedrive-auth", () => ({
   ensureSelectedFolderAccessible: jest.fn(),
   getOneDriveRedirectUri: () => "steuerfuchs://auth",
+  isOneDriveConfigured: () => mockOneDriveConfigured,
   getSelectedOneDriveFolder: () => mockGetSelectedOneDriveFolder(),
   listOneDriveFolders: jest.fn(),
   setSelectedOneDriveFolder: jest.fn(),
@@ -122,8 +126,11 @@ describe("Settings subroutes fallback navigation", () => {
     mockGetSettings.mockReset();
     mockIsConnected.mockReset();
     mockGetSelectedOneDriveFolder.mockReset();
+    mockConnectOneDrive.mockReset();
+    mockDisconnectOneDrive.mockReset();
 
     mockCanGoBack = false;
+    mockOneDriveConfigured = true;
 
     mockGetSettings.mockResolvedValue({
       taxYearDefault: 2026,
@@ -138,6 +145,8 @@ describe("Settings subroutes fallback navigation", () => {
     });
     mockIsConnected.mockResolvedValue(false);
     mockGetSelectedOneDriveFolder.mockResolvedValue(null);
+    mockConnectOneDrive.mockResolvedValue(undefined);
+    mockDisconnectOneDrive.mockResolvedValue(undefined);
   });
 
   it("shows fallback back button on Backup & Sync when route has no history", async () => {
@@ -155,6 +164,40 @@ describe("Settings subroutes fallback navigation", () => {
 
     expect(await screen.findByText("Backup & Sync")).toBeTruthy();
     expect(screen.queryByTestId("settings-back-to-main-fallback")).toBeNull();
+  });
+
+  it("hides OneDrive connect action and shows friendly config copy when build is not configured", async () => {
+    mockOneDriveConfigured = false;
+    render(<SettingsBackupSyncRoute />);
+
+    expect(await screen.findByText("Backup & Sync")).toBeTruthy();
+    expect(screen.getByTestId("settings-onedrive-config-missing")).toBeTruthy();
+    expect(screen.getByTestId("settings-onedrive-config-hint")).toBeTruthy();
+    expect(screen.queryByTestId("settings-onedrive-connect")).toBeNull();
+  });
+
+  it("shows OneDrive connect action when build is configured", async () => {
+    mockOneDriveConfigured = true;
+    render(<SettingsBackupSyncRoute />);
+
+    expect(await screen.findByText("Backup & Sync")).toBeTruthy();
+    expect(screen.getByTestId("settings-onedrive-connect")).toBeTruthy();
+  });
+
+  it("shows generic user error when OneDrive connect fails", async () => {
+    mockOneDriveConfigured = true;
+    mockConnectOneDrive.mockRejectedValueOnce(new Error("OneDrive OAuth is not configured."));
+
+    render(<SettingsBackupSyncRoute />);
+    expect(await screen.findByText("Backup & Sync")).toBeTruthy();
+
+    fireEvent.press(screen.getByTestId("settings-onedrive-connect"));
+
+    await waitFor(() => {
+      expect(
+        screen.getByText("Unable to connect to OneDrive. Please try again.")
+      ).toBeTruthy();
+    });
   });
 
   it("shows fallback back button on Danger Zone when route has no history", async () => {

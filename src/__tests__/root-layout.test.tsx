@@ -65,29 +65,26 @@ jest.mock("@/components/app-lock-gate", () => {
     AppLockGate: ({
       errorMessage,
       pinValue,
-      showPinEntry,
       onPinValueChange,
       onPinSubmit,
-      onRetry,
+      onUseBiometric,
       onCancel,
     }: {
       errorMessage: string | null;
       pinValue: string;
-      showPinEntry: boolean;
       onPinValueChange: (value: string) => void;
       onPinSubmit: () => void;
-      onRetry: () => void;
+      onUseBiometric: () => void;
       onCancel: () => void;
     }) => (
       <View testID="app-lock-gate">
-        <Text>{`show-pin:${showPinEntry}`}</Text>
         {errorMessage ? <Text>{errorMessage}</Text> : null}
         <TextInput testID="pin-input" value={pinValue} onChangeText={onPinValueChange} />
         <Pressable testID="pin-submit" onPress={onPinSubmit}>
           <Text>pin-submit</Text>
         </Pressable>
-        <Pressable testID="retry-auth" onPress={onRetry}>
-          <Text>retry-auth</Text>
+        <Pressable testID="use-face-id" onPress={onUseBiometric}>
+          <Text>use-face-id</Text>
         </Pressable>
         <Pressable testID="cancel-auth" onPress={onCancel}>
           <Text>cancel-auth</Text>
@@ -249,7 +246,6 @@ describe("RootLayout", () => {
     render(<RootLayout />);
 
     expect(await screen.findByTestId("app-lock-gate")).toBeTruthy();
-    expect(screen.getByText("show-pin:true")).toBeTruthy();
 
     fireEvent.changeText(screen.getByTestId("pin-input"), "1234");
     fireEvent.press(screen.getByTestId("pin-submit"));
@@ -257,7 +253,7 @@ describe("RootLayout", () => {
     expect(await screen.findByText(/Too many failed PIN attempts/)).toBeTruthy();
   });
 
-  it("supports cancel then retry authentication flow in app lock gate", async () => {
+  it("supports cancel then face-id authentication flow in app lock gate", async () => {
     mockGetSettings.mockResolvedValue({
       taxYearDefault: 2026,
       marginalRateBps: 4000,
@@ -277,13 +273,15 @@ describe("RootLayout", () => {
     expect(await screen.findByTestId("app-lock-gate")).toBeTruthy();
 
     fireEvent.press(screen.getByTestId("cancel-auth"));
-    expect(await screen.findByText("Authentication canceled.")).toBeTruthy();
+    expect(
+      await screen.findByText("Authentication canceled. Use Face ID again or enter your PIN.")
+    ).toBeTruthy();
 
     mockHasHardwareAsync.mockResolvedValue(true);
     mockIsEnrolledAsync.mockResolvedValue(true);
     mockAuthenticateAsync.mockResolvedValue({ success: true });
 
-    fireEvent.press(screen.getByTestId("retry-auth"));
+    fireEvent.press(screen.getByTestId("use-face-id"));
 
     await waitFor(() => {
       expect(mockAuthenticateAsync).toHaveBeenCalled();

@@ -14,10 +14,7 @@ interface Props {
   pinValue: string;
   onPinValueChange: (value: string) => void;
   onPinSubmit: () => void;
-  onUsePin: () => void;
   onUseBiometric: () => void;
-  showPinEntry: boolean;
-  onRetry: () => void;
   onCancel: () => void;
 }
 
@@ -28,10 +25,7 @@ export function AppLockGate({
   pinValue,
   onPinValueChange,
   onPinSubmit,
-  onUsePin,
   onUseBiometric,
-  showPinEntry,
-  onRetry,
   onCancel,
 }: Props) {
   const theme = useTheme();
@@ -41,112 +35,85 @@ export function AppLockGate({
     <SafeAreaView style={{ flex: 1 }} edges={["top", "bottom"]}>
       <View style={[styles.container, { paddingBottom: Math.max(insets.bottom, Spacing.four) }]}>
         <ThemedView type="backgroundElement" style={styles.card}>
-        <ThemedText type="subtitle" style={styles.center}>
-          App Locked
-        </ThemedText>
-        <ThemedText themeColor="textSecondary" style={styles.center}>
-          Authenticate with biometrics or your device passcode to continue.
-        </ThemedText>
-        {errorMessage && (
-          <ThemedText style={[styles.errorText, { color: theme.danger }]}>
-            {errorMessage}
+          <ThemedText type="subtitle" style={styles.center}>
+            App Locked
           </ThemedText>
-        )}
+          <ThemedText themeColor="textSecondary" style={styles.center}>
+            Authenticate with biometrics or enter your PIN.
+          </ThemedText>
 
-        {pinEnabled && showPinEntry && (
-          <>
-            <TextInput
-              value={pinValue}
-              onChangeText={onPinValueChange}
-              style={[
-                styles.pinInput,
-                {
-                  borderColor: theme.border,
-                  backgroundColor: theme.background,
-                  color: theme.text,
-                },
-              ]}
-              keyboardType="number-pad"
-              secureTextEntry
-              maxLength={6}
-              placeholder="Enter PIN"
-              placeholderTextColor={theme.textSecondary}
-            />
+          {pinEnabled && (
+            <>
+              <TextInput
+                value={pinValue}
+                onChangeText={onPinValueChange}
+                style={[
+                  styles.pinInput,
+                  {
+                    borderColor: theme.border,
+                    backgroundColor: theme.background,
+                    color: theme.text,
+                  },
+                ]}
+                keyboardType="number-pad"
+                secureTextEntry
+                maxLength={6}
+                placeholder="Enter PIN"
+                placeholderTextColor={theme.textSecondary}
+                testID="app-lock-pin-input"
+              />
+              {errorMessage && (
+                <ThemedText testID="app-lock-error" style={[styles.errorText, { color: theme.danger }]}>
+                  {errorMessage}
+                </ThemedText>
+              )}
+              <Pressable
+                style={({ pressed }) => [
+                  styles.primaryButton,
+                  {
+                    borderColor: theme.primary,
+                    backgroundColor: theme.primary,
+                  },
+                  (pressed || isAuthenticating) && styles.pressed,
+                ]}
+                onPress={onPinSubmit}
+                disabled={isAuthenticating}
+                testID="app-lock-unlock"
+              >
+                <ThemedText type="smallBold" themeColor="textOnPrimary">
+                  Unlock
+                </ThemedText>
+              </Pressable>
+            </>
+          )}
+
+          {!pinEnabled && errorMessage && (
+            <ThemedText testID="app-lock-error" style={[styles.errorText, { color: theme.danger }]}>
+              {errorMessage}
+            </ThemedText>
+          )}
+
+          <View style={styles.secondaryActions}>
             <Pressable
-              style={({ pressed }) => [
-                styles.primaryButton,
-                {
-                  borderColor: theme.border,
-                  backgroundColor: theme.backgroundElement,
-                },
-                pressed && styles.pressed,
-              ]}
-              onPress={onPinSubmit}
-            >
-              <ThemedText type="smallBold">Unlock with PIN</ThemedText>
-            </Pressable>
-            <Pressable
-              style={({ pressed }) => [
-                styles.secondaryButton,
-                {
-                  borderColor: theme.border,
-                  backgroundColor: theme.background,
-                },
-                pressed && styles.pressed,
-              ]}
+              style={({ pressed }) => [styles.secondaryActionButton, (pressed || isAuthenticating) && styles.pressed]}
               onPress={onUseBiometric}
+              disabled={isAuthenticating}
+              testID="app-lock-use-face-id"
             >
-              <ThemedText type="smallBold">Use Biometrics Instead</ThemedText>
+              <ThemedText type="smallBold" themeColor="primary">
+                {isAuthenticating ? "Authenticating..." : "Use Face ID"}
+              </ThemedText>
             </Pressable>
-          </>
-        )}
-
-        <Pressable
-          style={({ pressed }) => [
-            styles.primaryButton,
-            {
-              borderColor: theme.border,
-              backgroundColor: theme.backgroundElement,
-            },
-            pressed && styles.pressed,
-          ]}
-          onPress={onRetry}
-          disabled={isAuthenticating}
-        >
-          <ThemedText type="smallBold">
-            {isAuthenticating ? "Authenticating..." : "Retry Authentication"}
-          </ThemedText>
-        </Pressable>
-
-        {pinEnabled && !showPinEntry && (
-          <Pressable
-            style={({ pressed }) => [
-              styles.secondaryButton,
-              {
-                borderColor: theme.border,
-                backgroundColor: theme.background,
-              },
-              pressed && styles.pressed,
-            ]}
-            onPress={onUsePin}
-          >
-            <ThemedText type="smallBold">Use PIN Instead</ThemedText>
-          </Pressable>
-        )}
-
-        <Pressable
-          style={({ pressed }) => [
-            styles.secondaryButton,
-            {
-              borderColor: theme.border,
-              backgroundColor: theme.background,
-            },
-            pressed && styles.pressed,
-          ]}
-          onPress={onCancel}
-        >
-          <ThemedText type="smallBold">Cancel</ThemedText>
-        </Pressable>
+            <Pressable
+              style={({ pressed }) => [styles.secondaryActionButton, pressed && styles.pressed]}
+              onPress={onCancel}
+              testID="app-lock-cancel"
+            >
+              <ThemedText type="smallBold" themeColor="textSecondary">
+                Cancel
+              </ThemedText>
+            </Pressable>
+          </View>
         </ThemedView>
       </View>
     </SafeAreaView>
@@ -176,14 +143,17 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingVertical: 12,
   },
-  secondaryButton: {
-    borderWidth: 1,
-    borderRadius: 10,
+  secondaryActions: {
+    marginTop: Spacing.two,
+    gap: Spacing.one,
+  },
+  secondaryActionButton: {
     alignItems: "center",
-    paddingVertical: 12,
+    justifyContent: "center",
+    paddingVertical: 8,
   },
   errorText: {
-    textAlign: "center",
+    textAlign: "left",
   },
   pinInput: {
     borderWidth: 1,

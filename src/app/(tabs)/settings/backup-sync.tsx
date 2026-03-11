@@ -43,6 +43,7 @@ import { friendlyFileErrorMessage } from "@/services/friendly-errors";
 import {
   ensureSelectedFolderAccessible,
   getOneDriveRedirectUri,
+  isOneDriveConfigured,
   getSelectedOneDriveFolder,
   listOneDriveFolders,
   setSelectedOneDriveFolder,
@@ -52,6 +53,7 @@ import {
 
 WebBrowser.maybeCompleteAuthSession();
 const oneDriveAuthProvider = getOneDriveAuthProvider();
+const ONEDRIVE_CONNECT_ERROR_MESSAGE = "Unable to connect to OneDrive. Please try again.";
 
 export default function SettingsBackupSyncRoute() {
   const router = useRouter();
@@ -73,6 +75,7 @@ export default function SettingsBackupSyncRoute() {
   const [isConfirmBusy, setIsConfirmBusy] = useState(false);
 
   const [oneDriveConnected, setOneDriveConnected] = useState(false);
+  const [oneDriveConnecting, setOneDriveConnecting] = useState(false);
   const [oneDriveBusy, setOneDriveBusy] = useState(false);
   const [oneDriveError, setOneDriveError] = useState<string | null>(null);
   const [oneDriveFolders, setOneDriveFolders] = useState<OneDriveFolder[]>([]);
@@ -80,6 +83,7 @@ export default function SettingsBackupSyncRoute() {
     useState<OneDriveFolderSelection | null>(null);
   const [exportProgress, setExportProgress] = useState<ExportProgress | null>(null);
   const [exportResult, setExportResult] = useState<ExportPipelineResult | null>(null);
+  const oneDriveConfigured = isOneDriveConfigured();
 
   const reloadSettings = useCallback(async () => {
     setIsLoading(true);
@@ -88,7 +92,7 @@ export default function SettingsBackupSyncRoute() {
       const repository = await getProfileSettingsRepository();
       const [loaded, connected, selectedFolder] = await Promise.all([
         repository.getSettings(),
-        oneDriveAuthProvider.isConnected(),
+        oneDriveConfigured ? oneDriveAuthProvider.isConnected() : Promise.resolve(false),
         getSelectedOneDriveFolder(),
       ]);
 
@@ -101,7 +105,7 @@ export default function SettingsBackupSyncRoute() {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [oneDriveConfigured]);
 
   useEffect(() => {
     void reloadSettings();
@@ -186,6 +190,7 @@ export default function SettingsBackupSyncRoute() {
 
   const handleConnectOneDrive = async () => {
     setOneDriveError(null);
+    setOneDriveConnecting(true);
     setOneDriveBusy(true);
     try {
       await oneDriveAuthProvider.connect();
@@ -194,8 +199,9 @@ export default function SettingsBackupSyncRoute() {
       setOneDriveSelectedFolderState(selected);
     } catch (error) {
       console.error("Failed to connect OneDrive", error);
-      setOneDriveError(error instanceof Error ? error.message : "Could not connect OneDrive.");
+      setOneDriveError(ONEDRIVE_CONNECT_ERROR_MESSAGE);
     } finally {
+      setOneDriveConnecting(false);
       setOneDriveBusy(false);
     }
   };
@@ -298,6 +304,12 @@ export default function SettingsBackupSyncRoute() {
     }
   };
 
+  const oneDriveStatusLabel = oneDriveConnected
+    ? "Connected"
+    : oneDriveConnecting
+      ? "Connecting..."
+      : "Not connected";
+
   if (isLoading || !settings) {
     return (
       <SafeAreaView style={{ flex: 1 }} edges={["bottom"]}>
@@ -354,7 +366,7 @@ export default function SettingsBackupSyncRoute() {
                 <Heading size="md">Local backup / restore</Heading>
                 {backupError && <Text size="sm" color="$error600">{backupError}</Text>}
                 <HStack space="sm" flexWrap="wrap">
-                  <Button onPress={() => void handleCreateBackup()} disabled={backupBusy}>
+                  <Button action="primary" onPress={() => void handleCreateBackup()} disabled={backupBusy}>
                     <ButtonText>{backupBusy ? "Working..." : "Create backup ZIP"}</ButtonText>
                   </Button>
                   <Button
@@ -406,17 +418,31 @@ export default function SettingsBackupSyncRoute() {
                   />
                 </HStack>
                 <Text size="sm">Redirect URI: {getOneDriveRedirectUri()}</Text>
-                <Text size="sm">Status: {oneDriveConnected ? "Connected" : "Not connected"}</Text>
+                <Text size="sm">Status: {oneDriveStatusLabel}</Text>
                 <Text size="sm">
                   Selected folder: {oneDriveSelectedFolder ? oneDriveSelectedFolder.path : "Not selected"}
                 </Text>
+                {!oneDriveConfigured && (
+                  <VStack space="xs">
+                    <Text size="sm" testID="settings-onedrive-config-missing">
+                      OneDrive connection is not configured on this build.
+                    </Text>
+                    <Text size="xs" testID="settings-onedrive-config-hint">
+                      To enable this feature, configure the OneDrive client ID.
+                    </Text>
+                  </VStack>
+                )}
                 {oneDriveError && <Text size="sm" color="$error600">{oneDriveError}</Text>}
 
-                {!oneDriveConnected ? (
-                  <Button onPress={() => void handleConnectOneDrive()} disabled={oneDriveBusy}>
-                    <ButtonText>{oneDriveBusy ? "Connecting..." : "Connect OneDrive"}</ButtonText>
+                {oneDriveConfigured && !oneDriveConnected ? (
+                  <Button
+                    onPress={() => void handleConnectOneDrive()}
+                    disabled={oneDriveBusy}
+                    testID="settings-onedrive-connect"
+                  >
+                    <ButtonText>{oneDriveConnecting ? "Connecting..." : "Connect OneDrive"}</ButtonText>
                   </Button>
-                ) : (
+                ) : oneDriveConfigured ? (
                   <Button
                     variant="outline"
                     action="secondary"
@@ -425,7 +451,7 @@ export default function SettingsBackupSyncRoute() {
                   >
                     <ButtonText>{oneDriveBusy ? "Disconnecting..." : "Disconnect OneDrive"}</ButtonText>
                   </Button>
-                )}
+                ) : null}
 
                 {oneDriveConnected && (
                   <>
