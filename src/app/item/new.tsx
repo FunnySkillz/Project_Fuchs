@@ -53,7 +53,6 @@ import {
   ChevronRight,
   FileText,
   Plus,
-  Upload,
   X,
 } from "lucide-react-native";
 import * as Sharing from "expo-sharing";
@@ -254,6 +253,7 @@ export default function NewItemRoute() {
   const [isLoadingCategories, setIsLoadingCategories] = useState(false);
   const [isCreatingCategory, setIsCreatingCategory] = useState(false);
   const [isCategorySheetOpen, setIsCategorySheetOpen] = useState(false);
+  const [isAttachmentSheetOpen, setIsAttachmentSheetOpen] = useState(false);
   const [isOptionalOpen, setIsOptionalOpen] = useState(false);
   const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
@@ -1080,49 +1080,17 @@ export default function NewItemRoute() {
               >
                 <GVStack space="md">
                   <GHeading size="md">Attachments</GHeading>
-                  <GHStack space="sm">
-                    <GButton
-                      flex={1}
-                      variant="outline"
-                      action="secondary"
-                      onPress={() => void addReceiptFromCamera()}
-                      disabled={isBusy}
-                      testID="additem-btn-takephoto"
-                      accessibilityLabel="Take photo"
-                    >
-                      <GHStack space="xs" alignItems="center">
-                        <Plus size={16} color={theme.text} />
-                        <GButtonText>Take photo</GButtonText>
-                      </GHStack>
-                    </GButton>
-                    <GButton
-                      flex={1}
-                      variant="outline"
-                      action="secondary"
-                      onPress={() => void uploadReceipt()}
-                      disabled={isBusy}
-                      testID="additem-btn-upload"
-                      accessibilityLabel="Upload PDF or image"
-                    >
-                      <GHStack space="xs" alignItems="center">
-                        <Upload size={16} color={theme.text} />
-                        <GButtonText>Upload PDF/Image</GButtonText>
-                      </GHStack>
-                    </GButton>
-                  </GHStack>
                   <GButton
-                    size="sm"
-                    variant="link"
-                    action="secondary"
-                    alignSelf="flex-start"
-                    onPress={() => void addExtraPhoto()}
+                    onPress={() => setIsAttachmentSheetOpen(true)}
                     disabled={isBusy}
-                    testID="additem-btn-addextraphto"
-                    accessibilityLabel="Add extra photo"
+                    alignSelf="stretch"
+                    testID="additem-btn-addreceipt"
+                    accessibilityLabel="Add receipt"
                   >
-                    <GButtonText>
-                      {isBusy ? "Working..." : "Add extra photo"}
-                    </GButtonText>
+                    <GHStack space="xs" alignItems="center">
+                      <Plus size={16} color={theme.textOnPrimary} />
+                      <GButtonText>{isBusy ? "Working..." : "Add receipt"}</GButtonText>
+                    </GHStack>
                   </GButton>
 
                   <GText size="xs" color="$textLight500">
@@ -1925,6 +1893,55 @@ export default function NewItemRoute() {
                   <GActionsheetItemText>{category.name}</GActionsheetItemText>
                 </GActionsheetItem>
               ))}
+            </GActionsheetContent>
+          </GActionsheet>
+
+          <GActionsheet
+            isOpen={isAttachmentSheetOpen}
+            onClose={() => setIsAttachmentSheetOpen(false)}
+          >
+            <GActionsheetBackdrop />
+            <GActionsheetContent>
+              <GActionsheetDragIndicatorWrapper>
+                <GActionsheetDragIndicator />
+              </GActionsheetDragIndicatorWrapper>
+              <GActionsheetItem
+                testID="additem-btn-takephoto"
+                accessibilityLabel="Take photo"
+                onPress={() => {
+                  setIsAttachmentSheetOpen(false);
+                  void addReceiptFromCamera();
+                }}
+              >
+                <GActionsheetItemText>Take photo</GActionsheetItemText>
+              </GActionsheetItem>
+              <GActionsheetItem
+                testID="additem-btn-upload"
+                accessibilityLabel="Upload file"
+                onPress={() => {
+                  setIsAttachmentSheetOpen(false);
+                  void uploadReceipt();
+                }}
+              >
+                <GActionsheetItemText>Upload file</GActionsheetItemText>
+              </GActionsheetItem>
+              <GActionsheetItem
+                testID="additem-btn-addextraphto"
+                accessibilityLabel="Add extra photo"
+                onPress={() => {
+                  setIsAttachmentSheetOpen(false);
+                  void addExtraPhoto();
+                }}
+              >
+                <GActionsheetItemText>Add extra photo</GActionsheetItemText>
+              </GActionsheetItem>
+              <GActionsheetItem
+                testID="additem-btn-attachment-cancel"
+                accessibilityLabel="Cancel attachment action"
+                onPress={() => setIsAttachmentSheetOpen(false)}
+              >
+                <GActionsheetItemText>Cancel</GActionsheetItemText>
+              </GActionsheetItem>
             </GActionsheetContent>
           </GActionsheet>
         </GBox>

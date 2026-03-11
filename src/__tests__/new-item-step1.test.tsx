@@ -131,6 +131,13 @@ jest.mock("@/services/item-draft-store", () => ({
   removeAttachmentFromDraft: jest.fn(),
 }));
 
+async function openAttachmentActions(): Promise<void> {
+  fireEvent.press(screen.getByTestId("additem-btn-addreceipt"));
+  await waitFor(() => {
+    expect(screen.getByTestId("additem-btn-takephoto")).toBeTruthy();
+  });
+}
+
 describe("NewItemRoute attachments and cancel behavior", () => {
   beforeEach(() => {
     mockRouterReplace.mockReset();
@@ -195,6 +202,7 @@ describe("NewItemRoute attachments and cancel behavior", () => {
 
     expect(await screen.findByText("Attachments")).toBeTruthy();
 
+    await openAttachmentActions();
     fireEvent.press(screen.getByTestId("additem-btn-takephoto"));
 
     await waitFor(() => {
@@ -227,6 +235,7 @@ describe("NewItemRoute attachments and cancel behavior", () => {
     const view = render(<NewItemRoute />);
     expect(await screen.findByText("Attachments")).toBeTruthy();
 
+    await openAttachmentActions();
     fireEvent.press(screen.getByTestId("additem-btn-upload"));
     await waitFor(() => {
       expect(mockAddAttachmentToDraft).toHaveBeenCalled();
@@ -251,6 +260,7 @@ describe("NewItemRoute attachments and cancel behavior", () => {
     render(<NewItemRoute />);
     expect(await screen.findByText("Attachments")).toBeTruthy();
 
+    await openAttachmentActions();
     fireEvent.press(screen.getByTestId("additem-btn-takephoto"));
 
     await waitFor(() => {
@@ -270,6 +280,7 @@ describe("NewItemRoute attachments and cancel behavior", () => {
     render(<NewItemRoute />);
     expect(await screen.findByText("Attachments")).toBeTruthy();
 
+    await openAttachmentActions();
     fireEvent.press(screen.getByTestId("additem-btn-upload"));
 
     await waitFor(() => {
@@ -290,6 +301,7 @@ describe("NewItemRoute attachments and cancel behavior", () => {
     render(<NewItemRoute />);
     expect(await screen.findByText("Attachments")).toBeTruthy();
 
+    await openAttachmentActions();
     fireEvent.press(screen.getByTestId("additem-btn-takephoto"));
     await waitFor(() => {
       expect(mockAddAttachmentToDraft).toHaveBeenCalled();
@@ -333,6 +345,7 @@ describe("NewItemRoute attachments and cancel behavior", () => {
     render(<NewItemRoute />);
     expect(await screen.findByText("Attachments")).toBeTruthy();
 
+    await openAttachmentActions();
     fireEvent.press(screen.getByTestId("additem-btn-takephoto"));
     await waitFor(() => {
       expect(mockAddAttachmentToDraft).toHaveBeenCalled();
@@ -370,5 +383,83 @@ describe("NewItemRoute attachments and cancel behavior", () => {
     expect(preventDefault).not.toHaveBeenCalled();
     expect(mockRouterReplace).not.toHaveBeenCalled();
     expect(screen.queryByTestId("discard-modal")).toBeNull();
+  });
+
+  it("uses one Add receipt action sheet and maps every action to existing handlers", async () => {
+    mockSaveFromCamera
+      .mockResolvedValueOnce({
+        filePath: "/tmp/receipt-main.jpg",
+        mimeType: "image/jpeg",
+        originalFileName: "receipt-main.jpg",
+        fileSizeBytes: 48_000,
+        type: "PHOTO",
+      })
+      .mockResolvedValueOnce({
+        filePath: "/tmp/extra-photo.jpg",
+        mimeType: "image/jpeg",
+        originalFileName: "extra-photo.jpg",
+        fileSizeBytes: 23_000,
+        type: "PHOTO",
+      });
+    mockSaveFromPicker.mockResolvedValueOnce({
+      filePath: "/tmp/receipt-upload.pdf",
+      mimeType: "application/pdf",
+      originalFileName: "receipt-upload.pdf",
+      fileSizeBytes: 11_000,
+      type: "RECEIPT",
+    });
+
+    render(<NewItemRoute />);
+    expect(await screen.findByText("Attachments")).toBeTruthy();
+    expect(screen.getByTestId("additem-btn-addreceipt")).toBeTruthy();
+    expect(screen.queryByTestId("additem-btn-takephoto")).toBeNull();
+    expect(screen.queryByTestId("additem-btn-upload")).toBeNull();
+
+    await openAttachmentActions();
+    fireEvent.press(screen.getByTestId("additem-btn-takephoto"));
+    await waitFor(() => {
+      expect(mockSaveFromCamera).toHaveBeenCalledTimes(1);
+      expect(mockAddAttachmentToDraft).toHaveBeenCalledWith(
+        "draft-1",
+        expect.objectContaining({
+          filePath: "/tmp/receipt-main.jpg",
+          type: "RECEIPT",
+        }),
+      );
+    });
+
+    await openAttachmentActions();
+    fireEvent.press(screen.getByTestId("additem-btn-upload"));
+    await waitFor(() => {
+      expect(mockSaveFromPicker).toHaveBeenCalledTimes(1);
+      expect(mockAddAttachmentToDraft).toHaveBeenCalledWith(
+        "draft-1",
+        expect.objectContaining({
+          filePath: "/tmp/receipt-upload.pdf",
+          type: "RECEIPT",
+        }),
+      );
+    });
+
+    await openAttachmentActions();
+    fireEvent.press(screen.getByTestId("additem-btn-addextraphto"));
+    await waitFor(() => {
+      expect(mockSaveFromCamera).toHaveBeenCalledTimes(2);
+      expect(mockAddAttachmentToDraft).toHaveBeenCalledWith(
+        "draft-1",
+        expect.objectContaining({
+          filePath: "/tmp/extra-photo.jpg",
+          type: "PHOTO",
+        }),
+      );
+    });
+
+    await openAttachmentActions();
+    fireEvent.press(screen.getByTestId("additem-btn-attachment-cancel"));
+    await waitFor(() => {
+      expect(screen.queryByTestId("additem-btn-takephoto")).toBeNull();
+    });
+    expect(mockSaveFromCamera).toHaveBeenCalledTimes(2);
+    expect(mockSaveFromPicker).toHaveBeenCalledTimes(1);
   });
 });

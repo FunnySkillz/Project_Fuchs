@@ -99,6 +99,10 @@ jest.mock("expo-router", () => {
 });
 
 jest.mock("@react-navigation/native", () => ({
+  useFocusEffect: (callback: () => void | (() => void)) => {
+    const ReactModule = require("react");
+    ReactModule.useEffect(() => callback(), [callback]);
+  },
   useNavigation: () => ({
     addListener: mockNavigationAddListener,
     dispatch: mockNavigationDispatch,
@@ -522,6 +526,10 @@ jest.mock("@/services/item-draft-store", () => ({
   createItemDraft: () => {
     const id = `draft-${++mockDraftCounter}`;
     mockDraftStore.set(id, []);
+    mockLocalSearchParams = {
+      ...mockLocalSearchParams,
+      draftId: id,
+    };
     return id;
   },
   getItemDraftAttachments: (draftId: string) => [
@@ -570,8 +578,12 @@ async function createPurchaseViaUiFlow(
   });
 
   view.rerender(<NewItemRoute />);
-  expect(await screen.findByText("Add Item")).toBeTruthy();
+  expect(await screen.findByText("Attachments")).toBeTruthy();
 
+  fireEvent.press(screen.getByTestId("additem-btn-addreceipt"));
+  await waitFor(() => {
+    expect(screen.getByTestId("additem-btn-takephoto")).toBeTruthy();
+  });
   fireEvent.press(screen.getByTestId("additem-btn-takephoto"));
   expect(await screen.findByText(input.receiptFileName)).toBeTruthy();
 

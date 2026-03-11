@@ -12,6 +12,7 @@ const mockIsConnected = jest.fn();
 const mockGetSelectedOneDriveFolder = jest.fn();
 const mockConnectOneDrive = jest.fn();
 const mockDisconnectOneDrive = jest.fn();
+const mockRunExportPipeline = jest.fn();
 let mockOneDriveConfigured = true;
 
 jest.mock("@gluestack-ui/themed", () => {
@@ -113,7 +114,7 @@ jest.mock("@/services/backup-restore", () => ({
 }));
 
 jest.mock("@/services/export-pipeline", () => ({
-  runExportPipeline: jest.fn(),
+  runExportPipeline: (...args: unknown[]) => mockRunExportPipeline(...args),
 }));
 
 jest.mock("@/services/friendly-errors", () => ({
@@ -128,6 +129,7 @@ describe("Settings subroutes fallback navigation", () => {
     mockGetSelectedOneDriveFolder.mockReset();
     mockConnectOneDrive.mockReset();
     mockDisconnectOneDrive.mockReset();
+    mockRunExportPipeline.mockReset();
 
     mockCanGoBack = false;
     mockOneDriveConfigured = true;
@@ -147,6 +149,13 @@ describe("Settings subroutes fallback navigation", () => {
     mockGetSelectedOneDriveFolder.mockResolvedValue(null);
     mockConnectOneDrive.mockResolvedValue(undefined);
     mockDisconnectOneDrive.mockResolvedValue(undefined);
+    mockRunExportPipeline.mockResolvedValue({
+      localFileUri: "file:///exports/test.txt",
+      localFileName: "test.txt",
+      uploadStatus: "skipped",
+      uploadedFileName: null,
+      uploadError: null,
+    });
   });
 
   it("shows fallback back button on Backup & Sync when route has no history", async () => {
@@ -197,6 +206,64 @@ describe("Settings subroutes fallback navigation", () => {
       expect(
         screen.getByText("Unable to connect to OneDrive. Please try again.")
       ).toBeTruthy();
+    });
+  });
+
+  it("shows connected status when OneDrive is already connected", async () => {
+    mockOneDriveConfigured = true;
+    mockIsConnected.mockResolvedValue(true);
+    mockGetSelectedOneDriveFolder.mockResolvedValue({
+      id: "folder-1",
+      path: "/Documents/SteuerFuchs",
+    });
+
+    render(<SettingsBackupSyncRoute />);
+
+    expect(await screen.findByText("Backup & Sync")).toBeTruthy();
+    expect(screen.getByText("Status: Connected")).toBeTruthy();
+    expect(screen.getByText("Selected folder: /Documents/SteuerFuchs")).toBeTruthy();
+    expect(screen.queryByTestId("settings-onedrive-connect")).toBeNull();
+  });
+
+  it("keeps local export successful when OneDrive upload fails", async () => {
+    mockOneDriveConfigured = true;
+    mockIsConnected.mockResolvedValue(true);
+    mockGetSelectedOneDriveFolder.mockResolvedValue({
+      id: "folder-1",
+      path: "/Documents/SteuerFuchs",
+    });
+    mockGetSettings.mockResolvedValue({
+      taxYearDefault: 2026,
+      marginalRateBps: 4000,
+      defaultWorkPercent: 100,
+      gwgThresholdCents: 100000,
+      applyHalfYearRule: false,
+      appLockEnabled: false,
+      uploadToOneDriveAfterExport: true,
+      themeModePreference: "system",
+      currency: "EUR",
+    });
+    mockRunExportPipeline.mockResolvedValue({
+      localFileUri: "file:///exports/export-failed-upload.txt",
+      localFileName: "export-failed-upload.txt",
+      uploadStatus: "failed",
+      uploadedFileName: null,
+      uploadError: "OneDrive upload failed, but your local export was created successfully.",
+    });
+
+    render(<SettingsBackupSyncRoute />);
+    expect(await screen.findByText("Backup & Sync")).toBeTruthy();
+
+    fireEvent.press(screen.getByText("Run test export pipeline"));
+
+    await waitFor(() => {
+      expect(mockRunExportPipeline).toHaveBeenCalledWith(
+        expect.objectContaining({
+          uploadToOneDrive: true,
+        })
+      );
+      expect(screen.getByText("OneDrive upload failed, but your local export was created successfully.")).toBeTruthy();
+      expect(screen.getByText("Local file: export-failed-upload.txt | Upload failed (local export still saved)")).toBeTruthy();
     });
   });
 

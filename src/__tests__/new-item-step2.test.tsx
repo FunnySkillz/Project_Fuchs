@@ -124,6 +124,13 @@ jest.mock("@/services/item-draft-store", () => ({
   removeAttachmentFromDraft: jest.fn(),
 }));
 
+async function openAttachmentActions(): Promise<void> {
+  fireEvent.press(screen.getByTestId("additem-btn-addreceipt"));
+  await waitFor(() => {
+    expect(screen.getByTestId("additem-btn-takephoto")).toBeTruthy();
+  });
+}
+
 describe("NewItemRoute save and validation", () => {
   beforeEach(() => {
     mockRouterReplace.mockReset();
@@ -183,6 +190,7 @@ describe("NewItemRoute save and validation", () => {
     render(<NewItemRoute />);
     expect(await screen.findByText("Attachments")).toBeTruthy();
 
+    await openAttachmentActions();
     fireEvent.press(screen.getByTestId("additem-btn-takephoto"));
 
     await waitFor(() => {
