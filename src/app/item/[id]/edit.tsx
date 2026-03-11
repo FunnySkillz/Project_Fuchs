@@ -58,6 +58,7 @@ import {
 } from "@/services/friendly-errors";
 import { useTheme } from "@/hooks/use-theme";
 import { validateItemInput } from "@/domain/item-validation";
+import { resolveWorkPercent } from "@/domain/work-percent";
 import { addMonthsToYmd, formatYmdFromDateLocal, parseYmd } from "@/utils/date";
 import { parseEuroInputToCents } from "@/utils/money";
 
@@ -211,18 +212,10 @@ export default function ItemEditRoute() {
     const parsed = Number.parseInt(trimmed, 10);
     return Number.isFinite(parsed) ? parsed : null;
   }, [workPercent]);
-  const resolvedWorkUsagePercent = useMemo(() => {
-    if (usageType === "WORK") {
-      return 100;
-    }
-    if (usageType === "PRIVATE" || usageType === "OTHER") {
-      return 0;
-    }
-    if (parsedWorkPercent === null) {
-      return null;
-    }
-    return Math.max(0, Math.min(100, parsedWorkPercent));
-  }, [parsedWorkPercent, usageType]);
+  const resolvedWorkUsagePercent = useMemo(
+    () => resolveWorkPercent(usageType, parsedWorkPercent),
+    [parsedWorkPercent, usageType]
+  );
   const parsedWarrantyMonths = useMemo(() => {
     const trimmed = warrantyMonths.trim();
     if (trimmed.length === 0) {
@@ -1178,8 +1171,7 @@ export default function ItemEditRoute() {
                   ))}
                 </HStack>
                 <Text size="xs" color="$textLight500" testID="edititem-usage-workshare">
-                  Work usage applied:{" "}
-                  {resolvedWorkUsagePercent === null ? "not set" : `${resolvedWorkUsagePercent}%`}
+                  Work usage applied: {resolvedWorkUsagePercent}%
                 </Text>
               </VStack>
 

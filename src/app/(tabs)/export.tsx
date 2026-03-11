@@ -894,7 +894,7 @@ export default function ExportRoute() {
                 </Box>
                 {!hasSelectedItems && (
                   <Text size="sm" color="$text500" testID="export-no-items-hint">
-                    Select at least one item in the "Select items" section to generate an export.
+                    Select at least one item in the Select items section to generate an export.
                   </Text>
                 )}
 

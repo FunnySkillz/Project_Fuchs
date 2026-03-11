@@ -31,6 +31,7 @@ import {
 } from "@gluestack-ui/themed";
 
 import { estimateTaxImpact } from "@/domain/calculation-engine";
+import { resolveWorkPercent } from "@/domain/work-percent";
 import { useTheme } from "@/hooks/use-theme";
 import type { Attachment } from "@/models/attachment";
 import type { Category } from "@/models/category";
@@ -78,18 +79,14 @@ function resolveUsefulLifeMonths(item: Item, categoryMap: Map<string, Category>)
   return 36;
 }
 
-function resolveWorkShare(item: Item, defaultWorkPercent: number): number {
-  if (item.usageType === "WORK") {
-    return 1;
+function resolveCalculationWorkPercent(item: Item, defaultWorkPercent: number): number {
+  if (
+    item.usageType === "MIXED" &&
+    (item.workPercent === null || item.workPercent === undefined || !Number.isFinite(item.workPercent))
+  ) {
+    return Math.max(0, Math.min(100, defaultWorkPercent));
   }
-  if (item.usageType === "PRIVATE") {
-    return 0;
-  }
-  if (item.usageType === "MIXED") {
-    const percent = item.workPercent ?? defaultWorkPercent;
-    return Math.max(0, Math.min(100, percent)) / 100;
-  }
-  return 0;
+  return resolveWorkPercent(item.usageType, item.workPercent);
 }
 
 interface InfoRowProps {
@@ -235,14 +232,15 @@ export default function ItemDetailRoute() {
   const selectedAttachmentMissing = selectedAttachment
     ? missingAttachmentIds.has(selectedAttachment.id)
     : false;
+  const infoWorkPercent = item ? resolveWorkPercent(item.usageType, item.workPercent) : 0;
 
   const calculationBreakdown = useMemo(() => {
     if (!item || !settings) {
       return null;
     }
 
-    const workShare = resolveWorkShare(item, settings.defaultWorkPercent);
-    const workRelevantCents = Math.round(item.totalCents * workShare);
+    const effectiveWorkPercent = resolveCalculationWorkPercent(item, settings.defaultWorkPercent);
+    const workRelevantCents = Math.round((item.totalCents * effectiveWorkPercent) / 100);
     const usefulLifeMonths = resolveUsefulLifeMonths(item, categoryMap);
     const estimate = estimateTaxImpact(
       {
@@ -434,6 +432,7 @@ export default function ItemDetailRoute() {
                 <InfoRow label="Category" value={categoryName} />
                 <InfoRow label="Purchase date" value={item.purchaseDate} />
                 <InfoRow label="Vendor" value={item.vendor?.trim() ? item.vendor : "-"} />
+                <InfoRow label="% Work" value={`${infoWorkPercent}%`} />
                 <InfoRow label="Warranty until" value={warrantyUntilDate ?? "n/a"} />
               </GVStack>
             </GCard>

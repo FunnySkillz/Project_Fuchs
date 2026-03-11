@@ -16,6 +16,23 @@ const mockAttachmentFileExists = jest.fn();
 const mockResolveAttachmentPreviewUri = jest.fn();
 const mockDeleteAttachment = jest.fn();
 const mockNavigationSetOptions = jest.fn();
+const baseItem = {
+  id: "item-1",
+  title: "Work laptop",
+  purchaseDate: "2026-02-10",
+  totalCents: 200_000,
+  currency: "EUR",
+  usageType: "WORK" as const,
+  workPercent: null as number | null,
+  categoryId: "cat-1",
+  vendor: "ACME",
+  warrantyMonths: 24,
+  notes: "Invoice kept",
+  usefulLifeMonthsOverride: null,
+  createdAt: "2026-02-11T09:00:00.000Z",
+  updatedAt: "2026-02-11T09:00:00.000Z",
+  deletedAt: null,
+};
 
 jest.mock("@gluestack-ui/themed", () => {
   const {
@@ -142,23 +159,7 @@ describe("ItemDetailRoute", () => {
     mockResolveAttachmentPreviewUri.mockReset();
     mockDeleteAttachment.mockReset();
 
-    mockGetById.mockResolvedValue({
-      id: "item-1",
-      title: "Work laptop",
-      purchaseDate: "2026-02-10",
-      totalCents: 200_000,
-      currency: "EUR",
-      usageType: "WORK",
-      workPercent: null,
-      categoryId: "cat-1",
-      vendor: "ACME",
-      warrantyMonths: 24,
-      notes: "Invoice kept",
-      usefulLifeMonthsOverride: null,
-      createdAt: "2026-02-11T09:00:00.000Z",
-      updatedAt: "2026-02-11T09:00:00.000Z",
-      deletedAt: null,
-    });
+    mockGetById.mockResolvedValue({ ...baseItem });
     mockListAttachments.mockResolvedValue([
       {
         id: "att-missing",
@@ -232,6 +233,8 @@ describe("ItemDetailRoute", () => {
     expect(screen.getByText("WORK")).toBeTruthy();
     expect(screen.getByText("Attachment gallery")).toBeTruthy();
     expect(screen.getByText("Info")).toBeTruthy();
+    expect(screen.getByText("% Work")).toBeTruthy();
+    expect(screen.getByText("100%")).toBeTruthy();
     expect(screen.getByText("Calculation")).toBeTruthy();
     expect(screen.getByText("File unavailable")).toBeTruthy();
     expect(screen.getAllByText("Missing file").length).toBeGreaterThan(0);
@@ -264,6 +267,34 @@ describe("ItemDetailRoute", () => {
     headerRight?.props.onPress?.();
 
     expect(mockPush).toHaveBeenCalledWith("/item/item-1/edit");
+  });
+
+  it("renders % Work as 0% for PRIVATE usage", async () => {
+    mockGetById.mockResolvedValueOnce({
+      ...baseItem,
+      usageType: "PRIVATE",
+      workPercent: null,
+    });
+
+    render(<ItemDetailRoute />);
+
+    expect((await screen.findAllByText("Work laptop")).length).toBeGreaterThan(0);
+    expect(screen.getByText("% Work")).toBeTruthy();
+    expect(screen.getByText("0%")).toBeTruthy();
+  });
+
+  it("renders % Work from selected percent for MIXED usage", async () => {
+    mockGetById.mockResolvedValueOnce({
+      ...baseItem,
+      usageType: "MIXED",
+      workPercent: 70,
+    });
+
+    render(<ItemDetailRoute />);
+
+    expect((await screen.findAllByText("Work laptop")).length).toBeGreaterThan(0);
+    expect(screen.getByText("% Work")).toBeTruthy();
+    expect(screen.getByText("70%")).toBeTruthy();
   });
 
   it("deletes item after confirmation dialog", async () => {
