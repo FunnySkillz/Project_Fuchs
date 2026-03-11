@@ -56,17 +56,23 @@ jest.mock("@/services/app-events", () => ({
   emitProfileSettingsSaved: jest.fn(),
 }));
 
-describe("SettingsTaxCalculationRoute validation UX", () => {
+describe("SettingsTaxCalculationRoute", () => {
   beforeEach(() => {
     mockUpsertSettings.mockReset();
     mockGetSettings.mockReset();
 
     mockGetSettings.mockResolvedValue({
       taxYearDefault: 2026,
-      marginalRateBps: 4000,
+      marginalRateBps: 4_000,
+      monthlyGrossIncomeCents: 300_000,
+      salaryPaymentsPerYear: 14,
+      useManualMarginalTaxRate: false,
+      manualMarginalRateBps: 4_000,
       defaultWorkPercent: 100,
-      gwgThresholdCents: 100000,
+      gwgThresholdCents: 100_000,
       applyHalfYearRule: false,
+      werbungskostenPauschaleEnabled: true,
+      werbungskostenPauschaleAmountCents: 13_200,
       appLockEnabled: false,
       uploadToOneDriveAfterExport: false,
       themeModePreference: "system",
@@ -74,29 +80,75 @@ describe("SettingsTaxCalculationRoute validation UX", () => {
     });
   });
 
-  it("shows inline error on submit attempt and re-enables submit after fixing field", async () => {
+  it("computes auto marginal tax rate from monthly gross and salary payments", async () => {
     render(<SettingsTaxCalculationRoute />);
-    expect(await screen.findByText("Tax & Calculation")).toBeTruthy();
 
-    fireEvent.changeText(screen.getByTestId("settings-marginal-rate-input"), "");
-    fireEvent.press(screen.getByTestId("settings-tax-save"));
+    expect(await screen.findByText("Tax profile")).toBeTruthy();
+    expect(screen.getByTestId("settings-auto-marginal-rate")).toBeTruthy();
+    expect(screen.getByText("40%")).toBeTruthy();
 
+    fireEvent.changeText(screen.getByTestId("settings-monthly-gross-input"), "2000");
     await waitFor(() => {
-      expect(screen.getByTestId("settings-tax-error-marginalRatePercent")).toBeTruthy();
-      expect(screen.getByTestId("settings-tax-save").props.accessibilityState?.disabled).toBe(true);
-    });
-    expect(mockUpsertSettings).not.toHaveBeenCalled();
-
-    fireEvent.changeText(screen.getByTestId("settings-marginal-rate-input"), "40");
-    await waitFor(() => {
-      expect(screen.queryByTestId("settings-tax-error-marginalRatePercent")).toBeNull();
-      expect(screen.getByTestId("settings-tax-save").props.accessibilityState?.disabled).not.toBe(true);
+      expect(screen.getByText("30%")).toBeTruthy();
     });
 
+    fireEvent.press(screen.getByTestId("settings-salary-payments-12"));
+    await waitFor(() => {
+      expect(screen.getByText("30%")).toBeTruthy();
+    });
+  });
+
+  it("shows and hides manual marginal rate input with override toggle", async () => {
+    render(<SettingsTaxCalculationRoute />);
+    expect(await screen.findByText("Tax profile")).toBeTruthy();
+
+    expect(screen.queryByTestId("settings-marginal-rate-input")).toBeNull();
+
+    fireEvent(screen.getByTestId("settings-manual-rate-toggle"), "valueChange", true);
+    expect(await screen.findByTestId("settings-marginal-rate-input")).toBeTruthy();
+
+    fireEvent(screen.getByTestId("settings-manual-rate-toggle"), "valueChange", false);
+    await waitFor(() => {
+      expect(screen.queryByTestId("settings-marginal-rate-input")).toBeNull();
+    });
+  });
+
+  it("demotes default work percent to advanced defaults with clear label", async () => {
+    render(<SettingsTaxCalculationRoute />);
+    expect(await screen.findByText("Advanced defaults")).toBeTruthy();
+
+    expect(screen.queryByText("Default work percent (%)")).toBeNull();
+    expect(screen.queryByText("Default work percent for new items only")).toBeNull();
+
+    fireEvent.press(screen.getByTestId("settings-tax-advanced-toggle"));
+    expect(await screen.findByText("Default work percent for new items only")).toBeTruthy();
+  });
+
+  it("renders disclaimer card", async () => {
+    render(<SettingsTaxCalculationRoute />);
+    expect(await screen.findByTestId("settings-tax-disclaimer-card")).toBeTruthy();
+    expect(screen.getByText("This result is an estimate and not a binding Finanzamt assessment.")).toBeTruthy();
+  });
+
+  it("saves effective auto marginal rate when manual override is disabled", async () => {
+    render(<SettingsTaxCalculationRoute />);
+    expect(await screen.findByText("Tax profile")).toBeTruthy();
+
+    fireEvent.changeText(screen.getByTestId("settings-monthly-gross-input"), "3000");
+    fireEvent.press(screen.getByTestId("settings-salary-payments-14"));
     fireEvent.press(screen.getByTestId("settings-tax-save"));
 
     await waitFor(() => {
       expect(mockUpsertSettings).toHaveBeenCalledTimes(1);
+      expect(mockUpsertSettings).toHaveBeenCalledWith(
+        expect.objectContaining({
+          monthlyGrossIncomeCents: 300_000,
+          salaryPaymentsPerYear: 14,
+          useManualMarginalTaxRate: false,
+          marginalRateBps: 4_000,
+          werbungskostenPauschaleEnabled: true,
+        })
+      );
     });
   });
 });

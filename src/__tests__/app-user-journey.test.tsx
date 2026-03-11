@@ -274,9 +274,15 @@ jest.mock("@/domain/calculation-engine", () => ({
 let mockProfileSettingsStore: ProfileSettings = {
   taxYearDefault: 2026,
   marginalRateBps: 4_000,
+  monthlyGrossIncomeCents: 0,
+  salaryPaymentsPerYear: 14,
+  useManualMarginalTaxRate: false,
+  manualMarginalRateBps: 4_000,
   defaultWorkPercent: 100,
   gwgThresholdCents: 100_000,
   applyHalfYearRule: false,
+  werbungskostenPauschaleEnabled: true,
+  werbungskostenPauschaleAmountCents: 13_200,
   appLockEnabled: false,
   uploadToOneDriveAfterExport: false,
   themeModePreference: "system",
@@ -330,16 +336,7 @@ function mockNotesMissing(item: Item): boolean {
 jest.mock("@/repositories/create-profile-settings-repository", () => ({
   getProfileSettingsRepository: async () => ({
     getSettings: async () => mockProfileSettingsStore,
-    upsertSettings: async (values: {
-      taxYearDefault: number;
-      marginalRateBps: number;
-      defaultWorkPercent: number;
-      gwgThresholdCents: number;
-      applyHalfYearRule: boolean;
-      appLockEnabled: boolean;
-      uploadToOneDriveAfterExport: boolean;
-      themeModePreference?: "system" | "light" | "dark";
-    }) => {
+    upsertSettings: async (values: Partial<ProfileSettings>) => {
       mockProfileSettingsStore = {
         ...mockProfileSettingsStore,
         ...values,
@@ -654,9 +651,15 @@ describe("App first-user UI journey", () => {
     mockProfileSettingsStore = {
       taxYearDefault: 2026,
       marginalRateBps: 4_000,
+      monthlyGrossIncomeCents: 0,
+      salaryPaymentsPerYear: 14,
+      useManualMarginalTaxRate: false,
+      manualMarginalRateBps: 4_000,
       defaultWorkPercent: 100,
       gwgThresholdCents: 100_000,
       applyHalfYearRule: false,
+      werbungskostenPauschaleEnabled: true,
+      werbungskostenPauschaleAmountCents: 13_200,
       appLockEnabled: false,
       uploadToOneDriveAfterExport: false,
       themeModePreference: "system",

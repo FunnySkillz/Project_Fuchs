@@ -3,6 +3,7 @@ import { MIGRATION_0002_APP_LOCK_COLUMN } from "@/db/migrations/0002-app-lock";
 import { MIGRATION_0003_UPLOAD_TOGGLE_COLUMN } from "@/db/migrations/0003-upload-toggle";
 import { MIGRATION_0004_CATEGORY_PRESETS } from "@/db/migrations/0004-category-presets";
 import { applyMigration0005ThemeModePreference } from "@/db/migrations/0005-theme-mode-preference";
+import { applyMigration0006TaxProfileFields } from "@/db/migrations/0006-tax-profile-fields";
 import type { DbMigration } from "@/db/migrations/types";
 
 export const DB_MIGRATIONS: DbMigration[] = [
@@ -39,6 +40,13 @@ export const DB_MIGRATIONS: DbMigration[] = [
     name: "profile-settings-theme-mode-preference",
     up: async (db) => {
       await applyMigration0005ThemeModePreference(db);
+    },
+  },
+  {
+    version: 6,
+    name: "profile-settings-tax-profile-fields",
+    up: async (db) => {
+      await applyMigration0006TaxProfileFields(db);
     },
   },
 ];

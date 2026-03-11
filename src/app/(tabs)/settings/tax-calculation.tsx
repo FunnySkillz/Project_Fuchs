@@ -17,73 +17,62 @@ import {
   VStack,
 } from "@gluestack-ui/themed";
 
-import { estimateTaxImpact } from "@/domain/calculation-engine";
+import { estimateAustrianMarginalRateBpsFromAnnualGrossCents } from "@/domain/austrian-marginal-rate";
 import {
-  type ProfileSettingsFormInput,
-  type ProfileSettingsUpsertValues,
-  validateProfileSettingsFormInput,
-} from "@/domain/profile-settings-validation";
-import { createDefaultProfileSettings, type ProfileSettings } from "@/models/profile-settings";
+  buildTaxCalculationPreview,
+  type TaxCalculationSettingsFormInput,
+  validateTaxCalculationSettingsFormInput,
+} from "@/domain/tax-calculation-settings";
+import { bpsToPercent, type ProfileSettings } from "@/models/profile-settings";
 import { getProfileSettingsRepository } from "@/repositories/create-profile-settings-repository";
 import { emitProfileSettingsSaved } from "@/services/app-events";
 import { formatCents } from "@/utils/money";
 
-type TaxDefaultsFormState = ProfileSettingsFormInput;
 type FieldKey =
   | "taxYearDefault"
-  | "marginalRatePercent"
-  | "defaultWorkPercent"
-  | "gwgThresholdEuros";
+  | "monthlyGrossIncomeEuros"
+  | "manualMarginalRatePercent"
+  | "gwgThresholdEuros"
+  | "defaultWorkPercent";
 
 const fieldOrder: FieldKey[] = [
   "taxYearDefault",
-  "marginalRatePercent",
-  "defaultWorkPercent",
+  "monthlyGrossIncomeEuros",
+  "manualMarginalRatePercent",
   "gwgThresholdEuros",
+  "defaultWorkPercent",
 ];
 
 type FocusTarget = {
   focus?: () => void;
 };
 
-function createFormState(settings: ProfileSettings): TaxDefaultsFormState {
+function formatPercent(value: number): string {
+  const rounded = Math.round(value * 100) / 100;
+  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(2);
+}
+
+function parseNumberish(value: string): number | null {
+  const trimmed = value.trim().replace(",", ".");
+  if (!trimmed) {
+    return null;
+  }
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function createFormState(settings: ProfileSettings): TaxCalculationSettingsFormInput {
   return {
     taxYearDefault: String(settings.taxYearDefault),
-    marginalRatePercent: String(settings.marginalRateBps / 100),
+    monthlyGrossIncomeEuros: (settings.monthlyGrossIncomeCents / 100).toFixed(2),
+    salaryPaymentsPerYear: settings.salaryPaymentsPerYear,
+    useManualMarginalTaxRate: settings.useManualMarginalTaxRate,
+    manualMarginalRatePercent: formatPercent(bpsToPercent(settings.manualMarginalRateBps)),
     defaultWorkPercent: String(settings.defaultWorkPercent),
     gwgThresholdEuros: (settings.gwgThresholdCents / 100).toFixed(2),
     applyHalfYearRule: settings.applyHalfYearRule,
-    appLockEnabled: settings.appLockEnabled,
-    uploadToOneDriveAfterExport: settings.uploadToOneDriveAfterExport,
-  };
-}
-
-function calculatePreview(values: ProfileSettingsUpsertValues) {
-  const sampleItemCents = 150_000;
-  const estimate = estimateTaxImpact(
-    {
-      totalCents: sampleItemCents,
-      usageType: "MIXED",
-      workPercent: values.defaultWorkPercent,
-      purchaseDate: `${values.taxYearDefault}-07-15`,
-      usefulLifeMonths: 36,
-    },
-    {
-      gwgThresholdCents: values.gwgThresholdCents,
-      applyHalfYearRule: values.applyHalfYearRule,
-      marginalRateBps: values.marginalRateBps,
-      defaultWorkPercent: values.defaultWorkPercent,
-    },
-    values.taxYearDefault
-  );
-  const workRelevantCents = Math.round((sampleItemCents * values.defaultWorkPercent) / 100);
-
-  return {
-    sampleItemCents,
-    workRelevantCents,
-    deductibleThisYearCents: estimate.deductibleThisYearCents,
-    estimatedRefundCents: estimate.estimatedRefundThisYearCents,
-    immediate: estimate.scheduleByYear.length === 1,
+    werbungskostenPauschaleEnabled: settings.werbungskostenPauschaleEnabled,
+    werbungskostenPauschaleAmountCents: settings.werbungskostenPauschaleAmountCents,
   };
 }
 
@@ -94,9 +83,11 @@ export default function SettingsTaxCalculationRoute() {
     typeof (router as { canGoBack?: () => boolean }).canGoBack === "function"
       ? (router as { canGoBack: () => boolean }).canGoBack()
       : false;
-  const [formState, setFormState] = useState<TaxDefaultsFormState | null>(null);
+
+  const [formState, setFormState] = useState<TaxCalculationSettingsFormInput | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isAdvancedDefaultsOpen, setIsAdvancedDefaultsOpen] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
@@ -118,7 +109,6 @@ export default function SettingsTaxCalculationRoute() {
       setTouchedFields({});
     } catch (error) {
       console.error("Failed to load tax settings", error);
-      setFormState(createFormState(createDefaultProfileSettings()));
       setLoadError("Could not load tax settings.");
     } finally {
       setIsLoading(false);
@@ -136,16 +126,28 @@ export default function SettingsTaxCalculationRoute() {
         fieldErrors: { formState: "Settings are still loading." } as Record<string, string>,
       } as const;
     }
-
-    return validateProfileSettingsFormInput(formState);
+    return validateTaxCalculationSettingsFormInput(formState);
   }, [formState]);
 
   const preview = useMemo(() => {
     if (!validation.valid) {
       return null;
     }
-    return calculatePreview(validation.values);
+    return buildTaxCalculationPreview(validation.values);
   }, [validation]);
+
+  const marginalRateEstimate = useMemo(() => {
+    if (!formState) {
+      return null;
+    }
+    const taxYear = parseNumberish(formState.taxYearDefault);
+    const monthlyGrossIncomeEuros = parseNumberish(formState.monthlyGrossIncomeEuros);
+    if (taxYear === null || monthlyGrossIncomeEuros === null || monthlyGrossIncomeEuros < 0) {
+      return null;
+    }
+    const annualGrossCents = Math.round(monthlyGrossIncomeEuros * 100) * formState.salaryPaymentsPerYear;
+    return estimateAustrianMarginalRateBpsFromAnnualGrossCents(annualGrossCents, Math.round(taxYear));
+  }, [formState]);
 
   const shouldShowFieldError = useCallback(
     (field: FieldKey) => Boolean((submitAttempted || touchedFields[field]) && validation.fieldErrors[field]),
@@ -181,13 +183,16 @@ export default function SettingsTaxCalculationRoute() {
     if (!firstInvalid) {
       return;
     }
+    if (firstInvalid === "defaultWorkPercent") {
+      setIsAdvancedDefaultsOpen(true);
+    }
     scrollToField(firstInvalid);
     focusField(firstInvalid);
   }, [focusField, scrollToField, validation.fieldErrors]);
 
-  const updateFormField = <K extends keyof TaxDefaultsFormState>(
+  const updateFormField = <K extends keyof TaxCalculationSettingsFormInput>(
     key: K,
-    value: TaxDefaultsFormState[K]
+    value: TaxCalculationSettingsFormInput[K]
   ) => {
     setFormState((current) => (current ? { ...current, [key]: value } : current));
     setSaveError(null);
@@ -200,12 +205,25 @@ export default function SettingsTaxCalculationRoute() {
       focusAndScrollFirstInvalid();
       return;
     }
+
     setIsSaving(true);
     setSaveError(null);
     setSaveSuccess(null);
     try {
       const repository = await getProfileSettingsRepository();
-      await repository.upsertSettings(validation.values);
+      await repository.upsertSettings({
+        taxYearDefault: validation.values.taxYearDefault,
+        monthlyGrossIncomeCents: validation.values.monthlyGrossIncomeCents,
+        salaryPaymentsPerYear: validation.values.salaryPaymentsPerYear,
+        useManualMarginalTaxRate: validation.values.useManualMarginalTaxRate,
+        manualMarginalRateBps: validation.values.manualMarginalRateBps,
+        marginalRateBps: validation.values.effectiveMarginalRateBps,
+        defaultWorkPercent: validation.values.defaultWorkPercent,
+        gwgThresholdCents: validation.values.gwgThresholdCents,
+        applyHalfYearRule: validation.values.applyHalfYearRule,
+        werbungskostenPauschaleEnabled: validation.values.werbungskostenPauschaleEnabled,
+        werbungskostenPauschaleAmountCents: validation.values.werbungskostenPauschaleAmountCents,
+      });
       setSaveSuccess("Tax and calculation settings saved.");
       emitProfileSettingsSaved();
     } catch (error) {
@@ -259,7 +277,9 @@ export default function SettingsTaxCalculationRoute() {
 
             <VStack space="xs">
               <Heading size="xl">Tax & Calculation</Heading>
-              <Text size="sm">Manage defaults used for deductible impact calculations.</Text>
+              <Text size="sm">
+                Set a simple Austrian tax profile and deduction defaults for estimate previews.
+              </Text>
             </VStack>
 
             {loadError && (
@@ -270,6 +290,8 @@ export default function SettingsTaxCalculationRoute() {
 
             <Card borderWidth="$1" borderColor="$border200">
               <VStack space="md">
+                <Heading size="md">Tax profile</Heading>
+
                 <VStack
                   space="xs"
                   onLayout={(event) => {
@@ -308,70 +330,139 @@ export default function SettingsTaxCalculationRoute() {
                 <VStack
                   space="xs"
                   onLayout={(event) => {
-                    fieldYRef.current.marginalRatePercent = event.nativeEvent.layout.y;
+                    fieldYRef.current.monthlyGrossIncomeEuros = event.nativeEvent.layout.y;
                   }}
-                  testID="settings-tax-input-marginalRatePercent"
+                  testID="settings-tax-input-monthlyGrossIncomeEuros"
                 >
-                  <Text bold size="sm">Marginal tax rate (%)</Text>
+                  <Text bold size="sm">Monthly gross income (EUR)</Text>
                   <Input
                     variant="outline"
-                    borderColor={shouldShowFieldError("marginalRatePercent") ? "$error600" : "$border200"}
+                    borderColor={
+                      shouldShowFieldError("monthlyGrossIncomeEuros") ? "$error600" : "$border200"
+                    }
                   >
                     <InputField
                       ref={(node) => {
-                        inputRef.current.marginalRatePercent = node as FocusTarget | null;
+                        inputRef.current.monthlyGrossIncomeEuros = node as FocusTarget | null;
                       }}
-                      value={formState.marginalRatePercent}
-                      onChangeText={(value) => updateFormField("marginalRatePercent", value)}
-                      onBlur={() => setFieldTouched("marginalRatePercent")}
+                      value={formState.monthlyGrossIncomeEuros}
+                      onChangeText={(value) => updateFormField("monthlyGrossIncomeEuros", value)}
+                      onBlur={() => setFieldTouched("monthlyGrossIncomeEuros")}
                       keyboardType="decimal-pad"
-                      placeholder="40"
-                      testID="settings-marginal-rate-input"
+                      placeholder="3000.00"
+                      testID="settings-monthly-gross-input"
                       accessibilityState={
-                        ({ invalid: shouldShowFieldError("marginalRatePercent") } as any)
+                        ({ invalid: shouldShowFieldError("monthlyGrossIncomeEuros") } as any)
                       }
                     />
                   </Input>
-                  {shouldShowFieldError("marginalRatePercent") && (
-                    <Text size="xs" color="$error600" testID="settings-tax-error-marginalRatePercent">
-                      {validation.fieldErrors.marginalRatePercent}
+                  {shouldShowFieldError("monthlyGrossIncomeEuros") && (
+                    <Text size="xs" color="$error600" testID="settings-tax-error-monthlyGrossIncomeEuros">
+                      {validation.fieldErrors.monthlyGrossIncomeEuros}
                     </Text>
                   )}
                 </VStack>
 
-                <VStack
-                  space="xs"
-                  onLayout={(event) => {
-                    fieldYRef.current.defaultWorkPercent = event.nativeEvent.layout.y;
-                  }}
-                  testID="settings-tax-input-defaultWorkPercent"
-                >
-                  <Text bold size="sm">Default work percent (%)</Text>
-                  <Input
-                    variant="outline"
-                    borderColor={shouldShowFieldError("defaultWorkPercent") ? "$error600" : "$border200"}
-                  >
-                    <InputField
-                      ref={(node) => {
-                        inputRef.current.defaultWorkPercent = node as FocusTarget | null;
-                      }}
-                      value={formState.defaultWorkPercent}
-                      onChangeText={(value) => updateFormField("defaultWorkPercent", value)}
-                      onBlur={() => setFieldTouched("defaultWorkPercent")}
-                      keyboardType="number-pad"
-                      placeholder="100"
-                      testID="settings-default-work-percent-input"
-                      accessibilityState={
-                        ({ invalid: shouldShowFieldError("defaultWorkPercent") } as any)
-                      }
-                    />
-                  </Input>
-                  {shouldShowFieldError("defaultWorkPercent") && (
-                    <Text size="xs" color="$error600" testID="settings-tax-error-defaultWorkPercent">
-                      {validation.fieldErrors.defaultWorkPercent}
+                <VStack space="xs">
+                  <Text bold size="sm">Salary payments per year</Text>
+                  <HStack space="sm">
+                    <Button
+                      size="sm"
+                      variant={formState.salaryPaymentsPerYear === 12 ? "solid" : "outline"}
+                      action={formState.salaryPaymentsPerYear === 12 ? "primary" : "secondary"}
+                      onPress={() => updateFormField("salaryPaymentsPerYear", 12)}
+                      testID="settings-salary-payments-12"
+                    >
+                      <ButtonText>12</ButtonText>
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant={formState.salaryPaymentsPerYear === 14 ? "solid" : "outline"}
+                      action={formState.salaryPaymentsPerYear === 14 ? "primary" : "secondary"}
+                      onPress={() => updateFormField("salaryPaymentsPerYear", 14)}
+                      testID="settings-salary-payments-14"
+                    >
+                      <ButtonText>14</ButtonText>
+                    </Button>
+                  </HStack>
+                </VStack>
+
+                <VStack space="xs">
+                  <Text bold size="sm">Auto-calculated marginal tax rate (%)</Text>
+                  <Text size="sm" testID="settings-auto-marginal-rate">
+                    {marginalRateEstimate
+                      ? `${formatPercent(bpsToPercent(marginalRateEstimate.marginalRateBps))}%`
+                      : "n/a"}
+                  </Text>
+                  {marginalRateEstimate && (
+                    <Text size="sm">
+                      Estimated annual gross: {formatCents(marginalRateEstimate.annualGrossCents)}
                     </Text>
                   )}
+                  <Text size="xs" color="$text500">
+                    Estimate only. Uses Austrian bracket table for {marginalRateEstimate?.usedTaxYear ?? "selected year"}.
+                  </Text>
                 </VStack>
+
+                <HStack justifyContent="space-between" alignItems="center">
+                  <VStack space="xs" flex={1}>
+                    <Text size="sm">Manual override marginal tax rate</Text>
+                    <Text size="xs" color="$text500">
+                      If enabled, manual value is used instead of auto estimate.
+                    </Text>
+                  </VStack>
+                  <Switch
+                    value={formState.useManualMarginalTaxRate}
+                    onValueChange={(value) => updateFormField("useManualMarginalTaxRate", value)}
+                    testID="settings-manual-rate-toggle"
+                  />
+                </HStack>
+
+                {formState.useManualMarginalTaxRate && (
+                  <VStack
+                    space="xs"
+                    onLayout={(event) => {
+                      fieldYRef.current.manualMarginalRatePercent = event.nativeEvent.layout.y;
+                    }}
+                    testID="settings-tax-input-manualMarginalRatePercent"
+                  >
+                    <Text bold size="sm">Marginal tax rate (%)</Text>
+                    <Input
+                      variant="outline"
+                      borderColor={
+                        shouldShowFieldError("manualMarginalRatePercent")
+                          ? "$error600"
+                          : "$border200"
+                      }
+                    >
+                      <InputField
+                        ref={(node) => {
+                          inputRef.current.manualMarginalRatePercent = node as FocusTarget | null;
+                        }}
+                        value={formState.manualMarginalRatePercent}
+                        onChangeText={(value) => updateFormField("manualMarginalRatePercent", value)}
+                        onBlur={() => setFieldTouched("manualMarginalRatePercent")}
+                        keyboardType="decimal-pad"
+                        placeholder="40"
+                        testID="settings-marginal-rate-input"
+                        accessibilityState={
+                          ({ invalid: shouldShowFieldError("manualMarginalRatePercent") } as any)
+                        }
+                      />
+                    </Input>
+                    {shouldShowFieldError("manualMarginalRatePercent") && (
+                      <Text size="xs" color="$error600" testID="settings-tax-error-manualMarginalRatePercent">
+                        {validation.fieldErrors.manualMarginalRatePercent}
+                      </Text>
+                    )}
+                  </VStack>
+                )}
+              </VStack>
+            </Card>
+
+            <Card borderWidth="$1" borderColor="$border200">
+              <VStack space="md">
+                <Heading size="md">Deduction rules</Heading>
 
                 <VStack
                   space="xs"
@@ -412,21 +503,80 @@ export default function SettingsTaxCalculationRoute() {
                   <Switch
                     value={formState.applyHalfYearRule}
                     onValueChange={(value) => updateFormField("applyHalfYearRule", value)}
+                    testID="settings-half-year-rule-toggle"
                   />
                 </HStack>
 
-                {saveError && <Text size="sm" color="$error600">{saveError}</Text>}
-                {saveSuccess && <Text size="sm" color="$success600">{saveSuccess}</Text>}
+                <HStack justifyContent="space-between" alignItems="center">
+                  <Text size="sm">Werbungskostenpauschale enabled</Text>
+                  <Switch
+                    value={formState.werbungskostenPauschaleEnabled}
+                    onValueChange={(value) => updateFormField("werbungskostenPauschaleEnabled", value)}
+                    testID="settings-werbungskosten-enabled"
+                  />
+                </HStack>
 
-                <Box testID="settings-tax-btn-submit">
+                {formState.werbungskostenPauschaleEnabled && (
+                  <Text size="xs" color="$text500" testID="settings-tax-werbung-info">
+                    Informational baseline only for now:{" "}
+                    {formatCents(formState.werbungskostenPauschaleAmountCents)}. Refund logic is unchanged in this MVP step.
+                  </Text>
+                )}
+              </VStack>
+            </Card>
+
+            <Card borderWidth="$1" borderColor="$border200">
+              <VStack space="md">
+                <HStack justifyContent="space-between" alignItems="center">
+                  <Heading size="md">Advanced defaults</Heading>
                   <Button
-                    onPress={() => void handleSave()}
-                    disabled={isSubmitDisabled}
-                    testID="settings-tax-save"
+                    size="sm"
+                    variant="outline"
+                    action="secondary"
+                    onPress={() => setIsAdvancedDefaultsOpen((current) => !current)}
+                    testID="settings-tax-advanced-toggle"
                   >
-                    <ButtonText>{isSaving ? "Saving..." : "Save Tax Settings"}</ButtonText>
+                    <ButtonText>{isAdvancedDefaultsOpen ? "Collapse" : "Expand"}</ButtonText>
                   </Button>
-                </Box>
+                </HStack>
+                {isAdvancedDefaultsOpen && (
+                  <VStack
+                    space="xs"
+                    onLayout={(event) => {
+                      fieldYRef.current.defaultWorkPercent = event.nativeEvent.layout.y;
+                    }}
+                    testID="settings-tax-input-defaultWorkPercent"
+                  >
+                    <Text bold size="sm">Default work percent for new items only</Text>
+                    <Input
+                      variant="outline"
+                      borderColor={shouldShowFieldError("defaultWorkPercent") ? "$error600" : "$border200"}
+                    >
+                      <InputField
+                        ref={(node) => {
+                          inputRef.current.defaultWorkPercent = node as FocusTarget | null;
+                        }}
+                        value={formState.defaultWorkPercent}
+                        onChangeText={(value) => updateFormField("defaultWorkPercent", value)}
+                        onBlur={() => setFieldTouched("defaultWorkPercent")}
+                        keyboardType="number-pad"
+                        placeholder="100"
+                        testID="settings-default-work-percent-input"
+                        accessibilityState={
+                          ({ invalid: shouldShowFieldError("defaultWorkPercent") } as any)
+                        }
+                      />
+                    </Input>
+                    {shouldShowFieldError("defaultWorkPercent") && (
+                      <Text size="xs" color="$error600" testID="settings-tax-error-defaultWorkPercent">
+                        {validation.fieldErrors.defaultWorkPercent}
+                      </Text>
+                    )}
+                    <Text size="xs" color="$text500">
+                      Convenience prefill for new items. This is not a legal tax rule.
+                    </Text>
+                  </VStack>
+                )}
               </VStack>
             </Card>
 
@@ -434,16 +584,54 @@ export default function SettingsTaxCalculationRoute() {
               <Card borderWidth="$1" borderColor="$border200">
                 <VStack space="xs">
                   <Heading size="sm">Calculation preview (sample item)</Heading>
-                  <Text size="sm">Sample item: {formatCents(preview.sampleItemCents)}</Text>
-                  <Text size="sm">Work-relevant: {formatCents(preview.workRelevantCents)}</Text>
+                  <Text size="sm">Sample item amount: {formatCents(preview.sampleItemCents)}</Text>
+                  <Text size="sm">Work-relevant amount: {formatCents(preview.workRelevantCents)}</Text>
                   <Text size="sm">
                     Deductible this year: {formatCents(preview.deductibleThisYearCents)}
                   </Text>
                   <Text size="sm">Estimated refund: {formatCents(preview.estimatedRefundCents)}</Text>
-                  <Text size="sm">Mode: {preview.immediate ? "Immediate deduction" : "AfA schedule"}</Text>
+                  <Text size="sm">Mode: {preview.modeLabel}</Text>
+                  <Text size="sm">
+                    Marginal tax rate used: {formatPercent(bpsToPercent(preview.marginalRateUsedBps))}%
+                  </Text>
+                  {formState.werbungskostenPauschaleEnabled && (
+                    <Text size="xs" color="$text500">
+                      Werbungskostenpauschale is currently informational only in this preview.
+                    </Text>
+                  )}
                 </VStack>
               </Card>
             )}
+
+            <Card borderWidth="$1" borderColor="$border200" testID="settings-tax-disclaimer-card">
+              <VStack space="xs">
+                <Heading size="sm">Info</Heading>
+                <Text size="sm">
+                  This result is an estimate and not a binding Finanzamt assessment.
+                </Text>
+                <Text size="sm">
+                  Actual refund depends on total income, taxes already paid, and additional deductions.
+                </Text>
+                <Text size="sm">Austrian tax law and rates may change by tax year.</Text>
+              </VStack>
+            </Card>
+
+            <Card borderWidth="$1" borderColor="$border200">
+              <VStack space="md">
+                {saveError && <Text size="sm" color="$error600">{saveError}</Text>}
+                {saveSuccess && <Text size="sm" color="$success600">{saveSuccess}</Text>}
+                <Box testID="settings-tax-btn-submit">
+                  <Button
+                    onPress={() => void handleSave()}
+                    disabled={isSubmitDisabled}
+                    testID="settings-tax-save"
+                    accessibilityState={{ disabled: isSubmitDisabled }}
+                  >
+                    <ButtonText>{isSaving ? "Saving..." : "Save Tax Settings"}</ButtonText>
+                  </Button>
+                </Box>
+              </VStack>
+            </Card>
           </VStack>
         </ScrollView>
       </Box>
