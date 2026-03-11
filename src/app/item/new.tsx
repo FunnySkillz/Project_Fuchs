@@ -254,7 +254,7 @@ export default function NewItemRoute() {
   const [isLoadingCategories, setIsLoadingCategories] = useState(false);
   const [isCreatingCategory, setIsCreatingCategory] = useState(false);
   const [isCategorySheetOpen, setIsCategorySheetOpen] = useState(false);
-  const [isOptionalOpen, setIsOptionalOpen] = useState(true);
+  const [isOptionalOpen, setIsOptionalOpen] = useState(false);
   const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
 

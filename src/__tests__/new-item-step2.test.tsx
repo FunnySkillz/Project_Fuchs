@@ -197,6 +197,7 @@ describe("NewItemRoute save and validation", () => {
     fireEvent.changeText(screen.getByTestId("additem-input-title"), "  Work monitor  ");
     fireEvent.changeText(screen.getByTestId("additem-input-purchaseDate"), "2026-01-15");
     fireEvent.changeText(screen.getByTestId("additem-input-price"), "499.99");
+    fireEvent.press(screen.getByTestId("additem-optional-toggle"));
     fireEvent.changeText(screen.getByTestId("additem-input-vendor"), "  Saturn  ");
     fireEvent.changeText(screen.getByTestId("additem-input-notes"), "  invoice attached  ");
 
@@ -218,6 +219,21 @@ describe("NewItemRoute save and validation", () => {
     await waitFor(() => {
       expect(mockLinkDraftAttachmentsToItem).toHaveBeenCalledWith("draft-1", "item-123");
       expect(mockRouterReplace).toHaveBeenCalledWith("/(tabs)/items");
+    });
+  });
+
+  it("starts with optional section collapsed on add-item entry", async () => {
+    render(<NewItemRoute />);
+    expect(await screen.findByText("Attachments")).toBeTruthy();
+
+    expect(screen.queryByTestId("additem-input-vendor")).toBeNull();
+    expect(screen.queryByTestId("additem-input-notes")).toBeNull();
+
+    fireEvent.press(screen.getByTestId("additem-optional-toggle"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("additem-input-vendor")).toBeTruthy();
+      expect(screen.getByTestId("additem-input-notes")).toBeTruthy();
     });
   });
 
@@ -312,6 +328,7 @@ describe("NewItemRoute save and validation", () => {
       render(<NewItemRoute />);
       expect(await screen.findByText("Attachments")).toBeTruthy();
 
+      fireEvent.press(screen.getByTestId("additem-optional-toggle"));
       fireEvent(screen.getByTestId("additem-input-warrantymonths"), "focus");
       expect(scrollToMock).not.toHaveBeenCalled();
     } finally {

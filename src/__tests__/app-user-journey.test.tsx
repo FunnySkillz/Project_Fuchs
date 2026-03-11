@@ -584,6 +584,7 @@ async function createPurchaseViaUiFlow(
     screen.getByTestId("additem-input-price"),
     input.price,
   );
+  fireEvent.press(screen.getByTestId("additem-optional-toggle"));
   fireEvent.changeText(
     screen.getByTestId("additem-input-vendor"),
     input.vendor,
