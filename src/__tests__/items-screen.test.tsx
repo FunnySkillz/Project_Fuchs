@@ -324,8 +324,32 @@ describe("ItemsRoute", () => {
     expect(screen.queryByTestId("items-add-fab")).toBeNull();
   });
 
-  it("applies incoming year and missing receipt params from navigation", async () => {
+  it("hydrates missing receipt route param into chip and filtered rows", async () => {
     mockRouteParams = { year: "2026", missingReceipt: "1" };
+    const missingReceiptItem = {
+      id: "item-1",
+      title: "Receipt Missing",
+      purchaseDate: "2026-02-01",
+      totalCents: 199_900,
+      currency: "EUR",
+      usageType: "WORK",
+      workPercent: null,
+      categoryId: null,
+      vendor: "Store",
+      warrantyMonths: null,
+      notes: "Has notes",
+      usefulLifeMonthsOverride: null,
+      createdAt: "2026-02-01T10:00:00.000Z",
+      updatedAt: "2026-02-01T10:00:00.000Z",
+      deletedAt: null,
+    };
+    const notesMissingItem = {
+      ...missingReceiptItem,
+      id: "item-2",
+      title: "Notes Missing",
+      notes: null,
+      purchaseDate: "2026-02-02",
+    };
     mockGetSettings.mockResolvedValue({
       taxYearDefault: 2026,
       marginalRateBps: 4_000,
@@ -337,7 +361,12 @@ describe("ItemsRoute", () => {
       themeModePreference: "system",
       currency: "EUR",
     });
-    mockListItems.mockResolvedValue([]);
+    mockListItems.mockImplementation(async (filters?: { missingReceipt?: boolean }) => {
+      if (filters?.missingReceipt) {
+        return [missingReceiptItem];
+      }
+      return [missingReceiptItem, notesMissingItem];
+    });
     mockListMissingReceiptItemIds.mockResolvedValue([]);
     mockListCategories.mockResolvedValue([]);
     mockComputeDeductibleImpactCents.mockReturnValue(0);
@@ -350,6 +379,75 @@ describe("ItemsRoute", () => {
       });
       expect(hasFilteredCall).toBe(true);
     });
+    const hasSyncedSessionState = mockUpdateItemListSessionState.mock.calls.some(
+      ([state]) => state?.missingReceipt === true && state?.missingNotes === false
+    );
+    expect(hasSyncedSessionState).toBe(true);
+    expect(await screen.findByText("Receipt Missing")).toBeTruthy();
+    expect(screen.queryByText("Notes Missing")).toBeNull();
+  });
+
+  it("hydrates missing notes route param into chip and filtered rows", async () => {
+    mockRouteParams = { year: "2026", missingNotes: "1" };
+    const receiptMissingItem = {
+      id: "item-1",
+      title: "Receipt Missing",
+      purchaseDate: "2026-02-01",
+      totalCents: 199_900,
+      currency: "EUR",
+      usageType: "WORK",
+      workPercent: null,
+      categoryId: null,
+      vendor: "Store",
+      warrantyMonths: null,
+      notes: "Has notes",
+      usefulLifeMonthsOverride: null,
+      createdAt: "2026-02-01T10:00:00.000Z",
+      updatedAt: "2026-02-01T10:00:00.000Z",
+      deletedAt: null,
+    };
+    const notesMissingItem = {
+      ...receiptMissingItem,
+      id: "item-2",
+      title: "Notes Missing",
+      notes: null,
+      purchaseDate: "2026-02-02",
+    };
+    mockGetSettings.mockResolvedValue({
+      taxYearDefault: 2026,
+      marginalRateBps: 4_000,
+      defaultWorkPercent: 100,
+      gwgThresholdCents: 100_000,
+      applyHalfYearRule: false,
+      appLockEnabled: false,
+      uploadToOneDriveAfterExport: false,
+      themeModePreference: "system",
+      currency: "EUR",
+    });
+    mockListItems.mockImplementation(async (filters?: { missingNotes?: boolean }) => {
+      if (filters?.missingNotes) {
+        return [notesMissingItem];
+      }
+      return [receiptMissingItem, notesMissingItem];
+    });
+    mockListMissingReceiptItemIds.mockResolvedValue([]);
+    mockListCategories.mockResolvedValue([]);
+    mockComputeDeductibleImpactCents.mockReturnValue(0);
+
+    render(<ItemsRoute />);
+
+    await waitFor(() => {
+      const hasFilteredCall = mockListItems.mock.calls.some(([filters]) => {
+        return filters?.year === 2026 && filters?.missingNotes === true;
+      });
+      expect(hasFilteredCall).toBe(true);
+    });
+    const hasSyncedSessionState = mockUpdateItemListSessionState.mock.calls.some(
+      ([state]) => state?.missingNotes === true && state?.missingReceipt === false
+    );
+    expect(hasSyncedSessionState).toBe(true);
+    expect(await screen.findByText("Notes Missing")).toBeTruthy();
+    expect(screen.queryByText("Receipt Missing")).toBeNull();
   });
 
   it("swipes left and deletes an item after attachment confirmation", async () => {

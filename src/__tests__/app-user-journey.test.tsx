@@ -15,6 +15,7 @@ import NewItemRoute from "@/app/item/new";
 import type { Item, ItemUsageType } from "@/models/item";
 import type { ProfileSettings } from "@/models/profile-settings";
 import type { StoredAttachmentFile } from "@/services/attachment-storage";
+import { updateItemListSessionState } from "@/services/item-list-session";
 
 jest.mock("@/constants/theme", () => ({
   Colors: {
@@ -24,8 +25,12 @@ jest.mock("@/constants/theme", () => ({
       backgroundElement: "#EEF2F7",
       backgroundSelected: "#DFE6F0",
       textSecondary: "#66758A",
+      textMuted: "#7A889C",
       border: "#C8D1DE",
       primary: "#4E7FCF",
+      warning: "#D8891A",
+      warningText: "#A65F06",
+      warningBackground: "#2D2215",
       danger: "#C54444",
       textOnPrimary: "#F2F6FC",
     },
@@ -35,8 +40,12 @@ jest.mock("@/constants/theme", () => ({
       backgroundElement: "#1C2430",
       backgroundSelected: "#2A3544",
       textSecondary: "#A6B2C3",
+      textMuted: "#8A98AB",
       border: "#38475D",
       primary: "#6E97DF",
+      warning: "#F0B44A",
+      warningText: "#F2BC62",
+      warningBackground: "#3A2A16",
       danger: "#E66B6B",
       textOnPrimary: "#F1F5FB",
     },
@@ -72,6 +81,25 @@ function mockApplyRouteTarget(target: unknown) {
         : {};
     mockLocalSearchParams = {
       draftId: params.draftId,
+    };
+    return;
+  }
+
+  if (
+    typeof target === "object" &&
+    target !== null &&
+    "pathname" in target &&
+    (target as { pathname?: unknown }).pathname === "/(tabs)/items"
+  ) {
+    const params =
+      "params" in target &&
+      typeof (target as { params?: unknown }).params === "object"
+        ? ((target as { params?: Record<string, string | string[] | undefined> }).params ?? {})
+        : {};
+    mockLocalSearchParams = {
+      year: params.year,
+      missingReceipt: params.missingReceipt,
+      missingNotes: params.missingNotes,
     };
   }
 }
@@ -687,6 +715,15 @@ describe("App first-user UI journey", () => {
     mockDraftCounter = 0;
     mockCameraAttachmentQueue.splice(0, mockCameraAttachmentQueue.length);
     mockNavigationAddListener.mockReturnValue(jest.fn());
+    updateItemListSessionState({
+      search: "",
+      year: "",
+      categoryId: null,
+      usageType: null,
+      missingReceipt: false,
+      missingNotes: false,
+      sortMode: "purchase_date_desc",
+    });
   });
 
   it("walks from onboarding to creating TV and laptop invoices via real UI interactions", async () => {
@@ -782,6 +819,85 @@ describe("App first-user UI journey", () => {
     expect(await screen.findByText("Steuerausgleich 2026")).toBeTruthy();
     expect(screen.queryByText("No items added yet.")).toBeNull();
     homeAfterItems.unmount();
+  });
+
+  it("keeps Home attention navigation and Items filtering in sync for missing receipts and notes", async () => {
+    const now = "2026-05-10T10:00:00.000Z";
+    mockItemStore.push(
+      {
+        id: "item-receipt-missing",
+        title: "Office Headset",
+        purchaseDate: "2026-05-02",
+        totalCents: 12_900,
+        currency: "EUR",
+        usageType: "WORK",
+        workPercent: null,
+        categoryId: "cat-electronics",
+        vendor: "Tech Store",
+        warrantyMonths: null,
+        notes: "Submitted in monthly checklist",
+        usefulLifeMonthsOverride: null,
+        createdAt: now,
+        updatedAt: now,
+        deletedAt: null,
+      },
+      {
+        id: "item-notes-missing",
+        title: "USB-C Dock",
+        purchaseDate: "2026-05-04",
+        totalCents: 8_900,
+        currency: "EUR",
+        usageType: "WORK",
+        workPercent: null,
+        categoryId: "cat-electronics",
+        vendor: "Tech Store",
+        warrantyMonths: null,
+        notes: null,
+        usefulLifeMonthsOverride: null,
+        createdAt: now,
+        updatedAt: now,
+        deletedAt: null,
+      },
+    );
+    mockItemReceiptsById.set("item-notes-missing", [
+      {
+        filePath: "file:///tmp/receipts/usb-dock.jpg",
+        mimeType: "image/jpeg",
+        originalFileName: "usb-dock.jpg",
+        fileSizeBytes: 11_000,
+        type: "RECEIPT",
+      },
+    ]);
+
+    const home = render(<HomeRoute />);
+    expect(await screen.findByText("Attention needed")).toBeTruthy();
+
+    fireEvent.press(screen.getByTestId("home-missing-receipts-row"));
+    expect(mockPush).toHaveBeenLastCalledWith({
+      pathname: "/(tabs)/items",
+      params: { year: "2026", missingReceipt: "1" },
+    });
+    home.unmount();
+
+    const itemsMissingReceipt = render(<ItemsRoute />);
+    expect(await screen.findByText("Office Headset")).toBeTruthy();
+    expect(screen.queryByText("USB-C Dock")).toBeNull();
+    itemsMissingReceipt.unmount();
+
+    const homeAgain = render(<HomeRoute />);
+    expect(await screen.findByText("Attention needed")).toBeTruthy();
+
+    fireEvent.press(screen.getByTestId("home-missing-notes-row"));
+    expect(mockPush).toHaveBeenLastCalledWith({
+      pathname: "/(tabs)/items",
+      params: { year: "2026", missingNotes: "1" },
+    });
+    homeAgain.unmount();
+
+    const itemsMissingNotes = render(<ItemsRoute />);
+    expect(await screen.findByText("USB-C Dock")).toBeTruthy();
+    expect(screen.queryByText("Office Headset")).toBeNull();
+    itemsMissingNotes.unmount();
   });
 
   it("deletes an item from detail view and it no longer appears in items list", async () => {

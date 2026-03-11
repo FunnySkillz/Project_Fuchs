@@ -20,6 +20,9 @@ const mockTheme = {
   textMuted: "#7A889C",
   border: "#C8D1DE",
   primary: "#4E7FCF",
+  warning: "#D8891A",
+  warningText: "#A65F06",
+  warningBackground: "#2D2215",
   danger: "#C54444",
   success: "#2F8A52",
   textOnPrimary: "#F2F6FC",
@@ -116,7 +119,7 @@ describe("HomeRoute", () => {
     mockOnProfileSettingsSaved.mockReturnValue(jest.fn());
   });
 
-  it("renders dashboard summary and attention rows with filter navigation", async () => {
+  it("renders dashboard summary and compact attention cards with filter navigation", async () => {
     const yearItems = [
       {
         id: "item-a",
@@ -158,6 +161,10 @@ describe("HomeRoute", () => {
     expect(screen.getByText(formatCents(30_000))).toBeTruthy();
     expect(screen.getByText(`Estimated tax refund impact: ${formatCents(12_000)}`)).toBeTruthy();
     expect(screen.getByText("Attention needed")).toBeTruthy();
+    expect(screen.getByTestId("home-missing-receipts-card")).toBeTruthy();
+    expect(screen.getByTestId("home-missing-notes-card")).toBeTruthy();
+    expect(screen.getByText("Review items")).toBeTruthy();
+    expect(screen.getByText("Add missing notes")).toBeTruthy();
 
     fireEvent.press(screen.getByTestId("home-missing-receipts-row"));
     expect(mockPush).toHaveBeenCalledWith({

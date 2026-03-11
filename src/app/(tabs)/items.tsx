@@ -192,6 +192,7 @@ export default function ItemsRoute() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [deleteCandidateItem, setDeleteCandidateItem] = useState<Item | null>(null);
   const [isDeletingItem, setIsDeletingItem] = useState(false);
+  const hasMountedFiltersRef = useRef(false);
 
   const swipeableRefs = useRef<Map<string, Swipeable | null>>(new Map());
   const openedSwipeableIdRef = useRef<string | null>(null);
@@ -243,10 +244,8 @@ export default function ItemsRoute() {
     if (yearParam !== undefined) {
       setYear(yearParam);
     }
-    if (missingReceiptParam !== undefined) {
+    if (missingReceiptParam !== undefined || missingNotesParam !== undefined) {
       setMissingReceipt(missingReceiptParam === "1");
-    }
-    if (missingNotesParam !== undefined) {
       setMissingNotes(missingNotesParam === "1");
     }
   }, [params.missingNotes, params.missingReceipt, params.year]);
@@ -312,6 +311,14 @@ export default function ItemsRoute() {
       void loadData();
     }, [loadData])
   );
+
+  useEffect(() => {
+    if (!hasMountedFiltersRef.current) {
+      hasMountedFiltersRef.current = true;
+      return;
+    }
+    void loadData();
+  }, [loadData]);
 
   const displayedItems = useMemo(() => {
     const searchTerm = search.trim().toLowerCase();

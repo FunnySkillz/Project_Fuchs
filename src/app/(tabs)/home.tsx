@@ -135,6 +135,9 @@ export default function HomeRoute() {
   const hasAttentionItems = hasMissingReceipt || hasMissingNotes;
 
   const formatCountLabel = (count: number) => `${count} item${count === 1 ? "" : "s"}`;
+  const warningIconColor = theme.warning ?? theme.danger;
+  const warningActionTextColor = theme.warningText ?? theme.text;
+  const warningActionBackground = theme.warningBackground ?? theme.backgroundSelected;
 
   return (
     <SafeAreaView style={{ flex: 1 }} edges={["top"]}>
@@ -159,21 +162,18 @@ export default function HomeRoute() {
             <VStack space="sm">
               <Heading size="md">Attention needed</Heading>
               {hasAttentionItems ? (
-                <Card borderWidth="$1" borderColor="$border200">
-                  <VStack>
-                    {hasMissingReceipt && (
-                      <Pressable
-                        onPress={() =>
-                          router.push({
-                            pathname: "/(tabs)/items",
-                            params: { year: String(stats.year), missingReceipt: "1" },
-                          })
-                        }
-                        testID="home-missing-receipts-row"
-                      >
-                        <HStack px="$4" py="$3" alignItems="center" justifyContent="space-between" space="sm">
+                <VStack space="sm">
+                  {hasMissingReceipt && (
+                    <Card
+                      borderWidth="$1"
+                      borderColor="$border200"
+                      testID="home-missing-receipts-card"
+                      style={{ backgroundColor: theme.backgroundElement }}
+                    >
+                      <VStack space="sm">
+                        <HStack alignItems="center" justifyContent="space-between" space="sm">
                           <HStack alignItems="center" space="sm" flex={1}>
-                            <Receipt size={18} color={theme.danger} />
+                            <Receipt size={18} color={warningIconColor} />
                             <VStack space="xs" flex={1}>
                               <Text bold size="sm">
                                 Missing receipts
@@ -183,28 +183,51 @@ export default function HomeRoute() {
                               </Text>
                             </VStack>
                           </HStack>
-                          <ChevronRight size={16} color={theme.textSecondary} />
+                          <Text size="xs" color={theme.textSecondary}>
+                            {formatCountLabel(stats.missingReceiptCount)}
+                          </Text>
                         </HStack>
-                      </Pressable>
-                    )}
 
-                    {hasMissingReceipt && hasMissingNotes && (
-                      <Box borderTopWidth="$1" borderColor="$border200" />
-                    )}
+                        <Pressable
+                          onPress={() =>
+                            router.push({
+                              pathname: "/(tabs)/items",
+                              params: { year: String(stats.year), missingReceipt: "1" },
+                            })
+                          }
+                          testID="home-missing-receipts-row"
+                          style={{
+                            borderRadius: 10,
+                            backgroundColor: warningActionBackground,
+                          }}
+                        >
+                          <HStack
+                            px="$3"
+                            py="$2"
+                            alignItems="center"
+                            justifyContent="space-between"
+                          >
+                            <Text size="sm" color={warningActionTextColor}>
+                              Review items
+                            </Text>
+                            <ChevronRight size={14} color={warningActionTextColor} />
+                          </HStack>
+                        </Pressable>
+                      </VStack>
+                    </Card>
+                  )}
 
-                    {hasMissingNotes && (
-                      <Pressable
-                        onPress={() =>
-                          router.push({
-                            pathname: "/(tabs)/items",
-                            params: { year: String(stats.year), missingNotes: "1" },
-                          })
-                        }
-                        testID="home-missing-notes-row"
-                      >
-                        <HStack px="$4" py="$3" alignItems="center" justifyContent="space-between" space="sm">
+                  {hasMissingNotes && (
+                    <Card
+                      borderWidth="$1"
+                      borderColor="$border200"
+                      testID="home-missing-notes-card"
+                      style={{ backgroundColor: theme.backgroundElement }}
+                    >
+                      <VStack space="sm">
+                        <HStack alignItems="center" justifyContent="space-between" space="sm">
                           <HStack alignItems="center" space="sm" flex={1}>
-                            <FileText size={18} color={theme.danger} />
+                            <FileText size={18} color={warningIconColor} />
                             <VStack space="xs" flex={1}>
                               <Text bold size="sm">
                                 Missing notes
@@ -214,12 +237,40 @@ export default function HomeRoute() {
                               </Text>
                             </VStack>
                           </HStack>
-                          <ChevronRight size={16} color={theme.textSecondary} />
+                          <Text size="xs" color={theme.textSecondary}>
+                            {formatCountLabel(stats.missingNotesCount)}
+                          </Text>
                         </HStack>
-                      </Pressable>
-                    )}
-                  </VStack>
-                </Card>
+
+                        <Pressable
+                          onPress={() =>
+                            router.push({
+                              pathname: "/(tabs)/items",
+                              params: { year: String(stats.year), missingNotes: "1" },
+                            })
+                          }
+                          testID="home-missing-notes-row"
+                          style={{
+                            borderRadius: 10,
+                            backgroundColor: warningActionBackground,
+                          }}
+                        >
+                          <HStack
+                            px="$3"
+                            py="$2"
+                            alignItems="center"
+                            justifyContent="space-between"
+                          >
+                            <Text size="sm" color={warningActionTextColor}>
+                              Add missing notes
+                            </Text>
+                            <ChevronRight size={14} color={warningActionTextColor} />
+                          </HStack>
+                        </Pressable>
+                      </VStack>
+                    </Card>
+                  )}
+                </VStack>
               ) : (
                 <Text size="sm" color={theme.textSecondary}>
                   Everything looks good.
