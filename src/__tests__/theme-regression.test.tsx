@@ -13,6 +13,23 @@ const mockListItems = jest.fn();
 const mockListMissingReceiptItemIds = jest.fn();
 const mockListCategories = jest.fn();
 const mockSetThemeMode = jest.fn();
+const mockTheme = {
+  text: "#1B2330",
+  background: "#F7F9FC",
+  backgroundElement: "#EEF2F7",
+  backgroundSelected: "#DFE6F0",
+  textSecondary: "#66758A",
+  textMuted: "#7A889C",
+  border: "#C8D1DE",
+  primary: "#4E7FCF",
+  danger: "#C54444",
+  success: "#2F8A52",
+  textOnPrimary: "#F2F6FC",
+};
+
+jest.mock("@/hooks/use-theme", () => ({
+  useTheme: () => mockTheme,
+}));
 
 jest.mock("@gluestack-ui/themed", () => {
   const {
@@ -199,7 +216,7 @@ describe("theme regression smoke", () => {
     expect(await screen.findByText("Steuerausgleich 2026")).toBeTruthy();
     expect(screen.getByText("No items added yet.")).toBeTruthy();
     expect(screen.getByText("Use the center + button to add your first item.")).toBeTruthy();
-    expect(screen.getByText("Deductible this year")).toBeTruthy();
+    expect(screen.getAllByText("Estimated deductible this year").length).toBeGreaterThan(0);
   });
 
   it.each(["light", "dark"] as const)("renders Settings in %s mode", async (mode) => {

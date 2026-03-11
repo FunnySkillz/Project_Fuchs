@@ -1,9 +1,8 @@
 import { useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { ChevronRight, FileText, Receipt } from "lucide-react-native";
 import {
-  Badge,
-  BadgeText,
   Box,
   Button,
   ButtonText,
@@ -20,6 +19,7 @@ import { computeDeductibleImpactCents } from "@/domain/deductible-impact";
 import { getCategoryRepository, getItemRepository } from "@/repositories/create-core-repositories";
 import { getProfileSettingsRepository } from "@/repositories/create-profile-settings-repository";
 import { onProfileSettingsSaved } from "@/services/app-events";
+import { useTheme } from "@/hooks/use-theme";
 import { formatCents } from "@/utils/money";
 
 interface DashboardStats {
@@ -33,6 +33,7 @@ interface DashboardStats {
 
 export default function HomeRoute() {
   const router = useRouter();
+  const theme = useTheme();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -129,6 +130,11 @@ export default function HomeRoute() {
   }
 
   const hasItems = stats.itemCount > 0;
+  const hasMissingReceipt = stats.missingReceiptCount > 0;
+  const hasMissingNotes = stats.missingNotesCount > 0;
+  const hasAttentionItems = hasMissingReceipt || hasMissingNotes;
+
+  const formatCountLabel = (count: number) => `${count} item${count === 1 ? "" : "s"}`;
 
   return (
     <SafeAreaView style={{ flex: 1 }} edges={["top"]}>
@@ -141,62 +147,85 @@ export default function HomeRoute() {
 
           <Card borderWidth="$1" borderColor="$border200">
             <VStack space="sm">
-              <Text size="sm">Deductible this year</Text>
+              <Text size="sm">Estimated deductible this year</Text>
               <Heading size="3xl">{formatCents(stats.deductibleThisYearCents)}</Heading>
-              <Text size="sm">Estimated refund impact: {formatCents(stats.estimatedRefundImpactCents)}</Text>
+              <Text size="sm">
+                Estimated tax refund impact: {formatCents(stats.estimatedRefundImpactCents)}
+              </Text>
             </VStack>
           </Card>
 
           {hasItems ? (
-            <HStack space="md" flexWrap="wrap">
-              <Pressable
-                flex={1}
-                minWidth={240}
-                onPress={() =>
-                  router.push({
-                    pathname: "/(tabs)/items",
-                    params: { year: String(stats.year), missingReceipt: "1" },
-                  })
-                }
-                testID="home-missing-receipts-card"
-              >
+            <VStack space="sm">
+              <Heading size="md">Attention needed</Heading>
+              {hasAttentionItems ? (
                 <Card borderWidth="$1" borderColor="$border200">
-                  <VStack space="sm">
-                    <Text bold size="md">
-                      Missing receipts
-                    </Text>
-                    <Heading size="2xl">{stats.missingReceiptCount}</Heading>
-                    <Badge size="sm" action="warning" variant="solid">
-                      <BadgeText>Open filtered items</BadgeText>
-                    </Badge>
-                  </VStack>
-                </Card>
-              </Pressable>
+                  <VStack>
+                    {hasMissingReceipt && (
+                      <Pressable
+                        onPress={() =>
+                          router.push({
+                            pathname: "/(tabs)/items",
+                            params: { year: String(stats.year), missingReceipt: "1" },
+                          })
+                        }
+                        testID="home-missing-receipts-row"
+                      >
+                        <HStack px="$4" py="$3" alignItems="center" justifyContent="space-between" space="sm">
+                          <HStack alignItems="center" space="sm" flex={1}>
+                            <Receipt size={18} color={theme.danger} />
+                            <VStack space="xs" flex={1}>
+                              <Text bold size="sm">
+                                Missing receipts
+                              </Text>
+                              <Text size="xs" color={theme.textSecondary}>
+                                {formatCountLabel(stats.missingReceiptCount)}
+                              </Text>
+                            </VStack>
+                          </HStack>
+                          <ChevronRight size={16} color={theme.textSecondary} />
+                        </HStack>
+                      </Pressable>
+                    )}
 
-              <Pressable
-                flex={1}
-                minWidth={240}
-                onPress={() =>
-                  router.push({
-                    pathname: "/(tabs)/items",
-                    params: { year: String(stats.year), missingNotes: "1" },
-                  })
-                }
-                testID="home-missing-notes-card"
-              >
-                <Card borderWidth="$1" borderColor="$border200">
-                  <VStack space="sm">
-                    <Text bold size="md">
-                      Missing notes
-                    </Text>
-                    <Heading size="2xl">{stats.missingNotesCount}</Heading>
-                    <Badge size="sm" action="warning" variant="solid">
-                      <BadgeText>Open filtered items</BadgeText>
-                    </Badge>
+                    {hasMissingReceipt && hasMissingNotes && (
+                      <Box borderTopWidth="$1" borderColor="$border200" />
+                    )}
+
+                    {hasMissingNotes && (
+                      <Pressable
+                        onPress={() =>
+                          router.push({
+                            pathname: "/(tabs)/items",
+                            params: { year: String(stats.year), missingNotes: "1" },
+                          })
+                        }
+                        testID="home-missing-notes-row"
+                      >
+                        <HStack px="$4" py="$3" alignItems="center" justifyContent="space-between" space="sm">
+                          <HStack alignItems="center" space="sm" flex={1}>
+                            <FileText size={18} color={theme.danger} />
+                            <VStack space="xs" flex={1}>
+                              <Text bold size="sm">
+                                Missing notes
+                              </Text>
+                              <Text size="xs" color={theme.textSecondary}>
+                                {formatCountLabel(stats.missingNotesCount)}
+                              </Text>
+                            </VStack>
+                          </HStack>
+                          <ChevronRight size={16} color={theme.textSecondary} />
+                        </HStack>
+                      </Pressable>
+                    )}
                   </VStack>
                 </Card>
-              </Pressable>
-            </HStack>
+              ) : (
+                <Text size="sm" color={theme.textSecondary}>
+                  Everything looks good.
+                </Text>
+              )}
+            </VStack>
           ) : (
             <VStack space="sm">
               <Text bold size="md">
