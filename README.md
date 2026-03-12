@@ -1,325 +1,193 @@
-# Fuchs - App
+# SteuerFuchs
 
-A privacy-first mobile application for Austrian employees to organize, calculate, and export purchase evidence for the annual Arbeitnehmerveranlagung (Steuerausgleich).
+SteuerFuchs is a local-first mobile app (Expo/React Native) for Austrian Arbeitnehmerveranlagung preparation.
+It helps users track deductible purchases, estimate tax impact, and export records as PDF/ZIP.
 
-This app runs fully offline.
-No backend. No forced cloud. No data collection.
+The app has no backend and no analytics.
+Data stays on-device unless the user explicitly shares/exports it.
 
-## Vision
+## What The App Does
 
-Make tax-relevant purchase tracking simple, structured, and audit-ready.
+- Guides first-time users through onboarding profile setup (tax year, marginal rate, default work %, GWG threshold).
+- Lets users create, edit, view, filter, and delete tax-relevant items with attachments.
+- Calculates deductible impact using Austrian GWG/AfA logic and mixed-use percentages.
+- Generates PDF and ZIP exports, including optional detail pages and export history.
+- Supports local backup/restore and optional OneDrive upload for export-only workflows.
+- Provides app lock controls (biometric + PIN fallback), legal/privacy copy, and destructive local reset.
 
-Instead of:
-- Digging through emails
-- Searching for receipts
-- Recalculating mixed-use percentages manually
-- Guessing depreciation
+## Current Functionality Snapshot (March 12, 2026)
 
-You:
-- Capture receipts
-- Enter structured data
-- Get clear deduction estimates
-- Export a clean PDF or ZIP package
+### Onboarding and App Shell
 
-## Core Principles
+- Onboarding gate:
+  - New installs route to `/(onboarding)/welcome` and `/(onboarding)/profile-setup`.
+  - Existing profiles route to `/(tabs)/home`.
+- App initializes SQLite + migrations and shows an init error screen on startup failure.
+- Init error recovery includes:
+  - Retry initialization
+  - Export debug report
+  - Reset local data
 
-- Local-first architecture
-- No user account required
-- No data leaves the device unless explicitly exported
-- Deterministic calculations
-- Explicit tax assumptions (transparent, configurable)
-- Strong test coverage (unit + integration + workflow tests)
+### Home
 
-## V1 Scope Definition
+- Shows yearly dashboard metrics:
+  - Item count
+  - Estimated deductible total for selected tax year
+  - Estimated refund impact
+  - Missing receipt / missing notes attention cards
+- Attention cards deep-link into filtered item list.
 
-This project has a frozen V1 scope (see `docs/adr/0002-v1-scope.md`).
+### Items
 
-In scope for V1:
-- Local-first storage (SQLite + local files)
-- Manual entry (no OCR)
-- Receipt/photo attachments
-- Item list + detail + edit
-- Deduction estimation (GWG threshold + AfA splitting)
-- PDF export + optional ZIP with attachments
-
-Out of scope for V1:
-- OCR
-- Cloud sync (except OneDrive export)
-- Backend
-- Tax filing submission
-
-## Tech Stack
-
-- React Native (Expo)
-- TypeScript (strict mode)
-- NativeWind (Tailwind for RN)
-- SQLite (expo-sqlite)
-- Local file storage (expo-file-system)
-- Jest + React Native Testing Library
-- Optional: OneDrive OAuth for export-only
-
-## Features (V1)
-
-### Profile Setup
-
-- Tax year default
-- Marginal tax rate
-- GWG threshold (default 1.000 EUR)
-- Optional half-year depreciation rule
-- Default mixed-use percentage
-
-### Item Management
-
-- Capture receipt photo
-- Upload PDF receipt
-- Add additional product photos
-- Store:
-  - Product name
-  - Purchase date
-  - Price (stored as cents)
-  - Category
-  - Usage type (`WORK` / `PRIVATE` / `MIXED`)
-  - Work percentage
-  - Warranty duration
-  - Notes for Finanzamt
-
-### Deduction Estimation
-
-- Mixed-use calculation
-- GWG threshold handling
-- Useful life (default 36 months for Laptop/Computer)
-- Optional half-year rule
-- Estimated refund impact (based on marginal rate)
-
-### Inventory View
-
-- Filter by:
+- Search and filter by:
   - Year
-  - Category
   - Usage type
+  - Category
   - Missing receipt
   - Missing notes
-- Search by title/vendor
-- View detailed breakdown
+- Swipe-to-delete row interaction with confirmation for items that have attachments.
+- Item row shows category/date, total amount, and deductible-this-year value.
+
+### Add / Detail / Edit Item
+
+- Add item flow supports:
+  - Required fields and validation
+  - Optional and advanced sections
+  - Camera capture, file picker upload, and extra photos
+  - Draft attachment staging and cleanup on discard
+- Detail screen includes:
+  - Attachment gallery with missing-file handling
+  - Calculation breakdown
+  - Warranty and category info
+  - Delete item flow
+- Edit screen supports:
+  - Full field editing
+  - Attachment add/remove
+  - Unsaved-change discard guard
 
 ### Export
 
-- Generate PDF summary
-- Generate ZIP (PDF + receipts/photos)
-- Optional upload to OneDrive
-- Export history tracking
+- Select items with search + filters.
+- Export formats:
+  - PDF
+  - ZIP (embedded PDF + attachments + missing attachment note if needed)
+- Tracks export runs by tax year.
+- Supports share/re-share of generated outputs.
+- Android-only saved destination folder copy is supported through SAF.
+
+### Settings
+
+- Appearance:
+  - Theme mode selection (`system`, `light`, `dark`) persisted in `ProfileSettings`.
+- Tax & Calculation:
+  - Tax profile fields (tax year, monthly gross, salary payments 12/14)
+  - Auto-estimated Austrian marginal rate + optional manual override
+  - Deduction defaults (GWG, half-year rule, default work %, Werbungskosten toggle)
+  - Live sample calculation preview
+- Security:
+  - App lock toggle with biometric confirmation
+  - PIN set/change (4-6 digits) with lockout protection
+- Backup & Sync:
+  - Create/share backup ZIP
+  - Restore from backup ZIP with overwrite confirmation
+  - OneDrive connect/folder verification/test export (when configured)
+- Legal & Privacy:
+  - Disclaimer and privacy statement
+  - Permission usage summary
+- Danger Zone:
+  - Delete all local data (DB, attachments, PIN, settings state)
+
+## OneDrive Configuration
+
+OneDrive is optional and export-only.
+The UI action (`Connect OneDrive`) is displayed only when the build contains:
+
+- `EXPO_PUBLIC_ONEDRIVE_CLIENT_ID`
+
+In code this is evaluated by:
+
+- `src/services/onedrive-auth.ts` via `isOneDriveConfigured()`
+- `src/app/(tabs)/settings/backup-sync.tsx` for conditional UI rendering
+
+### Configure In EAS
+
+Add for each environment you build/publish:
+
+```bash
+eas env:create --environment development --name EXPO_PUBLIC_ONEDRIVE_CLIENT_ID --value <client-id>
+eas env:create --environment preview --name EXPO_PUBLIC_ONEDRIVE_CLIENT_ID --value <client-id>
+eas env:create --environment production --name EXPO_PUBLIC_ONEDRIVE_CLIENT_ID --value <client-id>
+```
+
+Verify:
+
+```bash
+eas env:list --environment preview
+```
+
+## Design Notes
+
+- Theme tokens are centralized in `src/constants/theme.ts`.
+- Settings stack uses `contentStyle` background from theme.
+- Tab scene background is centralized in `src/app/(tabs)/_layout.tsx` via:
+  - `sceneStyle: { backgroundColor: theme.background }`
+- This prevents background mismatches between tab screens and stack screens.
+
+See:
+
+- `docs/design/theme-qa.md`
+- `docs/design/navigation-layout-qa.md`
 
 ## Architecture Overview
 
-### Local-First Data Model
+- UI: Expo Router + React Navigation (Tabs + Stacks)
+- State/Persistence:
+  - SQLite repositories for domain data
+  - Local file storage for attachments and exports
+  - SecureStore for sensitive small state (PIN hash, OneDrive folder URI)
+- Core modules:
+  - `src/domain`: tax rules/validation
+  - `src/repositories`: persistence access
+  - `src/services`: exports, backup/restore, auth, file handling
+  - `src/app`: route-level screens
 
-SQLite schema includes:
-- ProfileSettings
-- Category
-- Item
-- Attachment
-- ExportRun
+## Testing
 
-All tables:
-- Use UUID primary keys
-- Store money as INTEGER cents
-- Include CreatedAt, UpdatedAt
-- Support soft-delete via DeletedAt
-- Use foreign keys + indexes
-- UpdatedAt enforced via DB triggers
+- Unit tests: domain logic and validation
+- Integration tests: DB migrations/repositories, backup/restore, attachment lifecycle
+- Screen/workflow tests: onboarding, home/items/export/settings flows
 
-### Domain Layer
-
-Pure logic:
-- Calculation engine
-- Money parsing
-- Validation rules
-
-Testable without React Native runtime.
-
-### Repository Layer
-
-Typed data access:
-- ItemRepository
-- CategoryRepository
-- AttachmentRepository
-- ExportRunRepository
-
-Soft-delete strategy enforced at repository level.
-
-### File Handling
-
-- Files copied into app sandbox
-- Thumbnails generated for images
-- Attachments deleted on item delete
-- No external references
-
-## Tax Logic (Austrian Context)
-
-This app provides structured guidance, not legal advice.
-
-Supported in V1:
-- GWG threshold (default 1.000 EUR)
-- Immediate deduction below threshold
-- AfA (depreciation) above threshold
-- Default 3-year useful life for computers
-- Optional half-year rule
-- Mixed-use percentage handling
-- Estimated refund impact via marginal tax rate
-
-Users remain responsible for final tax declaration.
-
-## Testing Strategy
-
-This project does not rely on shallow tests.
-
-### 1. Unit Tests
-
-- Money parsing and formatting
-- Calculation engine (GWG, mixed use, schedule)
-- Validation rules
-
-Pure, deterministic, fast.
-
-### 2. Integration Tests
-
-- SQLite migrations
-- Trigger behavior (UpdatedAt)
-- Soft delete + restore
-- File storage lifecycle
-- Export generation (PDF + ZIP)
-
-Real SQLite + temp filesystem.
-
-### 3. Workflow Tests
-
-Using React Native Testing Library:
-- Add item happy path
-- Cancel flow (no orphan files)
-- Validation errors
-- Delete flow
-- Filter logic
-- Settings update recalculation
-
-No full e2e, but realistic UI workflow coverage.
-
-## Project Structure
-
-```text
-app/
-  routes and screens
-
-src/
-  domain/
-  db/
-  repositories/
-  services/
-  models/
-  components/
-  utils/
-
-tests/
-  unit/
-  integration/
-  workflow/
-```
-
-## Development
-
-Install dependencies:
-
-```bash
-npm install
-```
-
-Run app:
-
-```bash
-npx expo start
-```
-
-Run tests:
+Run:
 
 ```bash
 npm test
-```
-
-Run release preflight checks:
-
-```bash
+npm run lint
+npm run typecheck
 npm run release:preflight
 ```
 
-Build preview:
+## Build Commands
 
 ```bash
-eas build --profile preview
-```
-
-Build production:
-
-```bash
-eas build --profile production
-```
-
-Internal dev client build:
-
-```bash
-eas build --profile dev
-```
-
-Release/internal testing:
-
-```bash
-# Android internal APK
+# Preview/internal
 eas build --platform android --profile preview
-
-# iOS internal/TestFlight candidate
 eas build --platform ios --profile preview
+
+# Production
+eas build --platform android --profile production
+eas build --platform ios --profile production
 ```
 
-Release checklist:
+## Documentation Map
 
-- `docs/release-internal-testing-checklist.md`
-- `docs/release/build-versioning.md`
-- `docs/release/final-qa-hardware-checklist.md`
-- `docs/design/navigation-layout-qa.md`
-
-## Security & Privacy
-
-- No backend
-- No tracking
-- No analytics
-- No automatic cloud sync
-- Optional OneDrive export requires explicit user action
-- App lock (biometric or PIN) supported
-- All sensitive data remains on device unless exported by user
-
-## Roadmap (Post V1)
-
-- OCR for receipts (offline or paid cloud)
-- Multi-device encrypted sync
-- Accountant export templates
-- Advanced category depreciation presets
-- Export directly formatted for FinanzOnline upload
-- Backup/restore assistant
-
-## Non-Goals (V1)
-
-- Direct tax filing
-- Legal tax advice
-- Automatic OCR extraction
-- SaaS cloud storage
-- Multi-user accounts
-
-## Philosophy
-
-This is not a flashy fintech startup app.
-
-This is:
-- Structured
-- Predictable
-- Transparent
-- Built like proper software
-
-Local-first. Typed. Tested. Controlled.
+- Full functionality catalog: `docs/functionalities.md`
+- Design QA:
+  - `docs/design/theme-qa.md`
+  - `docs/design/navigation-layout-qa.md`
+- Release docs:
+  - `docs/release/production-readiness.md`
+  - `docs/release/final-qa-hardware-checklist.md`
+  - `docs/release/build-versioning.md`
+- ADRs:
+  - `docs/adr/0001-auth-strategy.md`
+  - `docs/adr/0002-v1-scope.md`

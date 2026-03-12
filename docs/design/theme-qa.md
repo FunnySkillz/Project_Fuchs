@@ -1,32 +1,52 @@
 # Theme QA Checklist
 
-Last updated: 2026-03-01
+Last updated: 2026-03-12
 
-## Global Rules
+Use this checklist to keep theme behavior and background rendering consistent across light/dark modes.
 
-- [x] No hardcoded hex colors in app screens.
-- [x] Light and dark mode both use shared theme tokens.
-- [x] Border contrast remains visible in dark mode for cards and form controls.
-- [x] Destructive actions are readable but visually restrained (outline-first where possible).
+## Source Of Truth
 
-## Shared Components
+- Theme tokens:
+  - `src/constants/theme.ts`
+- Tab scene background:
+  - `src/app/(tabs)/_layout.tsx`
+  - `screenOptions.sceneStyle.backgroundColor = theme.background`
+- Settings stack background:
+  - `src/app/(tabs)/settings/_layout.tsx`
+  - `screenOptions.contentStyle.backgroundColor = theme.background`
 
-- [x] `src/components/ui/input.tsx`: placeholder + focus state readable in light/dark.
-- [x] `src/components/ui/text-area.tsx`: placeholder + focus state readable in light/dark.
-- [x] `src/components/ui/select.tsx`: selected option + search input focus state readable in light/dark.
+## Implementation Rules
 
-## Screen QA
+### 1) Color Tokens
 
-- [x] Home: card borders readable in light/dark.
-- [x] Items List: filter chip selected states use high-contrast selected style in dark mode.
-- [x] Add Item Step 1: error, warning badges, and action buttons remain readable in dark mode.
-- [x] Add Item Step 2: usage chips and validation messages readable in both modes.
-- [x] Item Detail: attachment states (normal/missing) remain readable in both modes.
-- [x] Export: filter chips selected states use high-contrast selected style in dark mode.
-- [x] Settings: theme selector + danger zone readability verified in light/dark.
+- Use theme tokens, not hardcoded hex values, for screen-level UI.
+- Keep text, border, and surface contrast readable in both modes.
 
-## Manual QA Notes
+### 2) Tab Scene Background Ownership
 
-- Verify on device/emulator with `mode = light` and `mode = dark` from Settings.
-- Confirm selected filter chips are distinguishable from unselected chips on Items and Export.
-- Confirm focused text inputs show clear focus border in edit/add forms.
+- Keep tab root screen background centralized in Tabs `sceneStyle`.
+- Do not set per-screen wrapper backgrounds (`SafeAreaView`, root `View`, root `Box`) unless there is a proven need.
+- If a wrapper-specific override is required, document why in PR notes.
+
+### 3) Stack Background Ownership
+
+- For stack screens (Item + Settings), keep stack `contentStyle` as background owner.
+- Avoid adding screen-level wrapper backgrounds that conflict with stack background.
+
+## Screen QA Coverage
+
+- [x] Home cards, badges, and action surfaces are readable in light/dark.
+- [x] Items filter states and row cards are readable in light/dark.
+- [x] Export filter states and totals cards are readable in light/dark.
+- [x] Settings appearance/security/backup cards are readable in light/dark.
+- [x] Danger/destructive actions remain readable in both modes.
+
+## Manual QA Checklist
+
+- [ ] Light mode: Home, Items, Export, Settings share the same page background.
+- [ ] Dark mode: Home, Items, Export, Settings share the same page background.
+- [ ] iOS overscroll/bounce on Home does not reveal a different background.
+- [ ] iOS overscroll/bounce on Items does not reveal a different background.
+- [ ] iOS overscroll/bounce on Export does not reveal a different background.
+- [ ] iOS overscroll/bounce on Settings (index and subroutes) does not reveal a different background.
+- [ ] Theme switching (`system/light/dark`) updates all tab/stack pages without stale colors.
