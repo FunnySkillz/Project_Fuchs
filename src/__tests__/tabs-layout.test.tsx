@@ -4,6 +4,7 @@ import { fireEvent, render, screen } from "@testing-library/react-native";
 import TabsLayout from "@/app/(tabs)/_layout";
 
 const mockPush = jest.fn();
+let mockTabsScreenOptions: Record<string, unknown> | undefined;
 
 jest.mock("@/hooks/use-theme", () => ({
   useTheme: () => ({
@@ -33,7 +34,16 @@ jest.mock("lucide-react-native", () => {
 jest.mock("expo-router", () => {
   const ReactModule = require("react");
   const { Pressable, View } = require("react-native");
-  const TabsComponent = ({ children }: { children: React.ReactNode }) => <View>{children}</View>;
+  const TabsComponent = ({
+    children,
+    screenOptions,
+  }: {
+    children: React.ReactNode;
+    screenOptions?: Record<string, unknown>;
+  }) => {
+    mockTabsScreenOptions = screenOptions;
+    return <View>{children}</View>;
+  };
   const TabsWithScreen = Object.assign(TabsComponent, {
     Screen: ({
       name,
@@ -65,6 +75,7 @@ jest.mock("expo-router", () => {
 describe("TabsLayout", () => {
   beforeEach(() => {
     mockPush.mockReset();
+    mockTabsScreenOptions = undefined;
   });
 
   it("opens add-item flow when add tab is pressed", () => {
@@ -74,5 +85,15 @@ describe("TabsLayout", () => {
     fireEvent.press(addTabButton);
 
     expect(mockPush).toHaveBeenCalledWith("/item/new");
+  });
+
+  it("uses theme background as scene container background", () => {
+    render(<TabsLayout />);
+
+    expect(mockTabsScreenOptions).toMatchObject({
+      sceneStyle: {
+        backgroundColor: "#F7F9FC",
+      },
+    });
   });
 });
