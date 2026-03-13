@@ -34,6 +34,7 @@ interface DashboardStats {
 export default function HomeRoute() {
   const router = useRouter();
   const theme = useTheme();
+  const isNavigatingToItemsRef = React.useRef(false);
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -82,6 +83,7 @@ export default function HomeRoute() {
 
   useFocusEffect(
     useCallback(() => {
+      isNavigatingToItemsRef.current = false;
       void loadDashboard();
     }, [loadDashboard])
   );
@@ -92,6 +94,20 @@ export default function HomeRoute() {
     });
     return unsubscribe;
   }, [loadDashboard]);
+
+  const navigateToItemsWithFilter = useCallback(
+    (params: { missingReceipt?: "1"; missingNotes?: "1" }) => {
+      if (!stats || isNavigatingToItemsRef.current) {
+        return;
+      }
+      isNavigatingToItemsRef.current = true;
+      router.push({
+        pathname: "/(tabs)/items",
+        params: { year: String(stats.year), ...params },
+      });
+    },
+    [router, stats]
+  );
 
   if (isLoading) {
     return (
@@ -189,12 +205,7 @@ export default function HomeRoute() {
                         </HStack>
 
                         <Pressable
-                          onPress={() =>
-                            router.push({
-                              pathname: "/(tabs)/items",
-                              params: { year: String(stats.year), missingReceipt: "1" },
-                            })
-                          }
+                          onPress={() => navigateToItemsWithFilter({ missingReceipt: "1" })}
                           testID="home-missing-receipts-row"
                           style={{
                             borderRadius: 10,
@@ -243,12 +254,7 @@ export default function HomeRoute() {
                         </HStack>
 
                         <Pressable
-                          onPress={() =>
-                            router.push({
-                              pathname: "/(tabs)/items",
-                              params: { year: String(stats.year), missingNotes: "1" },
-                            })
-                          }
+                          onPress={() => navigateToItemsWithFilter({ missingNotes: "1" })}
                           testID="home-missing-notes-row"
                           style={{
                             borderRadius: 10,

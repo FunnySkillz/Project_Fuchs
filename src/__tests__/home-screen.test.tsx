@@ -154,7 +154,7 @@ describe("HomeRoute", () => {
     mockCategoryList.mockResolvedValue([]);
     mockComputeDeductible.mockImplementation((item: { id: string }) => (item.id === "item-a" ? 10_000 : 20_000));
 
-    renderHome();
+    const homeView = renderHome();
 
     expect(await screen.findByText("Steuerausgleich 2026")).toBeTruthy();
     expect(screen.getAllByText("Estimated deductible this year").length).toBeGreaterThan(0);
@@ -172,10 +172,55 @@ describe("HomeRoute", () => {
       params: { year: "2026", missingReceipt: "1" },
     });
 
+    homeView.unmount();
+    const homeViewAgain = renderHome();
+    expect(await screen.findByText("Steuerausgleich 2026")).toBeTruthy();
+
     fireEvent.press(screen.getByTestId("home-missing-notes-row"));
     expect(mockPush).toHaveBeenCalledWith({
       pathname: "/(tabs)/items",
       params: { year: "2026", missingNotes: "1" },
+    });
+    homeViewAgain.unmount();
+  });
+
+  it("ignores rapid repeated taps on attention navigation rows", async () => {
+    const yearItems = [{ id: "item-a", title: "Laptop" }];
+
+    mockGetSettings.mockResolvedValue({
+      taxYearDefault: 2026,
+      marginalRateBps: 4_000,
+      defaultWorkPercent: 100,
+      gwgThresholdCents: 100_000,
+      applyHalfYearRule: false,
+      appLockEnabled: false,
+      uploadToOneDriveAfterExport: false,
+      themeModePreference: "system",
+      currency: "EUR",
+    });
+    mockItemList.mockImplementation(async (filters?: { missingReceipt?: boolean; missingNotes?: boolean }) => {
+      if (filters?.missingReceipt) {
+        return [yearItems[0]];
+      }
+      if (filters?.missingNotes) {
+        return [];
+      }
+      return yearItems;
+    });
+    mockCategoryList.mockResolvedValue([]);
+    mockComputeDeductible.mockReturnValue(10_000);
+
+    renderHome();
+    expect(await screen.findByText("Steuerausgleich 2026")).toBeTruthy();
+
+    const row = screen.getByTestId("home-missing-receipts-row");
+    fireEvent.press(row);
+    fireEvent.press(row);
+
+    expect(mockPush).toHaveBeenCalledTimes(1);
+    expect(mockPush).toHaveBeenCalledWith({
+      pathname: "/(tabs)/items",
+      params: { year: "2026", missingReceipt: "1" },
     });
   });
 

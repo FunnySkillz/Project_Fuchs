@@ -1,5 +1,5 @@
-import { useRouter } from "expo-router";
-import React from "react";
+import { useFocusEffect, useRouter } from "expo-router";
+import React, { useCallback, useRef } from "react";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   Box,
@@ -14,6 +14,21 @@ import {
 export default function OnboardingWelcomeRoute() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const isNavigatingRef = useRef(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      isNavigatingRef.current = false;
+    }, [])
+  );
+
+  const continueToProfileSetup = useCallback(() => {
+    if (isNavigatingRef.current) {
+      return;
+    }
+    isNavigatingRef.current = true;
+    router.push("/(onboarding)/profile-setup");
+  }, [router]);
 
   return (
     <SafeAreaView style={{ flex: 1 }} edges={["top"]}>
@@ -47,7 +62,7 @@ export default function OnboardingWelcomeRoute() {
           </Card>
 
           <Button
-            onPress={() => router.push("/(onboarding)/profile-setup")}
+            onPress={continueToProfileSetup}
             testID="onboarding-welcome-continue"
           >
             <ButtonText>Continue to Profile Setup</ButtonText>

@@ -1,5 +1,5 @@
-import { Tabs, useRouter } from "expo-router";
-import React from "react";
+import { Tabs, useFocusEffect, useRouter } from "expo-router";
+import React, { useCallback, useRef } from "react";
 import { Download, LayoutDashboard, Plus, Receipt, Settings } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -10,6 +10,21 @@ export default function TabsLayout() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const safeAreaBottom = Math.max(insets.bottom, 8);
+  const isNavigatingToAddRef = useRef(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      isNavigatingToAddRef.current = false;
+    }, [])
+  );
+
+  const openAddFlow = useCallback(() => {
+    if (isNavigatingToAddRef.current) {
+      return;
+    }
+    isNavigatingToAddRef.current = true;
+    router.push("/item/new");
+  }, [router]);
 
   return (
     <Tabs
@@ -51,7 +66,7 @@ export default function TabsLayout() {
         listeners={{
           tabPress: (event) => {
             event.preventDefault();
-            router.push("/item/new");
+            openAddFlow();
           },
         }}
         options={{

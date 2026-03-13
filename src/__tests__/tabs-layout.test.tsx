@@ -69,6 +69,9 @@ jest.mock("expo-router", () => {
   return {
     Tabs: TabsWithScreen,
     useRouter: () => ({ push: mockPush }),
+    useFocusEffect: (callback: () => void | (() => void)) => {
+      ReactModule.useEffect(() => callback(), [callback]);
+    },
   };
 });
 
@@ -84,6 +87,17 @@ describe("TabsLayout", () => {
     const addTabButton = screen.getByTestId("tab-add");
     fireEvent.press(addTabButton);
 
+    expect(mockPush).toHaveBeenCalledWith("/item/new");
+  });
+
+  it("ignores rapid repeated add-tab presses", () => {
+    render(<TabsLayout />);
+
+    const addTabButton = screen.getByTestId("tab-add");
+    fireEvent.press(addTabButton);
+    fireEvent.press(addTabButton);
+
+    expect(mockPush).toHaveBeenCalledTimes(1);
     expect(mockPush).toHaveBeenCalledWith("/item/new");
   });
 

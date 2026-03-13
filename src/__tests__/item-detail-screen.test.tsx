@@ -283,6 +283,30 @@ describe("ItemDetailRoute", () => {
     expect(mockPush).toHaveBeenCalledWith("/item/item-1/edit");
   });
 
+  it("ignores rapid repeated taps on header edit action", async () => {
+    render(<ItemDetailRoute />);
+
+    expect((await screen.findAllByText("Work laptop")).length).toBeGreaterThan(0);
+    await waitFor(() => {
+      expect(mockNavigationSetOptions).toHaveBeenCalledWith(
+        expect.objectContaining({ headerRight: expect.any(Function) })
+      );
+    });
+
+    const options = mockNavigationSetOptions.mock.calls[
+      mockNavigationSetOptions.mock.calls.length - 1
+    ][0] as { headerRight?: () => React.ReactElement };
+    const headerRight = options.headerRight?.() as
+      | React.ReactElement<{ onPress?: () => void }>
+      | undefined;
+
+    headerRight?.props.onPress?.();
+    headerRight?.props.onPress?.();
+
+    expect(mockPush).toHaveBeenCalledTimes(1);
+    expect(mockPush).toHaveBeenCalledWith("/item/item-1/edit");
+  });
+
   it("renders % Work as 0% for PRIVATE usage", async () => {
     mockGetById.mockResolvedValueOnce({
       ...baseItem,

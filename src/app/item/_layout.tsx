@@ -1,11 +1,23 @@
-import { Stack } from "expo-router";
-import React from "react";
+import { Stack, useRouter } from "expo-router";
+import React, { useCallback } from "react";
 import { HeaderBackButton } from "@react-navigation/elements";
 
 import { useTheme } from "@/hooks/use-theme";
 
 export default function ItemStackLayout() {
+  const router = useRouter();
   const theme = useTheme();
+  const goBackToItemsFallback = useCallback(() => {
+    const routerWithBack = router as {
+      canGoBack?: () => boolean;
+      back?: () => void;
+    };
+    if (typeof routerWithBack.canGoBack === "function" && routerWithBack.canGoBack()) {
+      routerWithBack.back?.();
+      return;
+    }
+    router.replace("/(tabs)/items");
+  }, [router]);
 
   return (
     <Stack
@@ -29,7 +41,13 @@ export default function ItemStackLayout() {
         options={{
           title: "Add Item",
           headerLeft: (props) =>
-            props.canGoBack ? <HeaderBackButton {...props} testID="additem-header-back" /> : null,
+            props.canGoBack ? (
+              <HeaderBackButton
+                {...props}
+                testID="additem-header-back"
+                onPress={goBackToItemsFallback}
+              />
+            ) : null,
         }}
       />
       <Stack.Screen
@@ -38,7 +56,12 @@ export default function ItemStackLayout() {
           title: "Item Detail",
           headerLeft: (props) =>
             props.canGoBack ? (
-              <HeaderBackButton {...props} displayMode="minimal" testID="itemdetail-header-back" />
+              <HeaderBackButton
+                {...props}
+                displayMode="minimal"
+                testID="itemdetail-header-back"
+                onPress={goBackToItemsFallback}
+              />
             ) : null,
         }}
       />
@@ -47,7 +70,13 @@ export default function ItemStackLayout() {
         options={{
           title: "Edit Item",
           headerLeft: (props) =>
-            props.canGoBack ? <HeaderBackButton {...props} testID="edititem-header-back" /> : null,
+            props.canGoBack ? (
+              <HeaderBackButton
+                {...props}
+                testID="edititem-header-back"
+                onPress={goBackToItemsFallback}
+              />
+            ) : null,
           presentation: "card",
         }}
       />

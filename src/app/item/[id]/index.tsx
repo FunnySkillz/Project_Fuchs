@@ -2,7 +2,7 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { Image } from "expo-image";
 import { useNavigation } from "@react-navigation/native";
 import { HeaderBackButton } from "@react-navigation/elements";
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useMemo, useRef, useState } from "react";
 import { Pressable as RNPressable, ScrollView } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Pencil, Trash2 } from "lucide-react-native";
@@ -131,6 +131,7 @@ export default function ItemDetailRoute() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [selectedAttachment, setSelectedAttachment] = useState<Attachment | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const isNavigatingToEditRef = useRef(false);
 
   const handleBackPress = useCallback(() => {
     if (typeof navigation.canGoBack === "function" && navigation.canGoBack()) {
@@ -221,9 +222,18 @@ export default function ItemDetailRoute() {
 
   useFocusEffect(
     useCallback(() => {
+      isNavigatingToEditRef.current = false;
       void loadItem();
     }, [loadItem])
   );
+
+  const handleEditPress = useCallback(() => {
+    if (!item || isNavigatingToEditRef.current) {
+      return;
+    }
+    isNavigatingToEditRef.current = true;
+    router.push(`/item/${item.id}/edit`);
+  }, [item, router]);
 
   React.useEffect(() => {
     const navigationWithOptions = navigation as {
@@ -248,7 +258,7 @@ export default function ItemDetailRoute() {
       headerLeft: renderHeaderBackButton,
       headerRight: () => (
         <RNPressable
-          onPress={() => router.push(`/item/${item.id}/edit`)}
+          onPress={handleEditPress}
           accessibilityRole="button"
           accessibilityLabel="Edit item"
           hitSlop={8}
@@ -263,7 +273,7 @@ export default function ItemDetailRoute() {
         </RNPressable>
       ),
     });
-  }, [item, navigation, renderHeaderBackButton, router, theme.primary]);
+  }, [handleEditPress, item, navigation, renderHeaderBackButton, theme.primary]);
 
   const categoryMap = useMemo(
     () => new Map(categories.map((category) => [category.id, category])),
