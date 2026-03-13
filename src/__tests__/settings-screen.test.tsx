@@ -61,6 +61,10 @@ jest.mock("@/hooks/use-theme", () => ({
 }));
 
 jest.mock("expo-router", () => ({
+  useFocusEffect: (callback: () => void | (() => void)) => {
+    const ReactModule = require("react");
+    ReactModule.useEffect(() => callback(), [callback]);
+  },
   useRouter: () => ({
     push: mockPush,
     replace: mockReplace,
@@ -81,8 +85,6 @@ describe("Settings navigation workflow", () => {
     expect(await screen.findByText("Settings")).toBeTruthy();
     fireEvent.press(screen.getByTestId("settings-nav-appearance"));
     expect(mockPush).toHaveBeenCalledWith("/(tabs)/settings/appearance");
-    fireEvent.press(screen.getByTestId("settings-nav-legal"));
-    expect(mockPush).toHaveBeenCalledWith("/(tabs)/settings/legal");
 
     mockCanGoBack = false;
     render(<SettingsAppearanceRoute />);
@@ -90,6 +92,19 @@ describe("Settings navigation workflow", () => {
 
     fireEvent.press(screen.getByTestId("settings-back-to-main-fallback"));
     expect(mockReplace).toHaveBeenCalledWith("/(tabs)/settings");
+  });
+
+  it("prevents duplicate pushes when tapping a settings entry rapidly", async () => {
+    render(<SettingsRoute />);
+
+    expect(await screen.findByText("Settings")).toBeTruthy();
+    const appearanceEntry = screen.getByTestId("settings-nav-appearance");
+
+    fireEvent.press(appearanceEntry);
+    fireEvent.press(appearanceEntry);
+
+    expect(mockPush).toHaveBeenCalledTimes(1);
+    expect(mockPush).toHaveBeenCalledWith("/(tabs)/settings/appearance");
   });
 
   it("renders legal disclaimer/privacy section and supports fallback navigation", async () => {

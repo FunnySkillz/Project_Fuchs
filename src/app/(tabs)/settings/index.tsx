@@ -1,5 +1,5 @@
-import { useRouter, type Href } from "expo-router";
-import React from "react";
+import { useFocusEffect, useRouter, type Href } from "expo-router";
+import React, { useCallback, useRef } from "react";
 import { ScrollView } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Box, Card, Heading, Pressable, Text, VStack } from "@gluestack-ui/themed";
@@ -47,6 +47,24 @@ const primaryEntries: SettingsEntry[] = [
 export default function TabSettingsRoute() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const isNavigatingRef = useRef(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      isNavigatingRef.current = false;
+    }, [])
+  );
+
+  const pushSettingsRoute = useCallback(
+    (route: Href) => {
+      if (isNavigatingRef.current) {
+        return;
+      }
+      isNavigatingRef.current = true;
+      router.push(route);
+    },
+    [router]
+  );
 
   return (
     <SafeAreaView style={{ flex: 1 }} edges={["bottom"]}>
@@ -71,7 +89,7 @@ export default function TabSettingsRoute() {
             {primaryEntries.map((entry) => (
               <Pressable
                 key={entry.testID}
-                onPress={() => router.push(entry.route)}
+                onPress={() => pushSettingsRoute(entry.route)}
                 testID={entry.testID}
               >
                 <Card borderWidth="$1" borderColor="$border200">
@@ -86,7 +104,7 @@ export default function TabSettingsRoute() {
             <VStack space="sm" pt="$2">
               <Heading size="sm">Danger Zone</Heading>
               <Pressable
-                onPress={() => router.push("/(tabs)/settings/danger-zone" as Href)}
+                onPress={() => pushSettingsRoute("/(tabs)/settings/danger-zone" as Href)}
                 testID="settings-nav-danger-zone"
               >
                 <Card borderWidth="$1" borderColor="$error300">
