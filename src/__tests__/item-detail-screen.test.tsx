@@ -5,7 +5,10 @@ import ItemDetailRoute from "@/app/item/[id]";
 
 const mockPush = jest.fn();
 const mockReplace = jest.fn();
+const mockBack = jest.fn();
 let mockCanGoBack = true;
+const mockNavigationCanGoBack = jest.fn(() => true);
+const mockNavigationGoBack = jest.fn();
 const mockGetById = jest.fn();
 const mockSoftDelete = jest.fn();
 const mockListAttachments = jest.fn();
@@ -86,14 +89,21 @@ jest.mock("expo-router", () => ({
   useRouter: () => ({
     push: mockPush,
     replace: mockReplace,
+    back: mockBack,
     canGoBack: () => mockCanGoBack,
   }),
   useLocalSearchParams: () => ({ id: "item-1" }),
+  useFocusEffect: (callback: () => void | (() => void)) => {
+    const ReactModule = require("react");
+    ReactModule.useEffect(() => callback(), [callback]);
+  },
 }));
 
 jest.mock("@react-navigation/native", () => ({
   useNavigation: () => ({
     setOptions: mockNavigationSetOptions,
+    canGoBack: () => mockNavigationCanGoBack(),
+    goBack: mockNavigationGoBack,
   }),
 }));
 
@@ -147,7 +157,11 @@ describe("ItemDetailRoute", () => {
   beforeEach(() => {
     mockPush.mockReset();
     mockReplace.mockReset();
+    mockBack.mockReset();
     mockNavigationSetOptions.mockReset();
+    mockNavigationCanGoBack.mockReset();
+    mockNavigationCanGoBack.mockReturnValue(true);
+    mockNavigationGoBack.mockReset();
     mockCanGoBack = true;
     mockGetById.mockReset();
     mockSoftDelete.mockReset();
@@ -316,6 +330,7 @@ describe("ItemDetailRoute", () => {
 
   it("shows back-to-items fallback when no history exists", async () => {
     mockCanGoBack = false;
+    mockNavigationCanGoBack.mockReturnValue(false);
     render(<ItemDetailRoute />);
 
     expect((await screen.findAllByText("Work laptop")).length).toBeGreaterThan(0);
@@ -326,5 +341,29 @@ describe("ItemDetailRoute", () => {
     await waitFor(() => {
       expect(mockReplace).toHaveBeenCalledWith("/(tabs)/items");
     });
+  });
+
+  it("wires header back to navigation.goBack when history exists", async () => {
+    render(<ItemDetailRoute />);
+
+    expect((await screen.findAllByText("Work laptop")).length).toBeGreaterThan(0);
+    await waitFor(() => {
+      expect(mockNavigationSetOptions).toHaveBeenCalledWith(
+        expect.objectContaining({ headerLeft: expect.any(Function) })
+      );
+    });
+
+    const options = mockNavigationSetOptions.mock.calls[
+      mockNavigationSetOptions.mock.calls.length - 1
+    ][0] as { headerLeft?: (props: { canGoBack?: boolean; tintColor?: string }) => React.ReactElement };
+    const headerLeft = options.headerLeft?.({ canGoBack: true, tintColor: "#111827" }) as
+      | React.ReactElement<{ testID?: string; onPress?: () => void }>
+      | undefined;
+
+    expect(headerLeft?.props.testID).toBe("itemdetail-header-back");
+    headerLeft?.props.onPress?.();
+
+    expect(mockNavigationGoBack).toHaveBeenCalledTimes(1);
+    expect(mockReplace).not.toHaveBeenCalled();
   });
 });

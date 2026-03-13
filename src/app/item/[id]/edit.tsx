@@ -697,8 +697,7 @@ export default function ItemEditRoute() {
       });
 
       setItem(updated);
-      allowNavigationExitRef.current = true;
-      router.replace(`/item/${itemId}`);
+      goBackFromEditFlow();
     } catch (error) {
       console.error("Failed to update item", error);
       setActionableLoadError(error, "Could not save changes.");

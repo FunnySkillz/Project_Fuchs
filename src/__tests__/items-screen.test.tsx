@@ -279,6 +279,63 @@ describe("ItemsRoute", () => {
     expect(mockPush).toHaveBeenCalledWith("/item/item-1");
   });
 
+  it("ignores rapid repeated row taps to avoid duplicate detail pushes", async () => {
+    const item = {
+      id: "item-1",
+      title: "Work Laptop",
+      purchaseDate: "2026-02-01",
+      totalCents: 199_900,
+      currency: "EUR",
+      usageType: "WORK",
+      workPercent: null,
+      categoryId: "cat-laptop",
+      vendor: "Store",
+      warrantyMonths: 24,
+      notes: null,
+      usefulLifeMonthsOverride: null,
+      createdAt: "2026-02-01T10:00:00.000Z",
+      updatedAt: "2026-02-01T10:00:00.000Z",
+      deletedAt: null,
+    };
+
+    mockGetSettings.mockResolvedValue({
+      taxYearDefault: 2026,
+      marginalRateBps: 4_000,
+      defaultWorkPercent: 100,
+      gwgThresholdCents: 100_000,
+      applyHalfYearRule: false,
+      appLockEnabled: false,
+      uploadToOneDriveAfterExport: false,
+      themeModePreference: "system",
+      currency: "EUR",
+    });
+    mockListItems.mockResolvedValue([item]);
+    mockListMissingReceiptItemIds.mockResolvedValue(["item-1"]);
+    mockListCategories.mockResolvedValue([
+      {
+        id: "cat-laptop",
+        name: "Laptop/Computer",
+        sortOrder: 10,
+        isPreset: true,
+        defaultUsefulLifeMonths: 36,
+        createdAt: "2026-01-01T00:00:00.000Z",
+        updatedAt: "2026-01-01T00:00:00.000Z",
+        deletedAt: null,
+      },
+    ]);
+    mockComputeDeductibleImpactCents.mockReturnValue(90_000);
+
+    render(<ItemsRoute />);
+    expect(await screen.findByText("Work Laptop")).toBeTruthy();
+
+    const row = screen.getByTestId("items-row-item-1");
+    fireEvent.press(row);
+    fireEvent.press(row);
+
+    expect(mockPush).toHaveBeenCalledTimes(1);
+    expect(mockPush).toHaveBeenCalledWith("/item/item-1");
+  });
+
   it("shows contract empty state copy when there are no matching items", async () => {
     mockGetSettings.mockResolvedValue({
       taxYearDefault: 2026,

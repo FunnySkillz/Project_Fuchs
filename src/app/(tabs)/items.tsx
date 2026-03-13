@@ -197,6 +197,7 @@ export default function ItemsRoute() {
   const swipeableRefs = useRef<Map<string, Swipeable | null>>(new Map());
   const openedSwipeableIdRef = useRef<string | null>(null);
   const fullSwipeArmedByItemIdRef = useRef<Map<string, boolean>>(new Map());
+  const isNavigatingToDetailRef = useRef(false);
 
   const parsedYear = useMemo(() => parseYearInput(year), [year]);
   const categoryMap = useMemo(
@@ -308,6 +309,7 @@ export default function ItemsRoute() {
 
   useFocusEffect(
     useCallback(() => {
+      isNavigatingToDetailRef.current = false;
       void loadData();
     }, [loadData])
   );
@@ -377,6 +379,17 @@ export default function ItemsRoute() {
     openedRef?.close();
     openedSwipeableIdRef.current = null;
   }, []);
+
+  const navigateToItemDetail = useCallback(
+    (itemId: string) => {
+      if (isNavigatingToDetailRef.current) {
+        return;
+      }
+      isNavigatingToDetailRef.current = true;
+      router.push(`/item/${itemId}`);
+    },
+    [router]
+  );
 
   const handleSwipeableWillOpen = useCallback((itemId: string) => {
     const currentlyOpenItemId = openedSwipeableIdRef.current;
@@ -625,7 +638,7 @@ export default function ItemsRoute() {
                     renderRightActions={(progress, dragX) => renderRightActions(progress, dragX, item)}
                   >
                     <Pressable
-                      onPress={() => router.push(`/item/${item.id}`)}
+                      onPress={() => navigateToItemDetail(item.id)}
                       testID={`items-row-${item.id}`}
                       style={styles.rowPressable}
                     >

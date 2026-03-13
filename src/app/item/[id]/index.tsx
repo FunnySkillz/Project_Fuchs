@@ -1,6 +1,7 @@
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { Image } from "expo-image";
 import { useNavigation } from "@react-navigation/native";
+import { HeaderBackButton } from "@react-navigation/elements";
 import React, { useCallback, useMemo, useState } from "react";
 import { Pressable as RNPressable, ScrollView } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
@@ -113,7 +114,9 @@ export default function ItemDetailRoute() {
   const params = useLocalSearchParams<{ id?: string | string[] }>();
   const itemId = toSingleParam(params.id);
   const canGoBack =
-    typeof (router as { canGoBack?: () => boolean }).canGoBack === "function"
+    typeof navigation.canGoBack === "function"
+      ? navigation.canGoBack()
+      : typeof (router as { canGoBack?: () => boolean }).canGoBack === "function"
       ? (router as { canGoBack: () => boolean }).canGoBack()
       : false;
 
@@ -128,6 +131,37 @@ export default function ItemDetailRoute() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [selectedAttachment, setSelectedAttachment] = useState<Attachment | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+
+  const handleBackPress = useCallback(() => {
+    if (typeof navigation.canGoBack === "function" && navigation.canGoBack()) {
+      navigation.goBack();
+      return;
+    }
+
+    const routerWithBack = router as {
+      canGoBack?: () => boolean;
+      back?: () => void;
+    };
+    if (typeof routerWithBack.canGoBack === "function" && routerWithBack.canGoBack()) {
+      routerWithBack.back?.();
+      return;
+    }
+
+    router.replace("/(tabs)/items");
+  }, [navigation, router]);
+
+  const renderHeaderBackButton = useCallback(
+    (props: { canGoBack?: boolean; tintColor?: string }) =>
+      props.canGoBack ? (
+        <HeaderBackButton
+          testID="itemdetail-header-back"
+          tintColor={props.tintColor}
+          displayMode="minimal"
+          onPress={handleBackPress}
+        />
+      ) : null,
+    [handleBackPress]
+  );
 
   const loadItem = useCallback(async () => {
     if (!itemId) {
@@ -185,24 +219,33 @@ export default function ItemDetailRoute() {
     }
   }, [itemId]);
 
-  React.useEffect(() => {
-    void loadItem();
-  }, [loadItem]);
+  useFocusEffect(
+    useCallback(() => {
+      void loadItem();
+    }, [loadItem])
+  );
 
   React.useEffect(() => {
     const navigationWithOptions = navigation as {
-      setOptions?: (options: { headerRight?: () => React.ReactNode }) => void;
+      setOptions?: (options: {
+        headerLeft?: (props: { canGoBack?: boolean; tintColor?: string }) => React.ReactNode;
+        headerRight?: () => React.ReactNode;
+      }) => void;
     };
     if (typeof navigationWithOptions.setOptions !== "function") {
       return;
     }
 
     if (!item) {
-      navigationWithOptions.setOptions({ headerRight: undefined });
+      navigationWithOptions.setOptions({
+        headerLeft: renderHeaderBackButton,
+        headerRight: undefined,
+      });
       return;
     }
 
     navigationWithOptions.setOptions({
+      headerLeft: renderHeaderBackButton,
       headerRight: () => (
         <RNPressable
           onPress={() => router.push(`/item/${item.id}/edit`)}
@@ -220,7 +263,7 @@ export default function ItemDetailRoute() {
         </RNPressable>
       ),
     });
-  }, [item, navigation, router, theme.primary]);
+  }, [item, navigation, renderHeaderBackButton, router, theme.primary]);
 
   const categoryMap = useMemo(
     () => new Map(categories.map((category) => [category.id, category])),
