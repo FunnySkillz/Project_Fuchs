@@ -81,6 +81,7 @@ import {
   isUserCancellationError,
   shouldOfferOpenSettingsForError,
 } from "@/services/friendly-errors";
+import { useI18n } from "@/contexts/language-context";
 import { addMonthsToYmd, formatYmdFromDateLocal, parseYmd } from "@/utils/date";
 import { parseEuroInputToCents } from "@/utils/money";
 
@@ -162,15 +163,6 @@ const usageOptions: { value: ItemUsageType; label: string; key: string }[] = [
   { value: "OTHER", label: "OTHER", key: "other" },
 ];
 
-const requiredFieldMessages: Record<
-  "title" | "purchaseDate" | "totalCents",
-  string
-> = {
-  title: "Title is required.",
-  purchaseDate: "Purchase date is required.",
-  totalCents: "Price is required and must be greater than 0.",
-};
-
 type FieldKey =
   | "title"
   | "purchaseDate"
@@ -201,6 +193,7 @@ export default function NewItemRoute() {
   const router = useRouter();
   const navigation = useNavigation<any>();
   const theme = useTheme();
+  const { t } = useI18n();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ draftId?: string | string[] }>();
   const draftId = toSingleParam(params.draftId);
@@ -311,6 +304,10 @@ export default function NewItemRoute() {
     return parsed;
   }, [usefulLifeMonthsOverride]);
 
+  const requiredTitleMessage = t("item.form.required.title");
+  const requiredPurchaseDateMessage = t("item.form.required.purchaseDate");
+  const requiredTotalCentsMessage = t("item.form.required.totalCents");
+
   const usefulLifeMonthsOverrideError = useMemo(() => {
     const trimmed = usefulLifeMonthsOverride.trim();
     if (trimmed.length === 0) {
@@ -320,10 +317,10 @@ export default function NewItemRoute() {
       parsedUsefulLifeMonthsOverride === null ||
       parsedUsefulLifeMonthsOverride <= 0
     ) {
-      return "Useful life override must be a positive number of months.";
+      return t("item.form.usefulLife.errorPositiveMonths");
     }
     return null;
-  }, [parsedUsefulLifeMonthsOverride, usefulLifeMonthsOverride]);
+  }, [parsedUsefulLifeMonthsOverride, t, usefulLifeMonthsOverride]);
 
   const validation = useMemo(() => {
     return validateItemInput({
@@ -355,19 +352,25 @@ export default function NewItemRoute() {
 
   const validationMessages = useMemo(() => {
     return {
-      title: fieldErrors.title ? requiredFieldMessages.title : undefined,
+      title: fieldErrors.title ? requiredTitleMessage : undefined,
       purchaseDate: fieldErrors.purchaseDate
         ? purchaseDate.trim().length === 0
-          ? requiredFieldMessages.purchaseDate
+          ? requiredPurchaseDateMessage
           : fieldErrors.purchaseDate
         : undefined,
       totalCents: fieldErrors.totalCents
-        ? requiredFieldMessages.totalCents
+        ? requiredTotalCentsMessage
         : undefined,
       workPercent: fieldErrors.workPercent,
       warrantyMonths: fieldErrors.warrantyMonths,
     };
-  }, [fieldErrors, purchaseDate]);
+  }, [
+    fieldErrors,
+    purchaseDate,
+    requiredPurchaseDateMessage,
+    requiredTitleMessage,
+    requiredTotalCentsMessage,
+  ]);
 
   const isFormValid =
     validation.valid && usefulLifeMonthsOverrideError === null;
@@ -376,13 +379,13 @@ export default function NewItemRoute() {
 
   const selectedCategoryName = useMemo(() => {
     if (!categoryId) {
-      return "No category selected";
+      return t("item.form.category.noneSelected");
     }
     return (
       categories.find((entry) => entry.id === categoryId)?.name ??
-      "Unknown category"
+      t("item.form.category.unknown")
     );
-  }, [categories, categoryId]);
+  }, [categories, categoryId, t]);
 
   const warrantyUntilDate = useMemo(() => {
     if (!parsedWarrantyMonths || parsedWarrantyMonths <= 0) {
@@ -468,12 +471,12 @@ export default function NewItemRoute() {
       }
     } catch (error) {
       console.error("Failed to load categories", error);
-      setErrorMessage("Could not load categories.");
+      setErrorMessage(t("item.form.error.loadCategories"));
       setShowOpenSettingsAction(false);
     } finally {
       setIsLoadingCategories(false);
     }
-  }, [categoryId]);
+  }, [categoryId, t]);
 
   useEffect(() => {
     if (activeDraftId) {
@@ -578,12 +581,12 @@ export default function NewItemRoute() {
       goBackFromAddFlow();
     } catch (error) {
       console.error("Failed to clear item draft", error);
-      setActionableError(error, "Could not cancel draft safely. Please retry.");
+      setActionableError(error, t("item.new.error.cancelDraft"));
     } finally {
       setIsBusy(false);
       setIsDiscardModalOpen(false);
     }
-  }, [activeDraftId, clearError, goBackFromAddFlow, setActionableError]);
+  }, [activeDraftId, clearError, goBackFromAddFlow, setActionableError, t]);
 
   const handleExitRequest = useCallback(async () => {
     pendingNavigationActionRef.current = null;
@@ -605,7 +608,7 @@ export default function NewItemRoute() {
 
     if (Platform.OS === "web") {
       const next = globalThis.prompt?.(
-        "Enter purchase date (YYYY-MM-DD)",
+        t("item.form.purchaseDate.webPrompt"),
         purchaseDate,
       );
       if (!next) {
@@ -619,7 +622,7 @@ export default function NewItemRoute() {
     }
 
     setIsDatePickerOpen(true);
-  }, [purchaseDate, setFieldTouched]);
+  }, [purchaseDate, setFieldTouched, t]);
 
   const onAndroidPurchaseDatePickerChange = useCallback(
     (event: DateTimePickerEvent, selectedDate?: Date) => {
@@ -745,11 +748,11 @@ export default function NewItemRoute() {
       await Linking.openSettings();
     } catch {
       setErrorMessage(
-        "Could not open device settings. Open system settings manually.",
+        t("item.form.error.openDeviceSettings"),
       );
       setShowOpenSettingsAction(false);
     }
-  }, []);
+  }, [t]);
 
   const handleOpenPdfAttachment = useCallback(
     async (attachment: StoredAttachmentFile) => {
@@ -763,10 +766,10 @@ export default function NewItemRoute() {
         await Linking.openURL(attachment.filePath);
       } catch (error) {
         console.error("Failed to open PDF attachment", error);
-        setActionableError(error, "Could not open PDF attachment.");
+        setActionableError(error, t("item.new.error.openPdfAttachment"));
       }
     },
-    [clearError, setActionableError],
+    [clearError, setActionableError, t],
   );
 
   const openAttachmentPreview = useCallback(
@@ -800,7 +803,7 @@ export default function NewItemRoute() {
         return;
       }
       console.error("Failed to capture receipt", error);
-      setActionableError(error, "Could not capture receipt photo.");
+      setActionableError(error, t("item.new.error.captureReceiptPhoto"));
     } finally {
       setIsBusy(false);
     }
@@ -826,7 +829,7 @@ export default function NewItemRoute() {
         return;
       }
       console.error("Failed to upload receipt", error);
-      setActionableError(error, "Could not upload receipt.");
+      setActionableError(error, t("item.new.error.uploadReceipt"));
     } finally {
       setIsBusy(false);
     }
@@ -852,7 +855,7 @@ export default function NewItemRoute() {
         return;
       }
       console.error("Failed to capture extra photo", error);
-      setActionableError(error, "Could not capture extra photo.");
+      setActionableError(error, t("item.new.error.captureExtraPhoto"));
     } finally {
       setIsBusy(false);
     }
@@ -871,14 +874,14 @@ export default function NewItemRoute() {
       }
     } catch (error) {
       console.error("Failed to remove attachment", error);
-      setActionableError(error, "Could not remove attachment.");
+      setActionableError(error, t("item.new.error.removeAttachment"));
     }
   };
 
   const createCategory = async () => {
     const name = newCategoryName.trim();
     if (name.length === 0) {
-      setErrorMessage("Category name cannot be empty.");
+      setErrorMessage(t("item.form.error.categoryNameEmpty"));
       setShowOpenSettingsAction(false);
       return;
     }
@@ -894,7 +897,7 @@ export default function NewItemRoute() {
       setIsCategorySheetOpen(false);
     } catch (error) {
       console.error("Failed to create category", error);
-      setActionableError(error, "Could not create category.");
+      setActionableError(error, t("item.form.error.createCategory"));
     } finally {
       setIsCreatingCategory(false);
     }
@@ -970,13 +973,13 @@ export default function NewItemRoute() {
       await linkDraftAttachmentsToItem(activeDraftId, created.id);
       shouldCleanupDraftOnExitRef.current = false;
       allowNavigationExitRef.current = true;
-      setSaveFeedbackMessage("Saved");
+      setSaveFeedbackMessage(t("common.status.saved"));
       await new Promise((resolve) => setTimeout(resolve, 600));
       router.replace("/(tabs)/items");
     } catch (error) {
       console.error("Failed to save item", error);
       setSaveFeedbackMessage(null);
-      setActionableError(error, "Could not save item. Please retry.");
+      setActionableError(error, t("item.new.error.save"));
     } finally {
       setIsSavingItem(false);
     }
@@ -1007,7 +1010,7 @@ export default function NewItemRoute() {
         >
           <GVStack space="md" alignItems="center">
             <GSpinner size="large" />
-            <GText size="sm">Preparing item draft...</GText>
+            <GText size="sm">{t("item.new.loadingDraft")}</GText>
           </GVStack>
         </GBox>
       </SafeAreaView>
@@ -1039,7 +1042,7 @@ export default function NewItemRoute() {
             <GVStack space="lg">
               <GVStack space="xs">
                 <GText size="sm">
-                  Capture purchase data and receipts in one clean flow.
+                  {t("item.new.subtitle")}
                 </GText>
               </GVStack>
 
@@ -1061,9 +1064,9 @@ export default function NewItemRoute() {
                         alignSelf="flex-start"
                         onPress={() => void openDeviceSettings()}
                         testID="new-item-open-settings"
-                        accessibilityLabel="Open device settings"
+                        accessibilityLabel={t("item.form.accessibility.openDeviceSettings")}
                       >
-                        <GButtonText>Open Settings</GButtonText>
+                        <GButtonText>{t("common.action.openSettings")}</GButtonText>
                       </GButton>
                     )}
                   </GVStack>
@@ -1079,29 +1082,32 @@ export default function NewItemRoute() {
                 }}
               >
                 <GVStack space="md">
-                  <GHeading size="md">Attachments</GHeading>
+                  <GHeading size="md">{t("item.attachments.title")}</GHeading>
                   <GButton
                     onPress={() => setIsAttachmentSheetOpen(true)}
                     disabled={isBusy}
                     alignSelf="stretch"
                     testID="additem-btn-addreceipt"
-                    accessibilityLabel="Add receipt"
+                    accessibilityLabel={t("item.attachments.accessibility.addReceipt")}
                   >
                     <GHStack space="xs" alignItems="center">
                       <Plus size={16} color={theme.textOnPrimary} />
-                      <GButtonText>{isBusy ? "Working..." : "Add receipt"}</GButtonText>
+                      <GButtonText>
+                        {isBusy ? t("settings.backupSync.localBackup.working") : t("item.attachments.action.addReceipt")}
+                      </GButtonText>
                     </GHStack>
                   </GButton>
 
                   <GText size="xs" color="$textLight500">
-                    Receipts: {receiptAttachments.length} | Extra photos:{" "}
-                    {extraPhotos.length}
+                    {t("item.attachments.countLine", {
+                      receipts: receiptAttachments.length,
+                      photos: extraPhotos.length,
+                    })}
                   </GText>
 
                   {attachments.length === 0 ? (
                     <GText size="sm" color="$textLight500">
-                      No attachments yet. You can still save and add files
-                      later.
+                      {t("item.attachments.empty")}
                     </GText>
                   ) : (
                     <ScrollView
@@ -1122,7 +1128,11 @@ export default function NewItemRoute() {
                                   openAttachmentPreview(attachment)
                                 }
                                 testID={`additem-attachment-preview-${attachmentId}`}
-                                accessibilityLabel={`Preview attachment ${attachment.originalFileName ?? "file"}`}
+                                accessibilityLabel={t("item.attachments.accessibility.preview", {
+                                  fileName:
+                                    attachment.originalFileName ??
+                                    t("item.attachments.unnamedFile"),
+                                })}
                               >
                                 <GCard
                                   borderWidth="$1"
@@ -1170,7 +1180,7 @@ export default function NewItemRoute() {
                                     </GBox>
                                     <GText size="xs" numberOfLines={1}>
                                       {attachment.originalFileName ??
-                                        "Unnamed file"}
+                                        t("item.attachments.unnamedFile")}
                                     </GText>
                                     <GText size="xs" color="$textLight500">
                                       {formatFileSize(attachment.fileSizeBytes)}
@@ -1183,7 +1193,11 @@ export default function NewItemRoute() {
                                   void removeAttachment(attachment.filePath)
                                 }
                                 testID={`additem-attachment-remove-${attachmentId}`}
-                                accessibilityLabel={`Remove attachment ${attachment.originalFileName ?? "file"}`}
+                                accessibilityLabel={t("item.attachments.accessibility.remove", {
+                                  fileName:
+                                    attachment.originalFileName ??
+                                    t("item.attachments.unnamedFile"),
+                                })}
                                 style={{
                                   position: "absolute",
                                   top: -10,
@@ -1227,7 +1241,7 @@ export default function NewItemRoute() {
                 }}
               >
                 <GVStack space="md">
-                  <GHeading size="md">Required</GHeading>
+                  <GHeading size="md">{t("item.new.section.required")}</GHeading>
 
                   <GBox
                     onLayout={(event) => {
@@ -1236,7 +1250,7 @@ export default function NewItemRoute() {
                   >
                     <GVStack space="xs">
                       <GText bold size="sm">
-                        Title
+                        {t("item.form.title")}
                       </GText>
                       <GInput
                         variant="outline"
@@ -1252,10 +1266,10 @@ export default function NewItemRoute() {
                           }}
                           value={title}
                           onChangeText={setTitle}
-                          placeholder="e.g. Laptop for work"
+                          placeholder={t("item.form.titlePlaceholder")}
                           onBlur={() => setFieldTouched("title")}
                           testID="additem-input-title"
-                          accessibilityLabel="Item title"
+                          accessibilityLabel={t("item.form.accessibility.title")}
                           accessibilityState={
                             { invalid: shouldShowFieldError("title") } as any
                           }
@@ -1286,7 +1300,7 @@ export default function NewItemRoute() {
                         alignItems="center"
                       >
                         <GText bold size="sm">
-                          Purchase date
+                          {t("item.form.purchaseDate")}
                         </GText>
                         <GButton
                           size="xs"
@@ -1296,16 +1310,16 @@ export default function NewItemRoute() {
                             setPurchaseDate(formatYmdFromDateLocal(new Date()))
                           }
                           testID="additem-btn-settoday"
-                          accessibilityLabel="Set purchase date to today"
+                          accessibilityLabel={t("item.form.accessibility.setToday")}
                         >
-                          <GButtonText>Set today</GButtonText>
+                          <GButtonText>{t("item.form.setToday")}</GButtonText>
                         </GButton>
                       </GHStack>
                       <Pressable
                         onPress={openPurchaseDatePicker}
                         testID="additem-input-purchaseDate"
                         accessibilityRole="button"
-                        accessibilityLabel="Purchase date"
+                        accessibilityLabel={t("item.form.accessibility.purchaseDate")}
                         accessibilityState={
                           {
                             invalid: shouldShowFieldError("purchaseDate"),
@@ -1355,7 +1369,7 @@ export default function NewItemRoute() {
                           <GVStack space="sm">
                             <iosSwiftUI.Host matchContents>
                               <iosSwiftUI.DatePicker
-                                title="Select purchase date"
+                                title={t("item.form.selectPurchaseDate")}
                                 selection={datePickerValue}
                                 displayedComponents={["date"]}
                                 modifiers={[iosSwiftUI.datePickerStyle("wheel")]}
@@ -1368,16 +1382,16 @@ export default function NewItemRoute() {
                                 variant="outline"
                                 action="secondary"
                                 onPress={closePurchaseDatePicker}
-                                accessibilityLabel="Cancel date selection"
+                                accessibilityLabel={t("item.form.accessibility.cancelDateSelection")}
                               >
-                                <GButtonText>Cancel</GButtonText>
+                                <GButtonText>{t("common.action.cancel")}</GButtonText>
                               </GButton>
                               <GButton
                                 size="sm"
                                 onPress={confirmPurchaseDatePicker}
-                                accessibilityLabel="Confirm date selection"
+                                accessibilityLabel={t("item.form.accessibility.confirmDateSelection")}
                               >
-                                <GButtonText>Done</GButtonText>
+                                <GButtonText>{t("common.action.done")}</GButtonText>
                               </GButton>
                             </GHStack>
                           </GVStack>
@@ -1390,7 +1404,7 @@ export default function NewItemRoute() {
                           style={{ backgroundColor: theme.background }}
                         >
                           <GVStack space="sm">
-                            <GHeading size="sm">Select purchase date</GHeading>
+                            <GHeading size="sm">{t("item.form.selectPurchaseDate")}</GHeading>
                             <DateTimePicker
                               mode="date"
                               value={datePickerValue}
@@ -1403,16 +1417,16 @@ export default function NewItemRoute() {
                                 variant="outline"
                                 action="secondary"
                                 onPress={closePurchaseDatePicker}
-                                accessibilityLabel="Cancel date selection"
+                                accessibilityLabel={t("item.form.accessibility.cancelDateSelection")}
                               >
-                                <GButtonText>Cancel</GButtonText>
+                                <GButtonText>{t("common.action.cancel")}</GButtonText>
                               </GButton>
                               <GButton
                                 size="sm"
                                 onPress={confirmPurchaseDatePicker}
-                                accessibilityLabel="Confirm date selection"
+                                accessibilityLabel={t("item.form.accessibility.confirmDateSelection")}
                               >
-                                <GButtonText>Done</GButtonText>
+                                <GButtonText>{t("common.action.done")}</GButtonText>
                               </GButton>
                             </GHStack>
                           </GVStack>
@@ -1428,7 +1442,7 @@ export default function NewItemRoute() {
                   >
                     <GVStack space="xs">
                       <GText bold size="sm">
-                        Price (EUR)
+                        {t("item.form.price")}
                       </GText>
                       <GInput
                         variant="outline"
@@ -1446,10 +1460,10 @@ export default function NewItemRoute() {
                           value={totalPrice}
                           onChangeText={setTotalPrice}
                           keyboardType="decimal-pad"
-                          placeholder="e.g. 1299.90"
+                          placeholder={t("item.form.pricePlaceholder")}
                           onBlur={() => setFieldTouched("totalCents")}
                           testID="additem-input-price"
-                          accessibilityLabel="Price in euros"
+                          accessibilityLabel={t("item.form.accessibility.price")}
                           accessibilityState={
                             {
                               invalid: shouldShowFieldError("totalCents"),
@@ -1472,7 +1486,7 @@ export default function NewItemRoute() {
 
                   <GVStack space="xs">
                     <GText bold size="sm">
-                      Category
+                      {t("item.form.category")}
                     </GText>
                     <GButton
                       variant="outline"
@@ -1480,30 +1494,30 @@ export default function NewItemRoute() {
                       onPress={() => setIsCategorySheetOpen(true)}
                       justifyContent="space-between"
                       testID="additem-select-category"
-                      accessibilityLabel="Select category"
+                      accessibilityLabel={t("item.form.accessibility.selectCategory")}
                     >
                       <GButtonText>{selectedCategoryName}</GButtonText>
                     </GButton>
                     {isLoadingCategories && (
                       <GHStack space="sm" alignItems="center">
                         <GSpinner size="small" />
-                        <GText size="xs">Loading categories...</GText>
+                        <GText size="xs">{t("item.form.loadingCategories")}</GText>
                       </GHStack>
                     )}
                   </GVStack>
 
                   <GVStack space="xs">
                     <GText size="xs" color="$textLight500">
-                      Create new category
+                      {t("item.form.createCategory")}
                     </GText>
                     <GHStack space="sm" alignItems="center">
                       <GInput variant="outline" flex={1}>
                         <GInputField
                           value={newCategoryName}
                           onChangeText={setNewCategoryName}
-                          placeholder="e.g. Office equipment"
+                          placeholder={t("item.form.createCategoryPlaceholder")}
                           testID="additem-input-newcategory"
-                          accessibilityLabel="Create new category"
+                          accessibilityLabel={t("item.form.accessibility.createCategory")}
                         />
                       </GInput>
                       <GButton
@@ -1513,10 +1527,10 @@ export default function NewItemRoute() {
                         onPress={() => void createCategory()}
                         disabled={isCreatingCategory}
                         testID="additem-btn-addcategory"
-                        accessibilityLabel="Add category"
+                        accessibilityLabel={t("item.form.accessibility.addCategory")}
                       >
                         <GButtonText>
-                          {isCreatingCategory ? "Adding..." : "Add"}
+                          {isCreatingCategory ? t("item.form.creatingCategory") : t("common.action.add")}
                         </GButtonText>
                       </GButton>
                     </GHStack>
@@ -1524,7 +1538,7 @@ export default function NewItemRoute() {
 
                   <GVStack space="xs">
                     <GText bold size="sm">
-                      Usage type
+                      {t("item.form.usageType")}
                     </GText>
                     <GHStack space="sm" flexWrap="wrap">
                       {usageOptions.map((option) => (
@@ -1539,7 +1553,9 @@ export default function NewItemRoute() {
                           }
                           onPress={() => setUsageType(option.value)}
                           testID={`additem-seg-usage-${option.key}`}
-                          accessibilityLabel={`Usage type ${option.label}`}
+                          accessibilityLabel={t("item.form.accessibility.usageType", {
+                            usageType: option.label,
+                          })}
                         >
                           <GButtonText>{option.label}</GButtonText>
                         </GButton>
@@ -1556,7 +1572,7 @@ export default function NewItemRoute() {
                     >
                       <GVStack space="xs">
                         <GText bold size="sm">
-                          Work percent (%)
+                          {t("item.form.workPercent")}
                         </GText>
                         <GInput
                           variant="outline"
@@ -1574,10 +1590,10 @@ export default function NewItemRoute() {
                             value={workPercent}
                             onChangeText={setWorkPercent}
                             keyboardType="number-pad"
-                            placeholder="0-100"
+                            placeholder={t("item.form.workPercentPlaceholder")}
                             onBlur={() => setFieldTouched("workPercent")}
                             testID="additem-input-workpercent"
-                            accessibilityLabel="Work percent"
+                            accessibilityLabel={t("item.form.accessibility.workPercent")}
                             accessibilityState={
                               {
                                 invalid: shouldShowFieldError("workPercent"),
@@ -1586,7 +1602,7 @@ export default function NewItemRoute() {
                           />
                         </GInput>
                         <GText size="xs" color="$textLight500">
-                          Used to calculate deductible share.
+                          {t("item.form.workPercentHint")}
                         </GText>
                         {shouldShowFieldError("workPercent") && (
                           <GText
@@ -1617,7 +1633,7 @@ export default function NewItemRoute() {
                     onPress={() => setIsOptionalOpen((current) => !current)}
                     testID="additem-optional-toggle"
                     accessibilityRole="button"
-                    accessibilityLabel="Toggle optional fields"
+                    accessibilityLabel={t("item.form.accessibility.toggleOptional")}
                     accessibilityState={{ expanded: isOptionalOpen }}
                   >
                     <GHStack alignItems="center" justifyContent="space-between">
@@ -1627,10 +1643,12 @@ export default function NewItemRoute() {
                         ) : (
                           <ChevronRight size={16} color={theme.textSecondary} />
                         )}
-                        <GHeading size="md">Optional</GHeading>
+                        <GHeading size="md">{t("item.form.optionalSection")}</GHeading>
                       </GHStack>
                       <GText size="xs" color="$textLight500">
-                        {isOptionalOpen ? "Hide" : "Show"}
+                        {isOptionalOpen
+                          ? t("settings.taxCalculation.collapse")
+                          : t("settings.taxCalculation.expand")}
                       </GText>
                     </GHStack>
                   </Pressable>
@@ -1639,19 +1657,19 @@ export default function NewItemRoute() {
                     <GVStack space="md">
                       <GVStack space="xs">
                         <GText bold size="sm">
-                          Notes
+                          {t("item.form.notes")}
                         </GText>
                         <GTextarea>
                           <GTextareaInput
                             value={notes}
                             onChangeText={setNotes}
-                            placeholder="Optional context for invoice or audit trail"
+                            placeholder={t("item.form.notesPlaceholder")}
                             testID="additem-input-notes"
-                            accessibilityLabel="Notes"
+                            accessibilityLabel={t("item.form.accessibility.notes")}
                           />
                         </GTextarea>
                         <GText size="xs" color="$textLight500">
-                          Optional. Missing notes may be flagged later.
+                          {t("item.form.notesHint")}
                         </GText>
                       </GVStack>
 
@@ -1663,7 +1681,7 @@ export default function NewItemRoute() {
                       >
                         <GVStack space="xs">
                           <GText bold size="sm">
-                            Warranty months
+                            {t("item.form.warrantyMonths")}
                           </GText>
                           <GInput
                             variant="outline"
@@ -1681,10 +1699,10 @@ export default function NewItemRoute() {
                               value={warrantyMonths}
                               onChangeText={setWarrantyMonths}
                               keyboardType="number-pad"
-                              placeholder="Optional"
+                              placeholder={t("item.form.optionalPlaceholder")}
                               onBlur={() => setFieldTouched("warrantyMonths")}
                               testID="additem-input-warrantymonths"
-                              accessibilityLabel="Warranty months"
+                              accessibilityLabel={t("item.form.accessibility.warrantyMonths")}
                               accessibilityState={
                                 {
                                   invalid: shouldShowFieldError("warrantyMonths"),
@@ -1703,22 +1721,24 @@ export default function NewItemRoute() {
                             </GText>
                           )}
                           <GText size="xs" color="$textLight500">
-                            Warranty until: {warrantyUntilDate ?? "n/a"}
+                            {t("item.form.warrantyUntil", {
+                              date: warrantyUntilDate ?? t("settings.taxCalculation.notAvailable"),
+                            })}
                           </GText>
                         </GVStack>
                       </GBox>
 
                       <GVStack space="xs">
                         <GText bold size="sm">
-                          Vendor
+                          {t("item.form.vendor")}
                         </GText>
                         <GInput variant="outline">
                           <GInputField
                             value={vendor}
                             onChangeText={setVendor}
-                            placeholder="Optional vendor/store"
+                            placeholder={t("item.form.vendorPlaceholder")}
                             testID="additem-input-vendor"
-                            accessibilityLabel="Vendor"
+                            accessibilityLabel={t("item.form.accessibility.vendor")}
                           />
                         </GInput>
                       </GVStack>
@@ -1740,7 +1760,7 @@ export default function NewItemRoute() {
                     onPress={() => setIsAdvancedOpen((current) => !current)}
                     testID="additem-advanced-toggle"
                     accessibilityRole="button"
-                    accessibilityLabel="Toggle advanced fields"
+                    accessibilityLabel={t("item.form.accessibility.toggleAdvanced")}
                     accessibilityState={{ expanded: isAdvancedOpen }}
                   >
                     <GHStack alignItems="center" justifyContent="space-between">
@@ -1750,10 +1770,12 @@ export default function NewItemRoute() {
                         ) : (
                           <ChevronRight size={16} color={theme.textSecondary} />
                         )}
-                        <GHeading size="md">Advanced</GHeading>
+                        <GHeading size="md">{t("item.form.advancedSection")}</GHeading>
                       </GHStack>
                       <GText size="xs" color="$textLight500">
-                        {isAdvancedOpen ? "Hide" : "Show"}
+                        {isAdvancedOpen
+                          ? t("settings.taxCalculation.collapse")
+                          : t("settings.taxCalculation.expand")}
                       </GText>
                     </GHStack>
                   </Pressable>
@@ -1767,7 +1789,7 @@ export default function NewItemRoute() {
                     >
                       <GVStack space="xs">
                         <GText bold size="sm">
-                          Useful life override (months)
+                          {t("item.form.usefulLifeOverride")}
                         </GText>
                         <GInput
                           variant="outline"
@@ -1783,20 +1805,19 @@ export default function NewItemRoute() {
                             value={usefulLifeMonthsOverride}
                             onChangeText={setUsefulLifeMonthsOverride}
                             keyboardType="number-pad"
-                            placeholder="Optional, e.g. 36"
+                            placeholder={t("item.form.usefulLifePlaceholder")}
                             onBlur={() =>
                               setFieldTouched("usefulLifeMonthsOverride")
                             }
                             testID="additem-input-usefullife"
-                            accessibilityLabel="Useful life override in months"
+                            accessibilityLabel={t("item.form.accessibility.usefulLifeOverride")}
                             accessibilityState={
                               { invalid: showUsefulLifeError } as any
                             }
                           />
                         </GInput>
                         <GText size="xs" color="$textLight500">
-                          Overrides automatic useful-life mapping for this item
-                          only.
+                          {t("item.form.usefulLifeHint")}
                         </GText>
                         {showUsefulLifeError && (
                           <GText
@@ -1833,9 +1854,9 @@ export default function NewItemRoute() {
                     onPress={() => void handleExitRequest()}
                     disabled={isBusy || isSavingItem}
                     testID="additem-btn-cancel"
-                    accessibilityLabel="Cancel add item"
+                    accessibilityLabel={t("item.new.accessibility.cancel")}
                   >
-                    <GButtonText testID="additem-cancel">Cancel</GButtonText>
+                    <GButtonText testID="additem-cancel">{t("common.action.cancel")}</GButtonText>
                   </GButton>
 
                   <GBox flex={1} testID="additem-btn-submit">
@@ -1844,9 +1865,11 @@ export default function NewItemRoute() {
                       onPress={() => void submitAndSave()}
                       disabled={isSaveDisabled}
                       testID="additem-btn-save"
-                      accessibilityLabel="Save item"
+                      accessibilityLabel={t("item.new.accessibility.save")}
                     >
-                      <GButtonText testID="action-add-item">{isSavingItem ? "Saving..." : "Save Item"}</GButtonText>
+                      <GButtonText testID="action-add-item">
+                        {isSavingItem ? t("onboarding.profileSetup.saving") : t("item.new.action.saveItem")}
+                      </GButtonText>
                     </GButton>
                   </GBox>
                 </GHStack>
@@ -1879,7 +1902,7 @@ export default function NewItemRoute() {
                 }}
               >
                 <GActionsheetItemText>
-                  No category selected
+                  {t("item.form.category.noneSelected")}
                 </GActionsheetItemText>
               </GActionsheetItem>
               {categories.map((category) => (
@@ -1907,40 +1930,40 @@ export default function NewItemRoute() {
               </GActionsheetDragIndicatorWrapper>
               <GActionsheetItem
                 testID="additem-btn-takephoto"
-                accessibilityLabel="Take photo"
+                accessibilityLabel={t("item.attachments.accessibility.takePhoto")}
                 onPress={() => {
                   setIsAttachmentSheetOpen(false);
                   void addReceiptFromCamera();
                 }}
               >
-                <GActionsheetItemText>Take photo</GActionsheetItemText>
+                <GActionsheetItemText>{t("item.attachments.action.takePhoto")}</GActionsheetItemText>
               </GActionsheetItem>
               <GActionsheetItem
                 testID="additem-btn-upload"
-                accessibilityLabel="Upload file"
+                accessibilityLabel={t("item.attachments.accessibility.uploadFile")}
                 onPress={() => {
                   setIsAttachmentSheetOpen(false);
                   void uploadReceipt();
                 }}
               >
-                <GActionsheetItemText>Upload file</GActionsheetItemText>
+                <GActionsheetItemText>{t("item.attachments.action.uploadFile")}</GActionsheetItemText>
               </GActionsheetItem>
               <GActionsheetItem
                 testID="additem-btn-addextraphto"
-                accessibilityLabel="Add extra photo"
+                accessibilityLabel={t("item.attachments.accessibility.addExtraPhoto")}
                 onPress={() => {
                   setIsAttachmentSheetOpen(false);
                   void addExtraPhoto();
                 }}
               >
-                <GActionsheetItemText>Add extra photo</GActionsheetItemText>
+                <GActionsheetItemText>{t("item.attachments.action.addExtraPhoto")}</GActionsheetItemText>
               </GActionsheetItem>
               <GActionsheetItem
                 testID="additem-btn-attachment-cancel"
-                accessibilityLabel="Cancel attachment action"
+                accessibilityLabel={t("item.attachments.accessibility.cancelAction")}
                 onPress={() => setIsAttachmentSheetOpen(false)}
               >
-                <GActionsheetItemText>Cancel</GActionsheetItemText>
+                <GActionsheetItemText>{t("common.action.cancel")}</GActionsheetItemText>
               </GActionsheetItem>
             </GActionsheetContent>
           </GActionsheet>
@@ -1990,9 +2013,9 @@ export default function NewItemRoute() {
                   variant="outline"
                   action="secondary"
                   onPress={() => setPreviewAttachment(null)}
-                  accessibilityLabel="Close attachment preview"
+                  accessibilityLabel={t("item.attachments.accessibility.closePreview")}
                 >
-                  <GButtonText>Close</GButtonText>
+                  <GButtonText>{t("common.action.close")}</GButtonText>
                 </GButton>
                 <GButton
                   size="sm"
@@ -2001,9 +2024,9 @@ export default function NewItemRoute() {
                   onPress={() =>
                     void removeAttachment(previewAttachment.filePath)
                   }
-                  accessibilityLabel="Delete attachment"
+                  accessibilityLabel={t("item.attachments.accessibility.deleteAttachment")}
                 >
-                  <GButtonText>Delete</GButtonText>
+                  <GButtonText>{t("common.action.delete")}</GButtonText>
                 </GButton>
               </GHStack>
             </Pressable>
@@ -2034,9 +2057,9 @@ export default function NewItemRoute() {
           >
             <GVStack space="md">
               <GVStack space="xs">
-                <GHeading size="md">Discard changes?</GHeading>
+                <GHeading size="md">{t("item.form.discard.title")}</GHeading>
                 <GText size="sm">
-                  Your changes and draft attachments will be lost.
+                  {t("item.form.discard.body")}
                 </GText>
               </GVStack>
               <GHStack justifyContent="flex-end" space="sm">
@@ -2046,10 +2069,10 @@ export default function NewItemRoute() {
                   action="secondary"
                   onPress={closeDiscardModal}
                   testID="keep-editing"
-                  accessibilityLabel="Keep editing"
+                  accessibilityLabel={t("common.action.keepEditing")}
                 >
                   <GButtonText testID="additem-discard-keepediting">
-                    Keep editing
+                    {t("common.action.keepEditing")}
                   </GButtonText>
                 </GButton>
                 <GButton
@@ -2057,10 +2080,10 @@ export default function NewItemRoute() {
                   action="negative"
                   onPress={() => void exitAfterDiscard()}
                   testID="discard-confirm"
-                  accessibilityLabel="Discard changes"
+                  accessibilityLabel={t("item.form.discard.accessibilityDiscard")}
                 >
                   <GButtonText testID="additem-discard-confirm">
-                    Discard
+                    {t("common.action.discard")}
                   </GButtonText>
                 </GButton>
               </GHStack>

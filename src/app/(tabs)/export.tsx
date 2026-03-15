@@ -26,6 +26,7 @@ import {
   VStack,
 } from "@gluestack-ui/themed";
 
+import { useI18n } from "@/contexts/language-context";
 import { computeDeductibleImpactCents } from "@/domain/deductible-impact";
 import type { Category } from "@/models/category";
 import type { ExportRun } from "@/models/export-run";
@@ -65,13 +66,7 @@ type ExportFormat = "PDF" | "ZIP";
 type ExportFieldKey = "taxYear";
 type FocusTarget = { focus?: () => void };
 
-const usageOptions: { label: string; value: ItemUsageType | null }[] = [
-  { label: "All usage types", value: null },
-  { label: "WORK", value: "WORK" },
-  { label: "PRIVATE", value: "PRIVATE" },
-  { label: "MIXED", value: "MIXED" },
-  { label: "OTHER", value: "OTHER" },
-];
+const usageOptionValues: readonly (ItemUsageType | null)[] = [null, "WORK", "PRIVATE", "MIXED", "OTHER"];
 
 function parseYearInput(rawYear: string): number | undefined {
   const trimmed = rawYear.trim();
@@ -85,17 +80,20 @@ function parseYearInput(rawYear: string): number | undefined {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
-function getTaxYearValidationMessage(rawYear: string): string | null {
+function getTaxYearValidationMessage(
+  rawYear: string,
+  t: ReturnType<typeof useI18n>["t"]
+): string | null {
   const trimmed = rawYear.trim();
   if (trimmed.length === 0) {
     return null;
   }
   if (!/^\d{4}$/.test(trimmed)) {
-    return "Tax year must be a 4-digit year.";
+    return t("export.taxYear.validation.format");
   }
   const parsed = Number.parseInt(trimmed, 10);
   if (!Number.isFinite(parsed) || parsed < 1900 || parsed > 2100) {
-    return "Tax year must be between 1900 and 2100.";
+    return t("export.taxYear.validation.range");
   }
   return null;
 }
@@ -124,6 +122,7 @@ const ExportItemRow = React.memo(function ExportItemRow({
   onToggle,
 }: ExportItemRowProps) {
   const theme = useTheme();
+  const { t } = useI18n();
 
   return (
     <Card borderWidth="$1" borderColor="$border200" mb="$3">
@@ -137,7 +136,7 @@ const ExportItemRow = React.memo(function ExportItemRow({
               {categoryName} | {item.purchaseDate}
             </Text>
             <Text size="sm" color={theme.textSecondary}>
-              Deductible this year: {formatCents(deductibleThisYearCents)}
+              {t("items.row.deductibleThisYear", { amount: formatCents(deductibleThisYearCents) })}
             </Text>
           </VStack>
           <Text bold size="md" color={theme.text}>
@@ -148,16 +147,16 @@ const ExportItemRow = React.memo(function ExportItemRow({
         <HStack space="sm" flexWrap="wrap">
           {missingReceipt && (
             <Badge size="sm" action="warning" variant="outline">
-              <BadgeText>Missing receipt</BadgeText>
+              <BadgeText>{t("items.badge.missingReceipt")}</BadgeText>
             </Badge>
           )}
           {missingNotes && (
             <Badge size="sm" action="warning" variant="outline">
-              <BadgeText>Missing notes</BadgeText>
+              <BadgeText>{t("items.badge.missingNotes")}</BadgeText>
             </Badge>
           )}
           <Badge size="sm" action={selected ? "success" : "muted"} variant="outline">
-            <BadgeText>{selected ? "Selected" : "Not selected"}</BadgeText>
+            <BadgeText>{selected ? t("export.selection.selected") : t("export.selection.notSelected")}</BadgeText>
           </Badge>
         </HStack>
 
@@ -169,7 +168,7 @@ const ExportItemRow = React.memo(function ExportItemRow({
             onPress={() => onToggle(item.id)}
             testID={`export-row-toggle-${item.id}`}
           >
-            <ButtonText>{selected ? "Unselect" : "Select"}</ButtonText>
+            <ButtonText>{selected ? t("export.selection.unselect") : t("export.selection.select")}</ButtonText>
           </Button>
         </HStack>
       </VStack>
@@ -180,6 +179,7 @@ const ExportItemRow = React.memo(function ExportItemRow({
 export default function ExportRoute() {
   const insets = useSafeAreaInsets();
   const theme = useTheme();
+  const { t } = useI18n();
   const sessionDefaults = useMemo(() => getExportSelectionSessionState(), []);
   const fieldYRef = useRef<Partial<Record<ExportFieldKey, number>>>({});
   const scrollRef = useRef<ScrollView | null>(null);
@@ -221,28 +221,40 @@ export default function ExportRoute() {
   const [touchedFields, setTouchedFields] = useState<Partial<Record<ExportFieldKey, boolean>>>({});
 
   const parsedTaxYear = useMemo(() => parseYearInput(taxYear), [taxYear]);
-  const taxYearError = useMemo(() => getTaxYearValidationMessage(taxYear), [taxYear]);
+  const taxYearError = useMemo(() => getTaxYearValidationMessage(taxYear, t), [t, taxYear]);
   const isGenerateFormValid = taxYearError === null;
   const shouldShowTaxYearError = Boolean((submitAttempted || touchedFields.taxYear) && taxYearError);
   const categoryMap = useMemo(
     () => new Map(categories.map((category) => [category.id, category])),
     [categories]
   );
-  const usageChipLabel = usageType ? `Usage: ${usageType}` : "Usage: all";
+  const usageOptions = useMemo(
+    () =>
+      usageOptionValues.map((value) => ({
+        value,
+        label: value ? value : t("items.filter.usage.all"),
+      })),
+    [t]
+  );
+  const usageChipLabel = usageType
+    ? t("items.filter.usage.label", { usage: usageType })
+    : t("items.filter.usage.allLabel");
   const categoryChipLabel = categoryId
-    ? `Category: ${categoryMap.get(categoryId)?.name ?? "Unknown"}`
-    : "Category: all";
+    ? t("items.filter.category.label", {
+        category: categoryMap.get(categoryId)?.name ?? t("items.category.unknown"),
+      })
+    : t("items.filter.category.all");
   const supportsDirectoryPicker = useMemo(() => isExportDirectoryPickerSupported(), []);
   const localExportDirectoryUri = useMemo(() => {
     try {
       return getLocalExportDirectoryUri();
     } catch {
-      return "Unavailable";
+      return t("export.destination.unavailable");
     }
-  }, []);
+  }, [t]);
   const savedDirectoryLabel = savedDirectoryUri
     ? formatDirectoryUriForDisplay(savedDirectoryUri)
-    : "Not selected";
+    : t("settings.backupSync.oneDrive.notSelected");
 
   useEffect(() => {
     updateExportSelectionSessionState({
@@ -321,11 +333,11 @@ export default function ExportRoute() {
       setYearItems([]);
       setMissingReceiptItemIds(new Set());
       setExportHistory([]);
-      setLoadError("Could not load export selection data.");
+      setLoadError(t("export.loadErrorSelection"));
     } finally {
       setIsLoading(false);
     }
-  }, [parsedTaxYear]);
+  }, [parsedTaxYear, t]);
 
   useFocusEffect(
     useCallback(() => {
@@ -491,12 +503,12 @@ export default function ExportRoute() {
         setDirectorySaveError(
           friendlyFileErrorMessage(
             error,
-            "Export was created, but copying it to the selected folder failed."
+            t("export.destination.copyFailed")
           )
         );
       }
     },
-    [savedDirectoryUri, supportsDirectoryPicker]
+    [savedDirectoryUri, supportsDirectoryPicker, t]
   );
 
   const handlePickExportDirectory = useCallback(async () => {
@@ -513,9 +525,9 @@ export default function ExportRoute() {
       setDirectorySaveError(null);
     } catch (error) {
       console.error("Failed to select export directory", error);
-      setLoadError(friendlyFileErrorMessage(error, "Could not choose export folder."));
+      setLoadError(friendlyFileErrorMessage(error, t("export.destination.chooseFolderError")));
     }
-  }, [savedDirectoryUri, supportsDirectoryPicker]);
+  }, [savedDirectoryUri, supportsDirectoryPicker, t]);
 
   const handleClearExportDirectory = useCallback(async () => {
     try {
@@ -525,9 +537,9 @@ export default function ExportRoute() {
       setDirectorySaveError(null);
     } catch (error) {
       console.error("Failed to clear saved export directory", error);
-      setLoadError(friendlyFileErrorMessage(error, "Could not clear selected export folder."));
+      setLoadError(friendlyFileErrorMessage(error, t("export.destination.clearFolderError")));
     }
-  }, []);
+  }, [t]);
 
   const handleShareLatestGeneratedExport = useCallback(async () => {
     if (!latestGeneratedFileUri || !latestGeneratedFormat) {
@@ -541,9 +553,9 @@ export default function ExportRoute() {
       }
     } catch (error) {
       console.error("Failed to share latest generated export", error);
-      setLoadError(friendlyFileErrorMessage(error, "Could not share latest export file."));
+      setLoadError(friendlyFileErrorMessage(error, t("export.shareLatestError")));
     }
-  }, [latestGeneratedFileUri, latestGeneratedFormat]);
+  }, [latestGeneratedFileUri, latestGeneratedFormat, t]);
 
   const handleGenerateExport = async () => {
     setSubmitAttempted(true);
@@ -621,7 +633,9 @@ export default function ExportRoute() {
       setLoadError(
         friendlyFileErrorMessage(
           error,
-          selectedFormat === "PDF" ? "Could not generate PDF export." : "Could not generate ZIP export."
+          selectedFormat === "PDF"
+            ? t("export.generateErrorPdf")
+            : t("export.generateErrorZip")
         )
       );
     } finally {
@@ -631,7 +645,7 @@ export default function ExportRoute() {
 
   const handleShareHistoryRun = async (run: ExportRun) => {
     if (!run.outputFilePath) {
-      setLoadError("Selected export history entry has no output file path.");
+      setLoadError(t("export.history.missingOutputPath"));
       return;
     }
     try {
@@ -642,7 +656,7 @@ export default function ExportRoute() {
       }
     } catch (error) {
       console.error("Failed to share export from history", error);
-      setLoadError(friendlyFileErrorMessage(error, "Could not share export file from history."));
+      setLoadError(friendlyFileErrorMessage(error, t("export.history.shareError")));
     }
   };
 
@@ -656,17 +670,17 @@ export default function ExportRoute() {
             <VStack space="lg" maxWidth={900} width="$full" alignSelf="center">
               <VStack space="xs">
                 <Heading size="2xl" color={theme.text}>
-                  Export
+                  {t("navigation.tabs.export")}
                 </Heading>
                 <Text size="sm" color={theme.textSecondary}>
-                  Select, review, then generate a clean export package.
+                  {t("export.subtitle")}
                 </Text>
               </VStack>
 
               <Card borderWidth="$1" borderColor="$border200">
                 <VStack space="sm">
                   <Text bold size="sm" color={theme.text}>
-                    Tax year
+                    {t("export.taxYear.label")}
                   </Text>
                 <Box
                   testID="export-input-taxYear"
@@ -687,7 +701,11 @@ export default function ExportRoute() {
                       onChangeText={setTaxYear}
                       keyboardType="number-pad"
                       maxLength={4}
-                      placeholder={settings ? String(settings.taxYearDefault) : "e.g. 2026"}
+                      placeholder={
+                        settings
+                          ? String(settings.taxYearDefault)
+                          : t("export.taxYear.placeholderExample")
+                      }
                       testID="export-tax-year-input"
                       accessibilityState={({ invalid: shouldShowTaxYearError } as any)}
                       onBlur={() => {
@@ -714,10 +732,10 @@ export default function ExportRoute() {
                 <HStack justifyContent="space-between" alignItems="center" space="sm">
                   <VStack space="xs" flex={1}>
                     <Heading size="md" color={theme.text}>
-                      Select items
+                      {t("export.selection.title")}
                     </Heading>
                     <Text size="sm" color={theme.textSecondary}>
-                      Selected items: {selectedItems.length}
+                      {t("export.selection.count", { count: selectedItems.length })}
                     </Text>
                   </VStack>
                   <Button
@@ -727,7 +745,9 @@ export default function ExportRoute() {
                     onPress={() => setIsSelectionOpen((current) => !current)}
                     testID="export-selection-toggle"
                   >
-                    <ButtonText>{isSelectionOpen ? "Collapse" : "Expand"}</ButtonText>
+                    <ButtonText>
+                      {isSelectionOpen ? t("settings.taxCalculation.collapse") : t("settings.taxCalculation.expand")}
+                    </ButtonText>
                   </Button>
                 </HStack>
 
@@ -735,13 +755,13 @@ export default function ExportRoute() {
                   <VStack space="md">
                     <VStack space="xs">
                       <Text bold size="sm" color={theme.text}>
-                        Search
+                        {t("common.search.placeholder")}
                       </Text>
                       <Input variant="outline" size="md">
                         <InputField
                           value={search}
                           onChangeText={setSearch}
-                          placeholder="Search by title or vendor"
+                          placeholder={t("export.searchPlaceholder")}
                           testID="export-search-input"
                         />
                       </Input>
@@ -774,7 +794,7 @@ export default function ExportRoute() {
                           onPress={() => setMissingReceipt((current) => !current)}
                           testID="export-filter-missing-receipt"
                         >
-                          <ButtonText>Missing receipt</ButtonText>
+                          <ButtonText>{t("items.filter.missingReceipt")}</ButtonText>
                         </Button>
                         <Button
                           size="sm"
@@ -783,7 +803,7 @@ export default function ExportRoute() {
                           onPress={() => setMissingNotes((current) => !current)}
                           testID="export-filter-missing-notes"
                         >
-                          <ButtonText>Missing notes</ButtonText>
+                          <ButtonText>{t("items.filter.missingNotes")}</ButtonText>
                         </Button>
                       </HStack>
                     </ScrollView>
@@ -797,7 +817,11 @@ export default function ExportRoute() {
                         disabled={filteredItems.length === 0}
                         testID="export-select-all-filtered"
                       >
-                        <ButtonText>{allFilteredSelected ? "Unselect filtered" : "Select all filtered"}</ButtonText>
+                        <ButtonText>
+                          {allFilteredSelected
+                            ? t("export.selection.unselectFiltered")
+                            : t("export.selection.selectAllFiltered")}
+                        </ButtonText>
                       </Button>
                       <Button
                         size="sm"
@@ -806,32 +830,32 @@ export default function ExportRoute() {
                         onPress={clearFilters}
                         testID="export-clear-filters"
                       >
-                        <ButtonText>Clear filters</ButtonText>
+                        <ButtonText>{t("common.action.clear")}</ButtonText>
                       </Button>
                     </HStack>
 
                     <Badge size="sm" action="muted" variant="outline" alignSelf="flex-start">
-                      <BadgeText>{filteredItems.length} filtered item(s)</BadgeText>
+                      <BadgeText>{t("export.selection.filteredCount", { count: filteredItems.length })}</BadgeText>
                     </Badge>
 
                     {isLoading ? (
                       <Card borderWidth="$1" borderColor="$border200">
                         <HStack alignItems="center" space="sm">
                           <Spinner size="small" />
-                          <Text color={theme.textSecondary}>Loading export items...</Text>
+                          <Text color={theme.textSecondary}>{t("export.selection.loadingItems")}</Text>
                         </HStack>
                       </Card>
                     ) : filteredItems.length === 0 ? (
                       <Card borderWidth="$1" borderColor="$border200" testID="export-empty-state">
                         <Text color={theme.textSecondary}>
-                          No items found. Adjust filters or add a new item.
+                          {t("items.emptyState.title")}
                         </Text>
                       </Card>
                     ) : (
                       filteredItems.map((item) => {
                         const categoryName = item.categoryId
-                          ? categoryMap.get(item.categoryId)?.name ?? "Unknown"
-                          : "No category";
+                          ? categoryMap.get(item.categoryId)?.name ?? t("items.category.unknown")
+                          : t("items.category.none");
 
                         return (
                           <ExportItemRow
@@ -855,13 +879,13 @@ export default function ExportRoute() {
             <Card borderWidth="$1" borderColor="$border200">
               <VStack space="md">
                 <Heading size="lg" color={theme.text}>
-                  Totals summary
+                  {t("export.totals.title")}
                 </Heading>
 
                 <HStack justifyContent="space-between" alignItems="center" flexWrap="wrap" space="sm">
                   <VStack space="xs" minWidth={140}>
                     <Text size="sm" color={theme.textSecondary}>
-                      Selected items
+                      {t("export.totals.selectedItems")}
                     </Text>
                     <Heading size="xl" color={theme.text}>
                       {selectedItems.length}
@@ -869,7 +893,7 @@ export default function ExportRoute() {
                   </VStack>
                   <VStack space="xs" minWidth={140}>
                     <Text size="sm" color={theme.textSecondary}>
-                      Deductible this year
+                      {t("export.totals.deductible")}
                     </Text>
                     <Heading size="xl" color={theme.text}>
                       {formatCents(totals.deductibleThisYearCents)}
@@ -877,7 +901,7 @@ export default function ExportRoute() {
                   </VStack>
                   <VStack space="xs" minWidth={140}>
                     <Text size="sm" color={theme.textSecondary}>
-                      Estimated refund
+                      {t("export.totals.refund")}
                     </Text>
                     <Heading size="xl" color={theme.text}>
                       {formatCents(totals.estimatedRefundCents)}
@@ -887,7 +911,7 @@ export default function ExportRoute() {
 
                 <HStack justifyContent="space-between" alignItems="center">
                   <Text size="sm" color={theme.textSecondary}>
-                    Include detail pages
+                    {t("export.includeDetailPages")}
                   </Text>
                   <Switch
                     value={includeDetailPages}
@@ -898,7 +922,7 @@ export default function ExportRoute() {
 
                 <VStack space="xs">
                   <Text bold size="sm" color={theme.text}>
-                    Format
+                    {t("export.format")}
                   </Text>
                   <HStack space="sm">
                     <Button
@@ -931,24 +955,26 @@ export default function ExportRoute() {
                     accessibilityState={{ disabled: isGenerateDisabled }}
                   >
                     <ButtonText color={generateButtonTextColor}>
-                      {isGenerating ? `Generating ${selectedFormat}...` : "Generate Export"}
+                      {isGenerating
+                        ? t("export.generatingWithFormat", { format: selectedFormat })
+                        : t("export.generate")}
                     </ButtonText>
                   </Button>
                 </Box>
                 {!hasSelectedItems && (
                   <Text size="sm" color={theme.textSecondary} testID="export-no-items-hint">
-                    Select at least one item in the Select items section to generate an export.
+                    {t("export.noItemsHint")}
                   </Text>
                 )}
 
                 {latestGeneratedFileName && (
                   <Text size="sm" color={theme.textSecondary}>
-                    Last export: {latestGeneratedFileName}
+                    {t("export.lastExport", { fileName: latestGeneratedFileName })}
                   </Text>
                 )}
                 {latestGeneratedFileUri && (
                   <Text size="sm" color={theme.textMuted} testID="export-last-local-file-uri">
-                    Local file: {latestGeneratedFileUri}
+                    {t("export.localFile", { filePath: latestGeneratedFileUri })}
                   </Text>
                 )}
                 {latestGeneratedFileUri && latestGeneratedFormat && (
@@ -959,12 +985,15 @@ export default function ExportRoute() {
                     onPress={() => void handleShareLatestGeneratedExport()}
                     testID="export-share-latest"
                   >
-                    <ButtonText>Share latest</ButtonText>
+                    <ButtonText>{t("export.shareLatest")}</ButtonText>
                   </Button>
                 )}
                 {zipProgress && (
                   <Text size="sm" color={theme.textMuted}>
-                    ZIP progress: {zipProgress.percent}% - {zipProgress.message}
+                    {t("export.zipProgress", {
+                      percent: zipProgress.percent,
+                      message: zipProgress.message,
+                    })}
                   </Text>
                 )}
               </VStack>
@@ -973,16 +1002,16 @@ export default function ExportRoute() {
             <Card borderWidth="$1" borderColor="$border200">
               <VStack space="md">
                 <Heading size="md" color={theme.text}>
-                  Save destination
+                  {t("export.destination.title")}
                 </Heading>
                 <Text size="sm" color={theme.textSecondary}>
-                  App storage (always): {localExportDirectoryUri}
+                  {t("export.destination.appStorage", { path: localExportDirectoryUri })}
                 </Text>
 
                 {supportsDirectoryPicker ? (
                   <>
                     <Text size="sm" color={theme.textSecondary}>
-                      Selected folder: {savedDirectoryLabel}
+                      {t("export.destination.selectedFolder", { folder: savedDirectoryLabel })}
                     </Text>
                     <HStack space="sm" flexWrap="wrap">
                       <Button
@@ -993,7 +1022,9 @@ export default function ExportRoute() {
                         testID="export-select-folder"
                       >
                         <ButtonText>
-                          {savedDirectoryUri ? "Change folder" : "Choose folder"}
+                          {savedDirectoryUri
+                            ? t("export.destination.changeFolder")
+                            : t("export.destination.chooseFolder")}
                         </ButtonText>
                       </Button>
                       {savedDirectoryUri && (
@@ -1004,25 +1035,25 @@ export default function ExportRoute() {
                           onPress={() => void handleClearExportDirectory()}
                           testID="export-clear-folder"
                         >
-                          <ButtonText>Clear folder</ButtonText>
+                          <ButtonText>{t("export.destination.clearFolder")}</ButtonText>
                         </Button>
                       )}
                     </HStack>
                     <Text size="xs" color={theme.textMuted}>
-                      Android: choose a folder once, and each new export is copied there.
+                      {t("export.destination.androidHint")}
                     </Text>
                   </>
                 ) : (
                   <Text size="xs" color={theme.textMuted}>
                     {Platform.OS === "ios"
-                      ? "iOS: use Share latest or Share again and save the file to Files."
-                      : "Folder selection is unavailable on this platform. Use Share latest or Share again."}
+                      ? t("export.destination.iosHint")
+                      : t("export.destination.unavailableHint")}
                   </Text>
                 )}
 
                 {latestSavedDirectoryFileUri && (
                   <Text size="sm" color={theme.textMuted} testID="export-last-folder-file-uri">
-                    Folder copy: {latestSavedDirectoryFileUri}
+                    {t("export.destination.folderCopy", { path: latestSavedDirectoryFileUri })}
                   </Text>
                 )}
                 {directorySaveError && (
@@ -1038,10 +1069,10 @@ export default function ExportRoute() {
                 <HStack justifyContent="space-between" alignItems="center" space="sm">
                   <VStack space="xs" flex={1}>
                     <Heading size="md" color={theme.text}>
-                      Export history
+                      {t("export.history.title")}
                     </Heading>
                     <Text size="sm" color={theme.textSecondary}>
-                      {exportHistory.length} run(s) in selected tax year
+                      {t("export.history.count", { count: exportHistory.length })}
                     </Text>
                   </VStack>
                   <Button
@@ -1051,7 +1082,7 @@ export default function ExportRoute() {
                     onPress={() => setIsHistoryOpen((current) => !current)}
                     testID="export-history-toggle"
                   >
-                    <ButtonText>{isHistoryOpen ? "Hide" : "Show"}</ButtonText>
+                    <ButtonText>{isHistoryOpen ? t("export.history.hide") : t("export.history.show")}</ButtonText>
                   </Button>
                 </HStack>
 
@@ -1059,7 +1090,7 @@ export default function ExportRoute() {
                   <VStack space="sm">
                     {exportHistory.length === 0 ? (
                       <Text size="sm" color={theme.textSecondary}>
-                        No exports recorded for this tax year yet.
+                        {t("export.history.empty")}
                       </Text>
                     ) : (
                       exportHistory.map((run) => (
@@ -1075,11 +1106,16 @@ export default function ExportRoute() {
                               {run.outputType}
                             </Text>
                             <Text size="sm" color={theme.textSecondary}>
-                              {run.createdAt} | Items: {run.itemCount}
+                              {t("export.history.itemsLine", {
+                                createdAt: run.createdAt,
+                                itemCount: run.itemCount,
+                              })}
                             </Text>
                             <Text size="sm" color={theme.textSecondary}>
-                              Deductible: {formatCents(run.totalDeductibleCents)} | Refund:{" "}
-                              {formatCents(run.estimatedRefundCents)}
+                              {t("export.history.amountsLine", {
+                                deductible: formatCents(run.totalDeductibleCents),
+                                refund: formatCents(run.estimatedRefundCents),
+                              })}
                             </Text>
                           </VStack>
                           <Button
@@ -1088,7 +1124,7 @@ export default function ExportRoute() {
                             action="secondary"
                             onPress={() => void handleShareHistoryRun(run)}
                           >
-                            <ButtonText>Share again</ButtonText>
+                            <ButtonText>{t("export.history.shareAgain")}</ButtonText>
                           </Button>
                         </HStack>
                       ))
@@ -1111,7 +1147,7 @@ export default function ExportRoute() {
                     onPress={() => void loadData()}
                     testID="export-retry"
                   >
-                    <ButtonText>Retry</ButtonText>
+                    <ButtonText>{t("common.action.retry")}</ButtonText>
                   </Button>
                 </HStack>
               </Card>
@@ -1150,7 +1186,7 @@ export default function ExportRoute() {
                     setActiveSheet(null);
                   }}
                 >
-                  <ActionsheetItemText>All categories</ActionsheetItemText>
+                  <ActionsheetItemText>{t("items.filter.category.allOption")}</ActionsheetItemText>
                 </ActionsheetItem>
                 {categories.map((category) => (
                   <ActionsheetItem

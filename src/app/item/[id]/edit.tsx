@@ -56,6 +56,7 @@ import {
   isUserCancellationError,
   shouldOfferOpenSettingsForError,
 } from "@/services/friendly-errors";
+import { useI18n } from "@/contexts/language-context";
 import { useTheme } from "@/hooks/use-theme";
 import { validateItemInput } from "@/domain/item-validation";
 import { resolveWorkPercent } from "@/domain/work-percent";
@@ -132,12 +133,6 @@ type FieldKey =
   | "warrantyMonths"
   | "usefulLifeMonthsOverride";
 
-const requiredFieldMessages: Record<"title" | "purchaseDate" | "totalCents", string> = {
-  title: "Title is required.",
-  purchaseDate: "Purchase date is required.",
-  totalCents: "Price is required and must be greater than 0.",
-};
-
 interface InitialSnapshot {
   title: string;
   purchaseDate: string;
@@ -159,6 +154,7 @@ export default function ItemEditRoute() {
   const router = useRouter();
   const navigation = useNavigation<any>();
   const theme = useTheme();
+  const { t } = useI18n();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ id?: string | string[] }>();
   const itemId = toSingleParam(params.id);
@@ -233,16 +229,20 @@ export default function ItemEditRoute() {
     return Number.isFinite(parsed) ? parsed : null;
   }, [usefulLifeMonthsOverride]);
 
+  const requiredTitleMessage = t("item.form.required.title");
+  const requiredPurchaseDateMessage = t("item.form.required.purchaseDate");
+  const requiredTotalCentsMessage = t("item.form.required.totalCents");
+
   const usefulLifeMonthsOverrideError = useMemo(() => {
     const trimmed = usefulLifeMonthsOverride.trim();
     if (trimmed.length === 0) {
       return null;
     }
     if (parsedUsefulLifeMonthsOverride === null || parsedUsefulLifeMonthsOverride <= 0) {
-      return "Useful life override must be a positive number of months.";
+      return t("item.form.usefulLife.errorPositiveMonths");
     }
     return null;
-  }, [parsedUsefulLifeMonthsOverride, usefulLifeMonthsOverride]);
+  }, [parsedUsefulLifeMonthsOverride, t, usefulLifeMonthsOverride]);
 
   const validation = useMemo(() => {
     return validateItemInput({
@@ -267,24 +267,30 @@ export default function ItemEditRoute() {
 
   const validationMessages = useMemo(() => {
     return {
-      title: fieldErrors.title ? requiredFieldMessages.title : undefined,
+      title: fieldErrors.title ? requiredTitleMessage : undefined,
       purchaseDate: fieldErrors.purchaseDate
         ? purchaseDate.trim().length === 0
-          ? requiredFieldMessages.purchaseDate
+          ? requiredPurchaseDateMessage
           : fieldErrors.purchaseDate
         : undefined,
-      totalCents: fieldErrors.totalCents ? requiredFieldMessages.totalCents : undefined,
+      totalCents: fieldErrors.totalCents ? requiredTotalCentsMessage : undefined,
       workPercent: fieldErrors.workPercent,
       warrantyMonths: fieldErrors.warrantyMonths,
     };
-  }, [fieldErrors, purchaseDate]);
+  }, [
+    fieldErrors,
+    purchaseDate,
+    requiredPurchaseDateMessage,
+    requiredTitleMessage,
+    requiredTotalCentsMessage,
+  ]);
 
   const selectedCategoryName = useMemo(() => {
     if (!categoryId) {
-      return "No category selected";
+      return t("item.form.category.noneSelected");
     }
-    return categories.find((entry) => entry.id === categoryId)?.name ?? "Unknown category";
-  }, [categories, categoryId]);
+    return categories.find((entry) => entry.id === categoryId)?.name ?? t("item.form.category.unknown");
+  }, [categories, categoryId, t]);
 
   const isDirty = useMemo(() => {
     const initial = initialSnapshotRef.current;
@@ -357,10 +363,10 @@ export default function ItemEditRoute() {
     try {
       await Linking.openSettings();
     } catch {
-      setLoadError("Could not open device settings. Open system settings manually.");
+      setLoadError(t("item.form.error.openDeviceSettings"));
       setShowOpenSettingsAction(false);
     }
-  }, []);
+  }, [t]);
 
   const refreshAttachmentReadModel = useCallback(async (nextAttachments: Attachment[]) => {
     const checks = await Promise.all(
@@ -376,7 +382,7 @@ export default function ItemEditRoute() {
 
   const loadEditData = useCallback(async () => {
     if (!itemId) {
-      setLoadError("Missing item id.");
+      setLoadError(t("item.detail.errorMissingId"));
       setIsLoading(false);
       return;
     }
@@ -399,7 +405,7 @@ export default function ItemEditRoute() {
 
       if (!loadedItem) {
         setItem(null);
-        setLoadError("Item not found.");
+        setLoadError(t("item.detail.notFound"));
         return;
       }
 
@@ -425,11 +431,11 @@ export default function ItemEditRoute() {
       setNewCategoryName("");
     } catch (error) {
       console.error("Failed to load item for edit", error);
-      setActionableLoadError(error, "Could not load item for editing.");
+      setActionableLoadError(error, t("item.edit.error.loadForEditing"));
     } finally {
       setIsLoading(false);
     }
-  }, [clearLoadError, itemId, refreshAttachmentReadModel, setActionableLoadError]);
+  }, [clearLoadError, itemId, refreshAttachmentReadModel, setActionableLoadError, t]);
 
   React.useEffect(() => {
     void loadEditData();
@@ -512,7 +518,7 @@ export default function ItemEditRoute() {
 
     if (Platform.OS === "web") {
       const next = globalThis.prompt?.(
-        "Enter purchase date (YYYY-MM-DD)",
+        t("item.form.purchaseDate.webPrompt"),
         purchaseDate
       );
       if (!next) {
@@ -526,7 +532,7 @@ export default function ItemEditRoute() {
     }
 
     setIsDatePickerOpen(true);
-  }, [purchaseDate, setFieldTouched]);
+  }, [purchaseDate, setFieldTouched, t]);
 
   const onAndroidPurchaseDatePickerChange = useCallback(
     (event: DateTimePickerEvent, selectedDate?: Date) => {
@@ -700,7 +706,7 @@ export default function ItemEditRoute() {
       goBackFromEditFlow();
     } catch (error) {
       console.error("Failed to update item", error);
-      setActionableLoadError(error, "Could not save changes.");
+      setActionableLoadError(error, t("item.edit.error.saveChanges"));
     } finally {
       setIsSaving(false);
     }
@@ -756,7 +762,7 @@ export default function ItemEditRoute() {
         }
       }
       console.error("Failed to add attachment", error);
-      setActionableLoadError(error, "Could not add attachment.");
+      setActionableLoadError(error, t("item.edit.error.addAttachment"));
     } finally {
       setIsAttachmentBusy(false);
     }
@@ -775,14 +781,14 @@ export default function ItemEditRoute() {
       await refreshAttachmentReadModel(refreshed);
     } catch (error) {
       console.error("Failed to remove attachment", error);
-      setActionableLoadError(error, "Could not remove attachment.");
+      setActionableLoadError(error, t("item.edit.error.removeAttachment"));
     }
   };
 
   const createCategory = async () => {
     const name = newCategoryName.trim();
     if (name.length === 0) {
-      setLoadError("Category name cannot be empty.");
+      setLoadError(t("item.form.error.categoryNameEmpty"));
       setShowOpenSettingsAction(false);
       return;
     }
@@ -799,7 +805,7 @@ export default function ItemEditRoute() {
       setIsCategorySheetOpen(false);
     } catch (error) {
       console.error("Failed to create category", error);
-      setActionableLoadError(error, "Could not create category.");
+      setActionableLoadError(error, t("item.form.error.createCategory"));
     } finally {
       setIsCreatingCategory(false);
     }
@@ -811,7 +817,7 @@ export default function ItemEditRoute() {
         <Box flex={1} alignItems="center" justifyContent="center" px="$5" py="$6">
           <VStack space="md" alignItems="center">
             <Spinner size="large" />
-            <Text size="sm">Loading item for edit...</Text>
+            <Text size="sm">{t("item.edit.loading")}</Text>
           </VStack>
         </Box>
       </SafeAreaView>
@@ -823,16 +829,16 @@ export default function ItemEditRoute() {
       <SafeAreaView style={{ flex: 1 }} edges={["bottom"]}>
         <Box flex={1} px="$5" py="$6">
           <VStack space="lg" maxWidth={760} width="$full" alignSelf="center">
-            <Heading size="xl">Edit Item</Heading>
+            <Heading size="xl">{t("item.edit.title")}</Heading>
             <Card borderWidth="$1" borderColor="$error300">
               <VStack space="sm">
                 <Text bold size="md">
-                  Could not load item
+                  {t("item.edit.couldNotLoad")}
                 </Text>
-                <Text size="sm">{loadError ?? "Item not found."}</Text>
+                <Text size="sm">{loadError ?? t("item.detail.notFound")}</Text>
                 <HStack space="sm" flexWrap="wrap">
                   <Button variant="outline" action="secondary" onPress={() => void loadEditData()}>
-                    <ButtonText>Retry</ButtonText>
+                    <ButtonText>{t("common.action.retry")}</ButtonText>
                   </Button>
                   {showOpenSettingsAction ? (
                     <Button
@@ -840,14 +846,14 @@ export default function ItemEditRoute() {
                       action="secondary"
                       onPress={() => void openDeviceSettings()}
                     >
-                      <ButtonText>Open Settings</ButtonText>
+                      <ButtonText>{t("common.action.openSettings")}</ButtonText>
                     </Button>
                   ) : null}
                 </HStack>
               </VStack>
             </Card>
             <Button variant="outline" action="secondary" onPress={() => router.replace("/(tabs)/items")}>
-              <ButtonText>Back to Items</ButtonText>
+              <ButtonText>{t("common.action.backToItems")}</ButtonText>
             </Button>
           </VStack>
         </Box>
@@ -872,9 +878,9 @@ export default function ItemEditRoute() {
         >
           <VStack space="lg">
           <VStack space="xs">
-            <Heading size="2xl">Edit Item</Heading>
+            <Heading size="2xl">{t("item.edit.title")}</Heading>
             <Text size="sm">
-              Update details and attachments for {item.title}.
+              {t("item.edit.subtitle", { title: item.title })}
             </Text>
           </VStack>
 
@@ -884,7 +890,7 @@ export default function ItemEditRoute() {
                 <Text size="sm">{loadError}</Text>
                 <HStack space="sm" flexWrap="wrap">
                   <Button variant="outline" action="secondary" onPress={() => void loadEditData()}>
-                    <ButtonText>Retry</ButtonText>
+                    <ButtonText>{t("common.action.retry")}</ButtonText>
                   </Button>
                   {showOpenSettingsAction ? (
                     <Button
@@ -892,7 +898,7 @@ export default function ItemEditRoute() {
                       action="secondary"
                       onPress={() => void openDeviceSettings()}
                     >
-                      <ButtonText>Open Settings</ButtonText>
+                      <ButtonText>{t("common.action.openSettings")}</ButtonText>
                     </Button>
                   ) : null}
                 </HStack>
@@ -902,7 +908,7 @@ export default function ItemEditRoute() {
 
           <Card borderWidth="$1" borderColor="$border200">
             <VStack space="md">
-              <Heading size="md">Fields</Heading>
+              <Heading size="md">{t("item.edit.section.fields")}</Heading>
 
               <Box
                 testID="edititem-input-title"
@@ -912,7 +918,7 @@ export default function ItemEditRoute() {
               >
               <VStack space="xs">
                 <Text bold size="sm">
-                  Title *
+                  {t("item.form.titleRequired")}
                 </Text>
                 <Input
                   variant="outline"
@@ -924,9 +930,10 @@ export default function ItemEditRoute() {
                     }}
                     value={title}
                     onChangeText={setTitle}
-                    placeholder="e.g. Work laptop"
+                    placeholder={t("item.form.titlePlaceholder")}
                     onBlur={() => setFieldTouched("title")}
                     testID="item-edit-title-input"
+                    accessibilityLabel={t("item.form.accessibility.title")}
                     accessibilityState={
                       ({ invalid: shouldShowFieldError("title") } as any)
                     }
@@ -953,14 +960,14 @@ export default function ItemEditRoute() {
               >
               <VStack space="xs">
                 <Text bold size="sm">
-                  Purchase date *
+                  {t("item.form.purchaseDateRequired")}
                 </Text>
                 <HStack space="sm" flexWrap="wrap" alignItems="center">
                   <Pressable
                     onPress={openPurchaseDatePicker}
                     testID="item-edit-purchase-date-input"
                     accessibilityRole="button"
-                    accessibilityLabel="Purchase date"
+                    accessibilityLabel={t("item.form.accessibility.purchaseDate")}
                     accessibilityState={
                       ({ invalid: shouldShowFieldError("purchaseDate") } as any)
                     }
@@ -987,7 +994,7 @@ export default function ItemEditRoute() {
                     action="secondary"
                     onPress={() => setPurchaseDate(formatYmdFromDateLocal(new Date()))}
                   >
-                    <ButtonText>Set today</ButtonText>
+                    <ButtonText>{t("item.form.setToday")}</ButtonText>
                   </Button>
                 </HStack>
                 {shouldShowFieldError("purchaseDate") ? (
@@ -1009,7 +1016,7 @@ export default function ItemEditRoute() {
                     <VStack space="sm">
                       <iosSwiftUI.Host matchContents>
                         <iosSwiftUI.DatePicker
-                          title="Select purchase date"
+                          title={t("item.form.selectPurchaseDate")}
                           selection={datePickerValue}
                           displayedComponents={["date"]}
                           modifiers={[iosSwiftUI.datePickerStyle("wheel")]}
@@ -1022,16 +1029,16 @@ export default function ItemEditRoute() {
                           variant="outline"
                           action="secondary"
                           onPress={closePurchaseDatePicker}
-                          accessibilityLabel="Cancel date selection"
+                          accessibilityLabel={t("item.form.accessibility.cancelDateSelection")}
                         >
-                          <ButtonText>Cancel</ButtonText>
+                          <ButtonText>{t("common.action.cancel")}</ButtonText>
                         </Button>
                         <Button
                           size="sm"
                           onPress={confirmPurchaseDatePicker}
-                          accessibilityLabel="Confirm date selection"
+                          accessibilityLabel={t("item.form.accessibility.confirmDateSelection")}
                         >
-                          <ButtonText>Done</ButtonText>
+                          <ButtonText>{t("common.action.done")}</ButtonText>
                         </Button>
                       </HStack>
                     </VStack>
@@ -1044,7 +1051,7 @@ export default function ItemEditRoute() {
                     style={{ backgroundColor: theme.background }}
                   >
                     <VStack space="sm">
-                      <Heading size="sm">Select purchase date</Heading>
+                      <Heading size="sm">{t("item.form.selectPurchaseDate")}</Heading>
                       <DateTimePicker
                         mode="date"
                         value={datePickerValue}
@@ -1057,16 +1064,16 @@ export default function ItemEditRoute() {
                           variant="outline"
                           action="secondary"
                           onPress={closePurchaseDatePicker}
-                          accessibilityLabel="Cancel date selection"
+                          accessibilityLabel={t("item.form.accessibility.cancelDateSelection")}
                         >
-                          <ButtonText>Cancel</ButtonText>
+                          <ButtonText>{t("common.action.cancel")}</ButtonText>
                         </Button>
                         <Button
                           size="sm"
                           onPress={confirmPurchaseDatePicker}
-                          accessibilityLabel="Confirm date selection"
+                          accessibilityLabel={t("item.form.accessibility.confirmDateSelection")}
                         >
-                          <ButtonText>Done</ButtonText>
+                          <ButtonText>{t("common.action.done")}</ButtonText>
                         </Button>
                       </HStack>
                     </VStack>
@@ -1083,7 +1090,7 @@ export default function ItemEditRoute() {
               >
               <VStack space="xs">
                 <Text bold size="sm">
-                  Price (EUR) *
+                  {t("item.form.priceRequired")}
                 </Text>
                 <Input
                   variant="outline"
@@ -1096,9 +1103,10 @@ export default function ItemEditRoute() {
                     value={totalPrice}
                     onChangeText={setTotalPrice}
                     keyboardType="decimal-pad"
-                    placeholder="e.g. 1299.90"
+                    placeholder={t("item.form.pricePlaceholder")}
                     onBlur={() => setFieldTouched("totalCents")}
                     testID="item-edit-total-price-input"
+                    accessibilityLabel={t("item.form.accessibility.price")}
                     accessibilityState={
                       ({ invalid: shouldShowFieldError("totalCents") } as any)
                     }
@@ -1119,7 +1127,7 @@ export default function ItemEditRoute() {
 
               <VStack space="xs" testID="edititem-input-category">
                 <Text bold size="sm">
-                  Category
+                  {t("item.form.category")}
                 </Text>
                 <Button
                   variant="outline"
@@ -1127,6 +1135,7 @@ export default function ItemEditRoute() {
                   justifyContent="space-between"
                   onPress={() => setIsCategorySheetOpen(true)}
                   testID="item-edit-category-open"
+                  accessibilityLabel={t("item.form.accessibility.selectCategory")}
                 >
                   <ButtonText>{selectedCategoryName}</ButtonText>
                 </Button>
@@ -1135,8 +1144,9 @@ export default function ItemEditRoute() {
                     <InputField
                       value={newCategoryName}
                       onChangeText={setNewCategoryName}
-                      placeholder="Create new category"
+                      placeholder={t("item.form.createCategoryPlaceholder")}
                       testID="item-edit-category-create-input"
+                      accessibilityLabel={t("item.form.accessibility.createCategory")}
                     />
                   </Input>
                   <Button
@@ -1145,15 +1155,16 @@ export default function ItemEditRoute() {
                     onPress={() => void createCategory()}
                     disabled={isCreatingCategory}
                     testID="item-edit-category-create-button"
+                    accessibilityLabel={t("item.form.accessibility.addCategory")}
                   >
-                    <ButtonText>{isCreatingCategory ? "Adding..." : "Add"}</ButtonText>
+                    <ButtonText>{isCreatingCategory ? t("item.form.creatingCategory") : t("common.action.add")}</ButtonText>
                   </Button>
                 </HStack>
               </VStack>
 
               <VStack space="xs" testID="edititem-input-usageType">
                 <Text bold size="sm">
-                  Usage type *
+                  {t("item.form.usageTypeRequired")}
                 </Text>
                 <HStack space="sm" flexWrap="wrap">
                   {usageOptions.map((option) => (
@@ -1164,13 +1175,18 @@ export default function ItemEditRoute() {
                       action={usageType === option.value ? "primary" : "secondary"}
                       onPress={() => setUsageType(option.value)}
                       testID={`item-edit-usage-${option.value.toLowerCase()}`}
+                      accessibilityLabel={t("item.form.accessibility.usageType", {
+                        usageType: option.label,
+                      })}
                     >
                       <ButtonText>{option.label}</ButtonText>
                     </Button>
                   ))}
                 </HStack>
                 <Text size="xs" color="$textLight500" testID="edititem-usage-workshare">
-                  Work usage applied: {resolvedWorkUsagePercent}%
+                  {t("item.edit.workUsageApplied", {
+                    percent: resolvedWorkUsagePercent,
+                  })}
                 </Text>
               </VStack>
 
@@ -1183,7 +1199,7 @@ export default function ItemEditRoute() {
                 >
                 <VStack space="xs">
                   <Text bold size="sm">
-                    Work percent *
+                    {t("item.form.workPercentRequired")}
                   </Text>
                   <Input
                     variant="outline"
@@ -1196,9 +1212,10 @@ export default function ItemEditRoute() {
                       value={workPercent}
                       onChangeText={setWorkPercent}
                       keyboardType="number-pad"
-                      placeholder="0-100"
+                      placeholder={t("item.form.workPercentPlaceholder")}
                       onBlur={() => setFieldTouched("workPercent")}
                       testID="item-edit-work-percent-input"
+                      accessibilityLabel={t("item.form.accessibility.workPercent")}
                       accessibilityState={
                         ({ invalid: shouldShowFieldError("workPercent") } as any)
                       }
@@ -1226,7 +1243,7 @@ export default function ItemEditRoute() {
               >
               <VStack space="xs">
                 <Text bold size="sm">
-                  Warranty months
+                  {t("item.form.warrantyMonths")}
                 </Text>
                 <Input
                   variant="outline"
@@ -1239,9 +1256,10 @@ export default function ItemEditRoute() {
                     value={warrantyMonths}
                     onChangeText={setWarrantyMonths}
                     keyboardType="number-pad"
-                    placeholder="Optional"
+                    placeholder={t("item.form.optionalPlaceholder")}
                     onBlur={() => setFieldTouched("warrantyMonths")}
                     testID="item-edit-warranty-months-input"
+                    accessibilityLabel={t("item.form.accessibility.warrantyMonths")}
                     accessibilityState={
                       ({ invalid: shouldShowFieldError("warrantyMonths") } as any)
                     }
@@ -1258,21 +1276,28 @@ export default function ItemEditRoute() {
                   </Text>
                 ) : null}
                 <Text size="xs" color="$textLight500">
-                  Warranty until: {parsedWarrantyMonths && parsedWarrantyMonths > 0 ? addMonthsToYmd(purchaseDate, parsedWarrantyMonths) : "n/a"}
+                  {t("item.form.warrantyUntil", {
+                    date:
+                      parsedWarrantyMonths && parsedWarrantyMonths > 0
+                        ? (addMonthsToYmd(purchaseDate, parsedWarrantyMonths) ??
+                          t("settings.taxCalculation.notAvailable"))
+                        : t("settings.taxCalculation.notAvailable"),
+                  })}
                 </Text>
               </VStack>
               </Box>
 
               <VStack space="xs" testID="edititem-input-vendor">
                 <Text bold size="sm">
-                  Vendor
+                  {t("item.form.vendor")}
                 </Text>
                 <Input variant="outline">
                   <InputField
                     value={vendor}
                     onChangeText={setVendor}
-                    placeholder="Optional vendor/store"
+                    placeholder={t("item.form.vendorPlaceholder")}
                     testID="item-edit-vendor-input"
+                    accessibilityLabel={t("item.form.accessibility.vendor")}
                   />
                 </Input>
               </VStack>
@@ -1285,7 +1310,7 @@ export default function ItemEditRoute() {
               >
               <VStack space="xs">
                 <Text bold size="sm">
-                  Useful life override (months)
+                  {t("item.form.usefulLifeOverride")}
                 </Text>
                 <Input
                   variant="outline"
@@ -1298,9 +1323,10 @@ export default function ItemEditRoute() {
                     value={usefulLifeMonthsOverride}
                     onChangeText={setUsefulLifeMonthsOverride}
                     keyboardType="number-pad"
-                    placeholder="Optional, e.g. 36"
+                    placeholder={t("item.form.usefulLifePlaceholder")}
                     onBlur={() => setFieldTouched("usefulLifeMonthsOverride")}
                     testID="item-edit-useful-life-input"
+                    accessibilityLabel={t("item.form.accessibility.usefulLifeOverride")}
                     accessibilityState={
                       ({ invalid: showUsefulLifeError } as any)
                     }
@@ -1321,18 +1347,19 @@ export default function ItemEditRoute() {
 
               <VStack space="xs" testID="edititem-input-notes">
                 <Text bold size="sm">
-                  Notes
+                  {t("item.form.notes")}
                 </Text>
                 <Textarea>
                   <TextareaInput
                     value={notes}
                     onChangeText={setNotes}
-                    placeholder="Optional notes for invoice/audit context"
+                    placeholder={t("item.form.notesPlaceholder")}
                     testID="item-edit-notes-input"
+                    accessibilityLabel={t("item.form.accessibility.notes")}
                   />
                 </Textarea>
                 <Text size="xs" color="$textLight500">
-                  Optional. Missing notes may be flagged later.
+                  {t("item.form.notesHint")}
                 </Text>
               </VStack>
             </VStack>
@@ -1340,37 +1367,52 @@ export default function ItemEditRoute() {
 
           <Card borderWidth="$1" borderColor="$border200">
             <VStack space="md">
-              <Heading size="md">Attachments</Heading>
+              <Heading size="md">{t("item.attachments.title")}</Heading>
               <HStack space="sm" flexWrap="wrap">
                 <Button
                   variant="outline"
                   action="secondary"
                   disabled={isAttachmentBusy}
                   onPress={() => void addAttachment("receipt_camera")}
+                  accessibilityLabel={t("item.attachments.accessibility.addReceipt")}
                 >
-                  <ButtonText>{isAttachmentBusy ? "Working..." : "Add Receipt Photo"}</ButtonText>
+                  <ButtonText>
+                    {isAttachmentBusy
+                      ? t("settings.backupSync.localBackup.working")
+                      : t("item.edit.action.addReceiptPhoto")}
+                  </ButtonText>
                 </Button>
                 <Button
                   variant="outline"
                   action="secondary"
                   disabled={isAttachmentBusy}
                   onPress={() => void addAttachment("receipt_upload")}
+                  accessibilityLabel={t("item.attachments.accessibility.uploadFile")}
                 >
-                  <ButtonText>{isAttachmentBusy ? "Working..." : "Upload Receipt PDF/Image"}</ButtonText>
+                  <ButtonText>
+                    {isAttachmentBusy
+                      ? t("settings.backupSync.localBackup.working")
+                      : t("item.edit.action.uploadReceipt")}
+                  </ButtonText>
                 </Button>
                 <Button
                   variant="outline"
                   action="secondary"
                   disabled={isAttachmentBusy}
                   onPress={() => void addAttachment("photo_camera")}
+                  accessibilityLabel={t("item.attachments.accessibility.addExtraPhoto")}
                 >
-                  <ButtonText>{isAttachmentBusy ? "Working..." : "Add Extra Photo"}</ButtonText>
+                  <ButtonText>
+                    {isAttachmentBusy
+                      ? t("settings.backupSync.localBackup.working")
+                      : t("item.edit.action.addExtraPhoto")}
+                  </ButtonText>
                 </Button>
               </HStack>
 
               {attachments.length === 0 ? (
                 <Card borderWidth="$1" borderColor="$border200">
-                  <Text size="sm">No attachments linked to this item.</Text>
+                  <Text size="sm">{t("item.edit.attachments.empty")}</Text>
                 </Card>
               ) : (
                 <VStack space="sm">
@@ -1391,14 +1433,17 @@ export default function ItemEditRoute() {
                               variant="outline"
                               action="secondary"
                               onPress={() => void removeAttachmentById(attachment.id)}
+                              accessibilityLabel={t("item.attachments.accessibility.remove", {
+                                fileName: attachment.originalFileName ?? t("item.attachments.unnamedFile"),
+                              })}
                             >
-                              <ButtonText>Remove</ButtonText>
+                              <ButtonText>{t("common.action.remove")}</ButtonText>
                             </Button>
                           </HStack>
 
                           {missing ? (
                             <Card borderWidth="$1" borderColor="$warning300">
-                              <Text size="sm">Attachment file missing on disk.</Text>
+                              <Text size="sm">{t("item.edit.attachments.missingOnDisk")}</Text>
                             </Card>
                           ) : isImageAttachment(attachment) ? (
                             <Image
@@ -1408,13 +1453,13 @@ export default function ItemEditRoute() {
                             />
                           ) : (
                             <Card borderWidth="$1" borderColor="$border200">
-                              <Text size="sm">PDF file attached.</Text>
+                              <Text size="sm">{t("item.edit.attachments.pdfAttached")}</Text>
                             </Card>
                           )}
 
                           {missing ? (
                             <Badge size="sm" action="warning" variant="outline" alignSelf="flex-start">
-                              <BadgeText>Missing file</BadgeText>
+                              <BadgeText>{t("item.detail.missingFile")}</BadgeText>
                             </Badge>
                           ) : null}
                         </VStack>
@@ -1436,9 +1481,9 @@ export default function ItemEditRoute() {
                   onPress={handleExitRequest}
                   disabled={isActionBusy}
                   testID="edititem-cancel"
-                  accessibilityLabel="Cancel editing item"
+                  accessibilityLabel={t("item.edit.accessibility.cancel")}
                 >
-                  <ButtonText testID="item-edit-cancel">Cancel</ButtonText>
+                  <ButtonText testID="item-edit-cancel">{t("common.action.cancel")}</ButtonText>
                 </Button>
               </Box>
               <Box flex={1} testID="edititem-btn-submit">
@@ -1447,8 +1492,11 @@ export default function ItemEditRoute() {
                   onPress={() => void saveChanges()}
                   disabled={isSaveDisabled}
                   testID="item-edit-save"
+                  accessibilityLabel={t("item.edit.accessibility.save")}
                 >
-                  <ButtonText>{isSaving ? "Saving..." : "Save Changes"}</ButtonText>
+                  <ButtonText>
+                    {isSaving ? t("onboarding.profileSetup.saving") : t("item.edit.action.saveChanges")}
+                  </ButtonText>
                 </Button>
               </Box>
             </HStack>
@@ -1477,7 +1525,7 @@ export default function ItemEditRoute() {
                 setIsCategorySheetOpen(false);
               }}
             >
-              <ActionsheetItemText>No category selected</ActionsheetItemText>
+              <ActionsheetItemText>{t("item.form.category.noneSelected")}</ActionsheetItemText>
             </ActionsheetItem>
             {categories.map((category) => (
               <ActionsheetItem
@@ -1510,8 +1558,8 @@ export default function ItemEditRoute() {
             <Card borderWidth="$1" borderColor="$border200" width="$full" maxWidth={420}>
               <VStack space="md">
                 <VStack space="xs">
-                  <Heading size="md">Discard changes?</Heading>
-                  <Text size="sm">Your changes and draft attachments will be lost.</Text>
+                  <Heading size="md">{t("item.form.discard.title")}</Heading>
+                  <Text size="sm">{t("item.form.discard.body")}</Text>
                 </VStack>
                 <HStack justifyContent="flex-end" space="sm">
                   <Button
@@ -1520,18 +1568,18 @@ export default function ItemEditRoute() {
                     action="secondary"
                     onPress={closeDiscardModal}
                     testID="keep-editing"
-                    accessibilityLabel="Keep editing"
+                    accessibilityLabel={t("common.action.keepEditing")}
                   >
-                    <ButtonText testID="item-edit-discard-keepediting">Keep editing</ButtonText>
+                    <ButtonText testID="item-edit-discard-keepediting">{t("common.action.keepEditing")}</ButtonText>
                   </Button>
                   <Button
                     size="sm"
                     action="negative"
                     onPress={goBackFromEditFlow}
                     testID="discard-confirm"
-                    accessibilityLabel="Discard changes"
+                    accessibilityLabel={t("item.form.discard.accessibilityDiscard")}
                   >
-                    <ButtonText testID="item-edit-discard-confirm">Discard</ButtonText>
+                    <ButtonText testID="item-edit-discard-confirm">{t("common.action.discard")}</ButtonText>
                   </Button>
                 </HStack>
               </VStack>
