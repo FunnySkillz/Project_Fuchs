@@ -16,6 +16,22 @@ const languageToLocaleMap: Record<AppLanguage, AppLocale> = {
   en: "en-AT",
   de: "de-AT",
 };
+const i18nWarningCache = new Set<string>();
+
+function isDevelopmentRuntime(): boolean {
+  if (typeof __DEV__ === "boolean") {
+    return __DEV__;
+  }
+  return process.env.NODE_ENV !== "production";
+}
+
+function warnI18n(message: string): void {
+  if (i18nWarningCache.has(message)) {
+    return;
+  }
+  i18nWarningCache.add(message);
+  console.warn(message);
+}
 
 function getMessageFromCatalog(
   catalog: Partial<EnCatalog>,
@@ -35,14 +51,30 @@ function isPluralMessage(value: MessageValue | undefined): value is PluralMessag
 }
 
 function interpolate(template: string, values?: InterpolationValues): string {
-  if (!values) {
-    return template;
+  const missingKeys = new Set<string>();
+  const rendered = template.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (full, key: string) => {
+    if (!values) {
+      missingKeys.add(key);
+      return full;
+    }
+    const value = values[key];
+    if (value === undefined || value === null) {
+      missingKeys.add(key);
+      return full;
+    }
+    return String(value);
+  });
+
+  if (missingKeys.size > 0) {
+    const missing = Array.from(missingKeys).sort().join(", ");
+    const message = `Missing interpolation value(s) for key(s): ${missing} in template "${template}"`;
+    if (isDevelopmentRuntime()) {
+      throw new Error(message);
+    }
+    warnI18n(`i18n warning: ${message}`);
   }
 
-  return template.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (full, key: string) => {
-    const value = values[key];
-    return value === undefined || value === null ? full : String(value);
-  });
+  return rendered;
 }
 
 function resolveStringMessage(language: AppLanguage, key: TranslationKey): string {
@@ -58,7 +90,7 @@ function resolveStringMessage(language: AppLanguage, key: TranslationKey): strin
     return enValue;
   }
 
-  if (__DEV__) {
+  if (isDevelopmentRuntime()) {
     throw new Error(`Missing translation key in English catalog: ${String(key)}`);
   }
   return String(key);
@@ -77,7 +109,7 @@ function resolvePluralMessage(language: AppLanguage, key: PluralTranslationKey):
     return enValue;
   }
 
-  if (__DEV__) {
+  if (isDevelopmentRuntime()) {
     throw new Error(`Missing plural translation key in English catalog: ${String(key)}`);
   }
 

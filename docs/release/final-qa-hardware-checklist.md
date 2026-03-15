@@ -67,6 +67,16 @@ Devices:
 - [ ] Change theme/tax/security settings.
 - [ ] Changes persist after app restart.
 
+### Localization verification (EN/DE)
+- [ ] Device locale German -> first launch resolves DE.
+- [ ] Device locale non-German (example Serbian) -> first launch resolves EN.
+- [ ] Switching app language updates current screens without restart.
+- [ ] Deep links / restored routes reopen in selected app language.
+- [ ] Export content language follows selected app language.
+- [ ] Exported filenames remain stable/non-localized.
+- [ ] German text does not break layouts in buttons, tabs, dialogs, and empty states.
+- [ ] Accessibility labels are correct in EN and DE.
+
 ## 4) Stability
 
 - [ ] No crashes.

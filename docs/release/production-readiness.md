@@ -44,6 +44,10 @@ Define a binary release gate for V1. V1 ships only when all must-have checks are
   Exit criteria:
   - `npx tsc --noEmit` passes.
   - Required unit/integration tests pass in CI.
+- [ ] PASS: i18n dictionary parity check is green.
+  Exit criteria:
+  - EN is treated as master dictionary.
+  - `npm run i18n:parity` passes (DE keys exactly match EN keys).
 - [ ] PASS: Release policy gate passes.
   Exit criteria:
   - `npm run release:policy` passes.
@@ -84,6 +88,24 @@ Define a binary release gate for V1. V1 ships only when all must-have checks are
   - Website `/privacy` includes local-first, permissions, export/OneDrive behavior, and privacy contact.
   - In-app legal copy does not contradict website legal pages.
 
+### 6) Localization Hardening (V1)
+- [ ] PASS: Product localization decisions are enforced.
+  Exit criteria:
+  - RTL is explicitly unsupported in v1.
+  - Export content language is the current app language at generation time.
+  - Export filenames stay stable/non-localized.
+  - EN/DE legal text remains semantically equivalent.
+- [ ] PASS: Startup localization behavior is stable.
+  Exit criteria:
+  - Language is resolved before first visible render.
+  - No localized UI flash appears on startup.
+- [ ] PASS: Localization release checks are verified.
+  Exit criteria:
+  - Deep links / restored routes show localized titles and body text.
+  - Accessibility labels are localized in EN and DE.
+  - Legal EN/DE sync is verified.
+  - Manual localization QA matrix is signed off.
+
 ## Manual QA Checklist (Light/Dark + Core Flows)
 
 ### Theme
@@ -105,6 +127,16 @@ Define a binary release gate for V1. V1 ships only when all must-have checks are
 - [ ] Export: PDF/ZIP generation and progress UI complete.
 - [ ] Settings: backup create, backup import overwrite confirmation, restore reinit.
 
+### Localization Matrix (Manual, Required)
+- [ ] Device locale German -> first launch resolves DE.
+- [ ] Device locale non-German (example Serbian) -> first launch resolves EN.
+- [ ] Switching language updates existing screens without restart.
+- [ ] Deep links reopen in the selected app language.
+- [ ] Export content uses selected app language.
+- [ ] Exported filenames remain stable/non-localized.
+- [ ] German copy does not break layouts (buttons, tabs, dialogs, empty states).
+- [ ] Accessibility labels are correct in EN and DE.
+
 ## Release Steps (EAS + Versioning)
 
 1. Freeze release branch and stop feature merges.
@@ -116,6 +148,7 @@ Define a binary release gate for V1. V1 ships only when all must-have checks are
    - `npx tsc --noEmit`
    - `npm test`
    - `npm run lint` (or project lint command)
+   - `npm run i18n:parity`
    - `npm run release:policy`
 4. Run manual QA checklist above on a release candidate build.
 5. Build artifacts:
@@ -142,3 +175,8 @@ Define a binary release gate for V1. V1 ships only when all must-have checks are
 V1 is releasable only when:
 - All must-have checklist items are `PASS`.
 - All mapped P1/P2 blocking issues are closed.
+
+## V1 De-Scoped Localization Work
+- No locale-aware sorting migration unless trivial and already low-risk.
+- No automated deep-link localization tests if manual QA matrix is signed off.
+- No dedicated untranslated accessibility-string detection script in v1.

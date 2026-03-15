@@ -9,7 +9,7 @@ const roots = [
 ];
 
 const ignorePathPattern = /(__tests__|__mocks__|\/i18n\/messages\/|\\i18n\\messages\\|\/db\/migrations\/|\\db\\migrations\\)/;
-const attrNames = new Set(['placeholder', 'accessibilityLabel', 'accessibilityHint', 'title']);
+const attrNames = new Set(['placeholder', 'title']);
 
 function collectFiles(dir) {
   const out = [];

@@ -23,3 +23,4 @@ Use this checklist before submitting SteuerFuchs to App Store review.
 
 - [ ] In-app legal screen text matches website `/privacy` and `/impressum`.
 - [ ] Website `/impressum` includes full name, address, email, country, and responsible publisher statement.
+- [ ] EN and DE legal text remain semantically equivalent.

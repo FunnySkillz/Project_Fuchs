@@ -12,10 +12,12 @@
     "test": "jest --runInBand",
     "test:ci": "jest --runInBand --ci",
     "typecheck": "tsc --noEmit",
+    "i18n:parity": "node ./scripts/check-i18n-dictionary-parity.js",
+    "i18n:parity:ci": "node ./scripts/check-i18n-dictionary-parity.js",
     "i18n:scan": "node ./scripts/check-untranslated-strings.js",
     "i18n:scan:ci": "node ./scripts/check-untranslated-strings.js --fail-on-findings",
     "release:policy": "node ./scripts/check-release-gate-policy.js",
-    "release:preflight": "npm run lint && npm run typecheck && npm run test:ci"
+    "release:preflight": "npm run lint && npm run typecheck && npm run i18n:parity:ci && npm run test:ci && npm run release:policy"
   },
   "dependencies": {
     "@expo/ui": "^55.0.1",

@@ -96,7 +96,32 @@ Policy interface:
 - `legal_profile: "private_individual" | "trader"`
 - `legal_migration_complete: boolean`
 - `submission_ready: boolean`
+- `rtl_supported_v1: false`
+- `export_content_language_policy: "app_language_at_generation_time"`
+- `export_filenames_localized: false`
+- `dictionary_parity_check_passed: boolean`
+- `deep_links_localized_verified: boolean`
+- `accessibility_labels_localized_verified: boolean`
+- `legal_text_semantic_sync_verified: boolean`
+- `language_ready_before_first_render_verified: boolean`
+- `no_localized_flash_verified: boolean`
+- `manual_localization_qa_signed_off: boolean`
 
 Rule:
 
 - If `monetization_enabled` is `true`, then `legal_profile` must be `trader` and `legal_migration_complete` must be `true`.
+- If `submission_ready` is `true`, all localization verification fields above must be `true`.
+
+## Localization Safety Commands
+
+Dictionary parity is mandatory (EN is the master dictionary):
+
+```bash
+npm run i18n:parity
+```
+
+Release preflight now enforces:
+
+```bash
+npm run release:preflight
+```
