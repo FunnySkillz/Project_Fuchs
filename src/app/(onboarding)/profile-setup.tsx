@@ -14,6 +14,7 @@ import {
   VStack,
 } from "@gluestack-ui/themed";
 
+import { useI18n } from "@/contexts/language-context";
 import { validateProfileSettingsFormInput } from "@/domain/profile-settings-validation";
 import { createDefaultProfileSettings } from "@/models/profile-settings";
 import { getProfileSettingsRepository } from "@/repositories/create-profile-settings-repository";
@@ -39,6 +40,7 @@ type FocusTarget = {
 export default function OnboardingProfileSetupRoute() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { t } = useI18n();
   const defaults = useMemo(() => createDefaultProfileSettings(), []);
 
   const [taxYearDefault, setTaxYearDefault] = useState(String(defaults.taxYearDefault));
@@ -126,7 +128,7 @@ export default function OnboardingProfileSetupRoute() {
       router.replace("/(tabs)/home");
     } catch (error) {
       console.error("Failed to save onboarding profile settings", error);
-      setSaveError("Could not save profile settings. Please retry.");
+      setSaveError(t("onboarding.profileSetup.saveError"));
     } finally {
       setIsSaving(false);
     }
@@ -151,10 +153,10 @@ export default function OnboardingProfileSetupRoute() {
           <VStack space="lg">
           <VStack space="xs">
             <Heading size="2xl" textAlign="center">
-              Profile Setup
+              {t("onboarding.profileSetup.title")}
             </Heading>
             <Text size="sm" textAlign="center">
-              These defaults are stored locally and can be changed later in Settings.
+              {t("onboarding.profileSetup.subtitle")}
             </Text>
           </VStack>
 
@@ -168,7 +170,7 @@ export default function OnboardingProfileSetupRoute() {
                 testID="onboarding-profile-input-taxYearDefault"
               >
                 <Text bold size="sm">
-                  Tax year default
+                  {t("onboarding.profileSetup.taxYearDefault")}
                 </Text>
                 <Input
                   variant="outline"
@@ -205,7 +207,7 @@ export default function OnboardingProfileSetupRoute() {
                 testID="onboarding-profile-input-marginalRatePercent"
               >
                 <Text bold size="sm">
-                  Marginal tax rate (%)
+                  {t("onboarding.profileSetup.marginalRatePercent")}
                 </Text>
                 <Input
                   variant="outline"
@@ -241,7 +243,7 @@ export default function OnboardingProfileSetupRoute() {
                 testID="onboarding-profile-input-defaultWorkPercent"
               >
                 <Text bold size="sm">
-                  Default work percent (%)
+                  {t("onboarding.profileSetup.defaultWorkPercent")}
                 </Text>
                 <Input
                   variant="outline"
@@ -277,7 +279,7 @@ export default function OnboardingProfileSetupRoute() {
                 testID="onboarding-profile-input-gwgThresholdEuros"
               >
                 <Text bold size="sm">
-                  GWG threshold (EUR)
+                  {t("onboarding.profileSetup.gwgThreshold")}
                 </Text>
                 <Input
                   variant="outline"
@@ -318,7 +320,7 @@ export default function OnboardingProfileSetupRoute() {
                   onPress={() => void saveProfileSettings()}
                   disabled={isSubmitDisabled}
                 >
-                  <ButtonText>Retry Save</ButtonText>
+                  <ButtonText>{t("onboarding.profileSetup.retrySave")}</ButtonText>
                 </Button>
               </VStack>
             </Card>
@@ -330,7 +332,9 @@ export default function OnboardingProfileSetupRoute() {
               disabled={isSubmitDisabled}
               testID="onboarding-profile-save"
             >
-              <ButtonText>{isSaving ? "Saving..." : "Save and Continue"}</ButtonText>
+              <ButtonText>
+                {isSaving ? t("onboarding.profileSetup.saving") : t("onboarding.profileSetup.saveAndContinue")}
+              </ButtonText>
             </Button>
           </Box>
           </VStack>

@@ -5,6 +5,7 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { Spacing } from "@/constants/theme";
+import { useI18n } from "@/contexts/language-context";
 import { useTheme } from "@/hooks/use-theme";
 
 interface Props {
@@ -16,6 +17,7 @@ interface Props {
 
 export function InitErrorScreen({ message, onRetry, onResetData, onExportDebugInfo }: Props) {
   const theme = useTheme();
+  const { t } = useI18n();
   const insets = useSafeAreaInsets();
   const [showResetConfirm, setShowResetConfirm] = React.useState(false);
   const [isExportingDebug, setIsExportingDebug] = React.useState(false);
@@ -27,9 +29,9 @@ export function InitErrorScreen({ message, onRetry, onResetData, onExportDebugIn
     setFeedbackMessage(null);
     try {
       await onExportDebugInfo();
-      setFeedbackMessage("Debug report created.");
+      setFeedbackMessage(t("initError.debugCreated"));
     } catch {
-      setFeedbackMessage("Could not export debug report.");
+      setFeedbackMessage(t("initError.debugFailed"));
     } finally {
       setIsExportingDebug(false);
     }
@@ -41,7 +43,7 @@ export function InitErrorScreen({ message, onRetry, onResetData, onExportDebugIn
     try {
       await onResetData();
     } catch {
-      setFeedbackMessage("Could not reset local data.");
+      setFeedbackMessage(t("initError.resetFailed"));
     } finally {
       setIsResettingData(false);
       setShowResetConfirm(false);
@@ -53,13 +55,13 @@ export function InitErrorScreen({ message, onRetry, onResetData, onExportDebugIn
       <View style={[styles.container, { paddingBottom: Math.max(insets.bottom, Spacing.four) }]}>
         <ThemedView type="backgroundElement" style={styles.card}>
         <ThemedText type="subtitle" style={styles.center}>
-          App Initialization Failed
+          {t("initError.title")}
         </ThemedText>
         <ThemedText style={styles.center} themeColor="textSecondary">
           {message}
         </ThemedText>
         <ThemedText style={styles.center} type="small" themeColor="textSecondary">
-          Try retrying first. If this keeps failing, you can reset local data to reinitialize the database.
+          {t("initError.help")}
         </ThemedText>
         <Pressable
           style={({ pressed }) => [
@@ -73,7 +75,7 @@ export function InitErrorScreen({ message, onRetry, onResetData, onExportDebugIn
           testID="init-error-retry"
           onPress={onRetry}
         >
-          <ThemedText type="smallBold">Retry Initialization</ThemedText>
+          <ThemedText type="smallBold">{t("initError.retry")}</ThemedText>
         </Pressable>
         <Pressable
           style={({ pressed }) => [
@@ -89,7 +91,7 @@ export function InitErrorScreen({ message, onRetry, onResetData, onExportDebugIn
           disabled={isExportingDebug || isResettingData}
         >
           <ThemedText type="smallBold">
-            {isExportingDebug ? "Exporting Debug Info..." : "Export Debug Info"}
+            {isExportingDebug ? t("initError.exportingDebugInfo") : t("initError.exportDebugInfo")}
           </ThemedText>
         </Pressable>
         {!showResetConfirm ? (
@@ -106,12 +108,12 @@ export function InitErrorScreen({ message, onRetry, onResetData, onExportDebugIn
             onPress={() => setShowResetConfirm(true)}
             disabled={isResettingData}
           >
-            <ThemedText type="smallBold">Reset Local Data</ThemedText>
+            <ThemedText type="smallBold">{t("initError.resetData")}</ThemedText>
           </Pressable>
         ) : (
           <View style={styles.confirmWrap}>
             <ThemedText style={styles.center} type="small" themeColor="textSecondary">
-              This will delete all local data on this device. Continue?
+              {t("initError.confirmMessage")}
             </ThemedText>
             <View style={styles.confirmButtonsRow}>
               <Pressable
@@ -127,7 +129,7 @@ export function InitErrorScreen({ message, onRetry, onResetData, onExportDebugIn
                 onPress={() => setShowResetConfirm(false)}
                 disabled={isResettingData}
               >
-                <ThemedText type="smallBold">Cancel</ThemedText>
+                <ThemedText type="smallBold">{t("common.action.cancel")}</ThemedText>
               </Pressable>
               <Pressable
                 style={({ pressed }) => [
@@ -143,7 +145,7 @@ export function InitErrorScreen({ message, onRetry, onResetData, onExportDebugIn
                 disabled={isResettingData}
               >
                 <ThemedText type="smallBold">
-                  {isResettingData ? "Resetting..." : "Confirm Reset"}
+                  {isResettingData ? t("initError.resetting") : t("initError.confirmReset")}
                 </ThemedText>
               </Pressable>
             </View>

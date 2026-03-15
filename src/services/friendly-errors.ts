@@ -1,3 +1,10 @@
+import { translate } from "@/i18n/translate";
+import { getCachedLanguagePreference } from "@/services/language-preference";
+
+function t(key: Parameters<typeof translate>[1]): string {
+  return translate(getCachedLanguagePreference(), key);
+}
+
 export function friendlyFileErrorMessage(
   error: unknown,
   fallback: string
@@ -6,14 +13,14 @@ export function friendlyFileErrorMessage(
   const message = rawMessage.toLowerCase();
 
   if (message.includes("camera permission denied")) {
-    return "Camera access is denied. Open device Settings and allow camera permission for SteuerFuchs.";
+    return t("errors.friendly.cameraPermissionDenied");
   }
   if (message.includes("file picker access failed")) {
-    return "File access is blocked. Open device Settings and allow file/photo access for SteuerFuchs.";
+    return t("errors.friendly.filePickerAccessFailed");
   }
 
   if (message.includes("permission") || message.includes("denied") || message.includes("not granted")) {
-    return "Permission is missing. Open device Settings, allow access, then retry.";
+    return t("errors.friendly.permissionMissing");
   }
   if (
     message.includes("no space left") ||
@@ -23,16 +30,16 @@ export function friendlyFileErrorMessage(
     message.includes("read-only") ||
     message.includes("write")
   ) {
-    return "Could not save file to local storage. Free up device space and retry.";
+    return t("errors.friendly.storageWriteFailed");
   }
   if (message.includes("not found") || message.includes("no such file") || message.includes("enoent")) {
-    return "A referenced file is missing. Re-attach the file and retry.";
+    return t("errors.friendly.fileMissing");
   }
   if (message.includes("share sheet is not available") || message.includes("sharing")) {
-    return "Sharing is not available on this device/platform.";
+    return t("errors.friendly.sharingUnavailable");
   }
   if (message.includes("cancel")) {
-    return "Action canceled.";
+    return t("errors.friendly.actionCanceled");
   }
 
   return fallback;

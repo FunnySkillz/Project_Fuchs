@@ -18,6 +18,7 @@ import {
   VStack,
 } from "@gluestack-ui/themed";
 
+import { useI18n } from "@/contexts/language-context";
 import { useThemeMode } from "@/contexts/theme-mode-context";
 import { emitLocalDataDeleted } from "@/services/app-events";
 import { deleteAllLocalData } from "@/services/local-data";
@@ -25,6 +26,7 @@ import { deleteAllLocalData } from "@/services/local-data";
 export default function SettingsDangerZoneRoute() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { t } = useI18n();
   const { setMode } = useThemeMode();
   const canGoBack =
     typeof (router as { canGoBack?: () => boolean }).canGoBack === "function"
@@ -44,7 +46,7 @@ export default function SettingsDangerZoneRoute() {
       setMode("system");
     } catch (error) {
       console.error("Failed to delete local data", error);
-      setDangerError("Could not delete local data. Please retry.");
+      setDangerError(t("settings.dangerZone.errorDeleteFailed"));
     } finally {
       setConfirmOpen(false);
       setIsConfirmBusy(false);
@@ -63,19 +65,19 @@ export default function SettingsDangerZoneRoute() {
               onPress={() => router.replace("/(tabs)/settings")}
               testID="settings-back-to-main-fallback"
             >
-              <ButtonText>Back to Settings</ButtonText>
+              <ButtonText>{t("common.action.backToSettings")}</ButtonText>
             </Button>
           )}
 
           <VStack space="xs">
-            <Heading size="xl">Danger Zone</Heading>
-            <Text size="sm">Destructive actions for local device data.</Text>
+            <Heading size="xl">{t("settings.dangerZone.title")}</Heading>
+            <Text size="sm">{t("settings.dangerZone.subtitle")}</Text>
           </VStack>
 
           <Card borderWidth="$1" borderColor="$error300">
             <VStack space="md">
               <Text size="sm">
-                Delete all local data (items, attachments, settings, and PIN) from this device.
+                {t("settings.dangerZone.cardBody")}
               </Text>
               {dangerError && <Text size="sm" color="$error600">{dangerError}</Text>}
               <Button
@@ -84,7 +86,7 @@ export default function SettingsDangerZoneRoute() {
                 onPress={() => setConfirmOpen(true)}
                 testID="settings-delete-local-data"
               >
-                <ButtonText>Delete all local data</ButtonText>
+                <ButtonText>{t("settings.dangerZone.deleteButton")}</ButtonText>
               </Button>
             </VStack>
           </Card>
@@ -95,11 +97,11 @@ export default function SettingsDangerZoneRoute() {
         <AlertDialogBackdrop />
         <AlertDialogContent>
           <AlertDialogHeader>
-            <Heading size="md">Delete all local data?</Heading>
+            <Heading size="md">{t("settings.dangerZone.confirmTitle")}</Heading>
           </AlertDialogHeader>
           <AlertDialogBody>
             <Text size="sm">
-              This action is irreversible and removes all local app data from this device.
+              {t("settings.dangerZone.confirmBody")}
             </Text>
           </AlertDialogBody>
           <AlertDialogFooter>
@@ -111,7 +113,7 @@ export default function SettingsDangerZoneRoute() {
                 disabled={isConfirmBusy}
                 testID="settings-confirm-cancel"
               >
-                <ButtonText>Cancel</ButtonText>
+                <ButtonText>{t("common.action.cancel")}</ButtonText>
               </Button>
               <Button
                 action="negative"
@@ -119,7 +121,9 @@ export default function SettingsDangerZoneRoute() {
                 disabled={isConfirmBusy}
                 testID="settings-confirm-accept"
               >
-                <ButtonText>{isConfirmBusy ? "Working..." : "Confirm"}</ButtonText>
+                <ButtonText>
+                  {isConfirmBusy ? t("settings.dangerZone.confirmWorking") : t("common.action.confirm")}
+                </ButtonText>
               </Button>
             </HStack>
           </AlertDialogFooter>

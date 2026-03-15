@@ -18,6 +18,7 @@ import {
   VStack,
 } from "@gluestack-ui/themed";
 
+import { useI18n } from "@/contexts/language-context";
 import { getProfileSettingsRepository } from "@/repositories/create-profile-settings-repository";
 import { emitProfileSettingsSaved } from "@/services/app-events";
 import { hasPinAsync, isValidPin, setPinAsync, verifyPinAsync } from "@/services/pin-auth";
@@ -32,6 +33,7 @@ type FocusTarget = {
 export default function SettingsSecurityRoute() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { t } = useI18n();
   const canGoBack =
     typeof (router as { canGoBack?: () => boolean }).canGoBack === "function"
       ? (router as { canGoBack: () => boolean }).canGoBack()
@@ -74,11 +76,11 @@ export default function SettingsSecurityRoute() {
       setCurrentPinVerificationError(null);
     } catch (error) {
       console.error("Failed to load security settings", error);
-      setLoadError("Could not load security settings.");
+      setLoadError(t("settings.security.loadError"));
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void loadSettings();
@@ -99,21 +101,21 @@ export default function SettingsSecurityRoute() {
       ]);
 
       if (!hasHardware || !isEnrolled) {
-        setSaveError("Biometric authentication is not available on this device.");
+        setSaveError(t("settings.security.appLock.biometricUnavailable"));
         return false;
       }
 
       const result = await LocalAuthentication.authenticateAsync({
-        promptMessage: "Confirm biometric unlock",
-        cancelLabel: "Cancel",
+        promptMessage: t("settings.security.appLock.confirmPrompt"),
+        cancelLabel: t("common.action.cancel"),
         disableDeviceFallback: false,
       });
 
       if (!result.success) {
         setSaveError(
           result.error === "user_cancel"
-            ? "Biometric confirmation canceled."
-            : "Biometric confirmation failed. App lock remains disabled."
+            ? t("settings.security.appLock.confirmCanceled")
+            : t("settings.security.appLock.confirmFailed")
         );
         return false;
       }
@@ -121,13 +123,13 @@ export default function SettingsSecurityRoute() {
       return true;
     } catch (error) {
       console.error("Failed to confirm biometric activation", error);
-      setSaveError("Could not verify biometric authentication.");
+      setSaveError(t("settings.security.appLock.confirmError"));
       return false;
     } finally {
       isAuthenticatingRef.current = false;
       setIsConfirmingAppLock(false);
     }
-  }, []);
+  }, [t]);
 
   const handleToggleAppLock = async (nextValue: boolean) => {
     if (isSavingAppLock || isConfirmingAppLock || isAuthenticatingRef.current) {
@@ -156,12 +158,12 @@ export default function SettingsSecurityRoute() {
     try {
       const repository = await getProfileSettingsRepository();
       await repository.upsertSettings({ appLockEnabled: nextValue });
-      setSaveSuccess("Security settings saved.");
+      setSaveSuccess(t("settings.security.appLock.saved"));
       emitProfileSettingsSaved();
     } catch (error) {
       console.error("Failed to update app lock setting", error);
       setAppLockEnabled(previous);
-      setSaveError("Could not update app lock setting.");
+      setSaveError(t("settings.security.appLock.saveError"));
     } finally {
       setIsSavingAppLock(false);
     }
@@ -171,17 +173,17 @@ export default function SettingsSecurityRoute() {
     const errors: Partial<Record<PinFieldKey, string>> = {};
 
     if (pinExists && currentPin.trim().length === 0) {
-      errors.currentPin = "Current PIN is required.";
+      errors.currentPin = t("settings.security.pin.currentRequired");
     }
 
     if (!isValidPin(newPin)) {
-      errors.newPin = "PIN must be 4 to 6 digits.";
+      errors.newPin = t("settings.security.pin.invalidFormat");
     }
 
     if (confirmPin.trim().length === 0) {
-      errors.confirmPin = "Please confirm your PIN.";
+      errors.confirmPin = t("settings.security.pin.confirmRequired");
     } else if (newPin !== confirmPin) {
-      errors.confirmPin = "PIN confirmation does not match.";
+      errors.confirmPin = t("settings.security.pin.confirmMismatch");
     }
 
     if (currentPinVerificationError) {
@@ -189,7 +191,7 @@ export default function SettingsSecurityRoute() {
     }
 
     return errors;
-  }, [confirmPin, currentPin, currentPinVerificationError, newPin, pinExists]);
+  }, [confirmPin, currentPin, currentPinVerificationError, newPin, pinExists, t]);
 
   const isPinFormValid = Object.keys(pinValidationErrors).length === 0;
   const isPinSubmitDisabled = (pinSubmitAttempted && !isPinFormValid) || isSavingPin;
@@ -251,8 +253,8 @@ export default function SettingsSecurityRoute() {
       if (pinExists) {
         const check = await verifyPinAsync(currentPin);
         if (!check.success) {
-          setCurrentPinVerificationError("Current PIN is incorrect.");
-          setPinError("Current PIN is incorrect.");
+          setCurrentPinVerificationError(t("settings.security.pin.currentIncorrect"));
+          setPinError(t("settings.security.pin.currentIncorrect"));
           focusPinField("currentPin");
           scrollToPinField("currentPin");
           return;
@@ -267,10 +269,10 @@ export default function SettingsSecurityRoute() {
       setPinSubmitAttempted(false);
       setPinTouchedFields({});
       setCurrentPinVerificationError(null);
-      setPinSuccess("PIN saved successfully.");
+      setPinSuccess(t("settings.security.pin.saved"));
     } catch (error) {
       console.error("Failed to save PIN", error);
-      setPinError("Could not save PIN.");
+      setPinError(t("settings.security.pin.saveError"));
     } finally {
       setIsSavingPin(false);
     }
@@ -282,7 +284,7 @@ export default function SettingsSecurityRoute() {
         <Box flex={1} px="$5" py="$6" alignItems="center" justifyContent="center">
           <VStack space="md" alignItems="center">
             <Spinner size="large" />
-            <Text size="sm">Loading security settings...</Text>
+            <Text size="sm">{t("settings.security.loading")}</Text>
           </VStack>
         </Box>
       </SafeAreaView>
@@ -313,13 +315,13 @@ export default function SettingsSecurityRoute() {
                 onPress={() => router.replace("/(tabs)/settings")}
                 testID="settings-back-to-main-fallback"
               >
-                <ButtonText>Back to Settings</ButtonText>
+                <ButtonText>{t("common.action.backToSettings")}</ButtonText>
               </Button>
             )}
 
             <VStack space="xs">
-              <Heading size="xl">Security</Heading>
-              <Text size="sm">Control lock behavior and PIN fallback on this device.</Text>
+              <Heading size="xl">{t("settings.security.title")}</Heading>
+              <Text size="sm">{t("settings.security.subtitle")}</Text>
             </VStack>
 
             {loadError && (
@@ -330,9 +332,9 @@ export default function SettingsSecurityRoute() {
 
             <Card borderWidth="$1" borderColor="$border200">
               <VStack space="md">
-                <Heading size="md">App lock</Heading>
+                <Heading size="md">{t("settings.security.appLock.title")}</Heading>
                 <HStack justifyContent="space-between" alignItems="center">
-                  <Text size="sm">Require biometric/PIN unlock on resume</Text>
+                  <Text size="sm">{t("settings.security.appLock.toggleLabel")}</Text>
                   <Switch
                     value={appLockEnabled}
                     onValueChange={handleToggleAppLock}
@@ -347,9 +349,11 @@ export default function SettingsSecurityRoute() {
 
             <Card borderWidth="$1" borderColor="$border200">
               <VStack space="md">
-                <Heading size="md">PIN fallback</Heading>
+                <Heading size="md">{t("settings.security.pin.title")}</Heading>
                 <Text size="sm">
-                  {pinExists ? "PIN is configured. You can change it below." : "Set a PIN fallback for app lock."}
+                  {pinExists
+                    ? t("settings.security.pin.configured")
+                    : t("settings.security.pin.notConfigured")}
                 </Text>
 
                 {pinExists && (
@@ -378,7 +382,7 @@ export default function SettingsSecurityRoute() {
                         secureTextEntry
                         keyboardType="number-pad"
                         maxLength={6}
-                        placeholder="Current PIN"
+                        placeholder={t("settings.security.pin.currentPlaceholder")}
                         testID="settings-security-current-pin-input"
                         accessibilityState={
                           ({ invalid: shouldShowPinFieldError("currentPin") } as any)
@@ -414,7 +418,11 @@ export default function SettingsSecurityRoute() {
                       secureTextEntry
                       keyboardType="number-pad"
                       maxLength={6}
-                      placeholder={pinExists ? "New PIN (4-6 digits)" : "PIN (4-6 digits)"}
+                      placeholder={
+                        pinExists
+                          ? t("settings.security.pin.newPlaceholder")
+                          : t("settings.security.pin.firstPlaceholder")
+                      }
                       testID="settings-security-new-pin-input"
                       accessibilityState={
                         ({ invalid: shouldShowPinFieldError("newPin") } as any)
@@ -449,7 +457,7 @@ export default function SettingsSecurityRoute() {
                       secureTextEntry
                       keyboardType="number-pad"
                       maxLength={6}
-                      placeholder="Confirm PIN"
+                      placeholder={t("settings.security.pin.confirmPlaceholder")}
                       testID="settings-security-confirm-pin-input"
                       accessibilityState={
                         ({ invalid: shouldShowPinFieldError("confirmPin") } as any)
@@ -475,7 +483,11 @@ export default function SettingsSecurityRoute() {
                     testID="settings-security-save-pin"
                   >
                     <ButtonText>
-                      {isSavingPin ? "Saving PIN..." : pinExists ? "Change PIN" : "Set PIN"}
+                      {isSavingPin
+                        ? t("settings.security.pin.saving")
+                        : pinExists
+                          ? t("settings.security.pin.change")
+                          : t("settings.security.pin.set")}
                     </ButtonText>
                   </Button>
                 </Box>

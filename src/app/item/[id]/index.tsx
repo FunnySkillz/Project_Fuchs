@@ -33,6 +33,7 @@ import {
 
 import { estimateTaxImpact } from "@/domain/calculation-engine";
 import { resolveWorkPercent } from "@/domain/work-percent";
+import { useI18n } from "@/contexts/language-context";
 import { useTheme } from "@/hooks/use-theme";
 import type { Attachment } from "@/models/attachment";
 import type { Category } from "@/models/category";
@@ -111,6 +112,7 @@ export default function ItemDetailRoute() {
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
   const theme = useTheme();
+  const { t } = useI18n();
   const params = useLocalSearchParams<{ id?: string | string[] }>();
   const itemId = toSingleParam(params.id);
   const canGoBack =
@@ -166,7 +168,7 @@ export default function ItemDetailRoute() {
 
   const loadItem = useCallback(async () => {
     if (!itemId) {
-      setLoadError("Missing item id.");
+      setLoadError(t("item.detail.errorMissingId"));
       setIsLoading(false);
       return;
     }
@@ -190,7 +192,7 @@ export default function ItemDetailRoute() {
       ]);
 
       if (!loadedItem) {
-        setLoadError("Item not found.");
+        setLoadError(t("item.detail.notFound"));
         setItem(null);
       } else {
         setItem(loadedItem);
@@ -214,11 +216,11 @@ export default function ItemDetailRoute() {
       setSettings(loadedSettings);
     } catch (error) {
       console.error("Failed to load item detail", error);
-      setLoadError(friendlyFileErrorMessage(error, "Could not load item details."));
+      setLoadError(friendlyFileErrorMessage(error, t("item.detail.errorLoad")));
     } finally {
       setIsLoading(false);
     }
-  }, [itemId]);
+  }, [itemId, t]);
 
   useFocusEffect(
     useCallback(() => {
@@ -260,7 +262,7 @@ export default function ItemDetailRoute() {
         <RNPressable
           onPress={handleEditPress}
           accessibilityRole="button"
-          accessibilityLabel="Edit item"
+          accessibilityLabel={t("item.detail.actionEdit")}
           hitSlop={8}
           testID="item-detail-header-edit"
           style={({ pressed }) => ({
@@ -273,14 +275,16 @@ export default function ItemDetailRoute() {
         </RNPressable>
       ),
     });
-  }, [handleEditPress, item, navigation, renderHeaderBackButton, theme.primary]);
+  }, [handleEditPress, item, navigation, renderHeaderBackButton, t, theme.primary]);
 
   const categoryMap = useMemo(
     () => new Map(categories.map((category) => [category.id, category])),
     [categories]
   );
 
-  const categoryName = item?.categoryId ? categoryMap.get(item.categoryId)?.name ?? "Unknown" : "None";
+  const categoryName = item?.categoryId
+    ? categoryMap.get(item.categoryId)?.name ?? t("items.category.unknown")
+    : t("item.detail.none");
   const warrantyUntilDate = item ? computeWarrantyUntilDate(item.purchaseDate, item.warrantyMonths) : null;
   const selectedAttachmentMissing = selectedAttachment
     ? missingAttachmentIds.has(selectedAttachment.id)
@@ -331,7 +335,7 @@ export default function ItemDetailRoute() {
       router.replace("/(tabs)/items");
     } catch (error) {
       console.error("Failed to delete item", error);
-      setLoadError(friendlyFileErrorMessage(error, "Could not delete item."));
+      setLoadError(friendlyFileErrorMessage(error, t("items.deleteError")));
     } finally {
       setIsDeleting(false);
     }
@@ -343,7 +347,7 @@ export default function ItemDetailRoute() {
         <GBox flex={1} px="$5" py="$6" alignItems="center" justifyContent="center">
           <GVStack space="md" alignItems="center">
             <GSpinner size="large" />
-            <GText size="sm">Loading item details...</GText>
+            <GText size="sm">{t("item.detail.loading")}</GText>
           </GVStack>
         </GBox>
       </SafeAreaView>
@@ -355,17 +359,17 @@ export default function ItemDetailRoute() {
       <SafeAreaView style={{ flex: 1 }} edges={["bottom"]}>
         <GBox flex={1} px="$5" py="$6">
           <GVStack maxWidth={860} width="$full" alignSelf="center" space="lg">
-            <GHeading size="xl">Item Detail</GHeading>
+            <GHeading size="xl">{t("navigation.stack.itemDetail")}</GHeading>
             <GCard borderWidth="$1" borderColor="$error300">
               <GVStack space="sm">
                 <GText bold size="md">
-                  Could not load item
+                  {t("item.detail.couldNotLoad")}
                 </GText>
-                <GText size="sm">{loadError ?? "Item not found."}</GText>
+                <GText size="sm">{loadError ?? t("item.detail.notFound")}</GText>
               </GVStack>
             </GCard>
             <GButton variant="outline" action="secondary" onPress={() => router.replace("/(tabs)/items")}>
-              <GButtonText>Back to Items</GButtonText>
+              <GButtonText>{t("common.action.backToItems")}</GButtonText>
             </GButton>
           </GVStack>
         </GBox>
@@ -396,7 +400,7 @@ export default function ItemDetailRoute() {
                 alignSelf="flex-start"
                 testID="item-detail-back-to-items"
               >
-                <GButtonText>Back to Items</GButtonText>
+                <GButtonText>{t("common.action.backToItems")}</GButtonText>
               </GButton>
             )}
 
@@ -411,7 +415,7 @@ export default function ItemDetailRoute() {
               >
                 <GBadgeText>{item.usageType}</GBadgeText>
               </GBadge>
-              <GText size="sm">Purchase date: {item.purchaseDate}</GText>
+              <GText size="sm">{t("item.detail.purchaseDate", { date: item.purchaseDate })}</GText>
             </GVStack>
 
             {loadError && (
@@ -422,9 +426,9 @@ export default function ItemDetailRoute() {
 
             <GCard borderWidth="$1" borderColor="$border200">
               <GVStack space="md">
-                <GHeading size="md">Attachment gallery</GHeading>
+                <GHeading size="md">{t("item.detail.attachmentGallery")}</GHeading>
                 {attachments.length === 0 ? (
-                  <GText size="sm">No attachments available.</GText>
+                  <GText size="sm">{t("item.detail.noAttachments")}</GText>
                 ) : (
                   <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                     <GHStack space="sm" pr="$2">
@@ -435,7 +439,7 @@ export default function ItemDetailRoute() {
                             <GVStack space="sm">
                               {missing ? (
                                 <GBox height={120} alignItems="center" justifyContent="center">
-                                  <GText size="sm">File unavailable</GText>
+                                  <GText size="sm">{t("item.detail.fileUnavailable")}</GText>
                                 </GBox>
                               ) : isImageAttachment(attachment) ? (
                                 <Image
@@ -455,7 +459,7 @@ export default function ItemDetailRoute() {
                               </GText>
                               {missing && (
                                 <GBadge size="sm" action="warning" variant="outline" alignSelf="flex-start">
-                                  <GBadgeText>Missing file</GBadgeText>
+                                  <GBadgeText>{t("item.detail.missingFile")}</GBadgeText>
                                 </GBadge>
                               )}
                             </GVStack>
@@ -480,39 +484,45 @@ export default function ItemDetailRoute() {
 
             <GCard borderWidth="$1" borderColor="$border200">
               <GVStack space="sm">
-                <GHeading size="md">Info</GHeading>
-                <InfoRow label="Title" value={item.title} />
-                <InfoRow label="Category" value={categoryName} />
-                <InfoRow label="Purchase date" value={item.purchaseDate} />
-                <InfoRow label="Vendor" value={item.vendor?.trim() ? item.vendor : "-"} />
-                <InfoRow label="% Work" value={`${infoWorkPercent}%`} />
-                <InfoRow label="Warranty until" value={warrantyUntilDate ?? "n/a"} />
+                <GHeading size="md">{t("item.detail.infoTitle")}</GHeading>
+                <InfoRow label={t("item.detail.info.labelTitle")} value={item.title} />
+                <InfoRow label={t("item.detail.info.labelCategory")} value={categoryName} />
+                <InfoRow label={t("item.detail.info.labelPurchaseDate")} value={item.purchaseDate} />
+                <InfoRow
+                  label={t("item.detail.info.labelVendor")}
+                  value={item.vendor?.trim() ? item.vendor : "-"}
+                />
+                <InfoRow label={t("item.detail.info.labelWorkPercent")} value={`${infoWorkPercent}%`} />
+                <InfoRow
+                  label={t("item.detail.info.labelWarrantyUntil")}
+                  value={warrantyUntilDate ?? t("item.detail.notAvailable")}
+                />
               </GVStack>
             </GCard>
 
             <GCard borderWidth="$1" borderColor="$border200">
               <GVStack space="sm">
-                <GHeading size="md">Calculation</GHeading>
+                <GHeading size="md">{t("item.detail.calculationTitle")}</GHeading>
                 {calculationBreakdown ? (
                   <>
                     <InfoRow
-                      label="Deductible base"
+                      label={t("item.detail.calculation.base")}
                       value={formatCents(calculationBreakdown.workRelevantCents)}
                     />
                     <InfoRow
-                      label="Deductible this year"
+                      label={t("item.detail.calculation.thisYear")}
                       value={formatCents(calculationBreakdown.deductibleThisYearCents)}
                     />
                     <InfoRow
-                      label="Estimated refund impact"
+                      label={t("item.detail.calculation.refundImpact")}
                       value={formatCents(calculationBreakdown.estimatedRefundCents)}
                     />
                     <GVStack space="xs" pt="$2">
                       <GText bold size="sm">
-                        Schedule by year
+                        {t("item.detail.calculation.schedule")}
                       </GText>
                       {calculationBreakdown.scheduleByYear.length === 0 ? (
-                        <GText size="sm">No deductible schedule available.</GText>
+                        <GText size="sm">{t("item.detail.calculation.noSchedule")}</GText>
                       ) : (
                         calculationBreakdown.scheduleByYear.map((entry) => (
                           <GHStack key={entry.year} justifyContent="space-between" alignItems="center">
@@ -526,7 +536,7 @@ export default function ItemDetailRoute() {
                     </GVStack>
                   </>
                 ) : (
-                  <GText size="sm">Calculation data unavailable.</GText>
+                  <GText size="sm">{t("item.detail.calculation.unavailable")}</GText>
                 )}
               </GVStack>
             </GCard>
@@ -538,8 +548,10 @@ export default function ItemDetailRoute() {
               disabled={isDeleting}
               alignSelf="flex-start"
               testID="item-detail-delete"
-              accessibilityLabel={isDeleting ? "Deleting item" : "Delete item"}
-              accessibilityHint="Opens a confirmation dialog."
+              accessibilityLabel={
+                isDeleting ? t("item.detail.deletingAccessibility") : t("item.detail.deleteAccessibility")
+              }
+              accessibilityHint={t("item.detail.deleteAccessibilityHint")}
             >
               <GHStack space="xs" alignItems="center">
                 <Trash2
@@ -547,7 +559,9 @@ export default function ItemDetailRoute() {
                   strokeWidth={2}
                   color={isDeleting ? theme.textSecondary : theme.danger}
                 />
-                <GButtonText>{isDeleting ? "Deleting..." : "Delete"}</GButtonText>
+                <GButtonText>
+                  {isDeleting ? t("items.deleteDialog.deleting") : t("common.action.delete")}
+                </GButtonText>
               </GHStack>
             </GButton>
           </GVStack>
@@ -557,11 +571,11 @@ export default function ItemDetailRoute() {
           <GAlertDialogBackdrop />
           <GAlertDialogContent>
             <GAlertDialogHeader>
-              <GHeading size="md">Delete item?</GHeading>
+              <GHeading size="md">{t("items.deleteDialog.title")}</GHeading>
             </GAlertDialogHeader>
             <GAlertDialogBody>
               <GText size="sm">
-                This will delete the item and all linked attachment files from this device.
+                {t("item.detail.deleteDialogBody")}
               </GText>
             </GAlertDialogBody>
             <GAlertDialogFooter>
@@ -572,7 +586,7 @@ export default function ItemDetailRoute() {
                   onPress={() => setIsDeleteDialogOpen(false)}
                   testID="item-detail-delete-cancel"
                 >
-                  <GButtonText>Cancel</GButtonText>
+                  <GButtonText>{t("common.action.cancel")}</GButtonText>
                 </GButton>
                 <GButton
                   action="negative"
@@ -582,7 +596,7 @@ export default function ItemDetailRoute() {
                     void handleDelete();
                   }}
                 >
-                  <GButtonText>Delete</GButtonText>
+                  <GButtonText>{t("common.action.delete")}</GButtonText>
                 </GButton>
               </GHStack>
             </GAlertDialogFooter>
@@ -598,7 +612,7 @@ export default function ItemDetailRoute() {
                   selectedAttachmentMissing ? (
                     <GCard borderWidth="$1" borderColor="$warning300">
                       <GText size="sm">
-                        File unavailable. Open Edit Item and re-attach this document/photo.
+                        {t("item.detail.preview.fileUnavailableHint")}
                       </GText>
                     </GCard>
                   ) : isImageAttachment(selectedAttachment) ? (
@@ -613,7 +627,7 @@ export default function ItemDetailRoute() {
                   ) : (
                     <GCard borderWidth="$1" borderColor="$border200">
                       <GText size="sm">
-                        PDF preview is not available in-app yet.
+                        {t("item.detail.preview.pdfUnavailable")}
                       </GText>
                     </GCard>
                   )
@@ -622,7 +636,7 @@ export default function ItemDetailRoute() {
                   {selectedAttachment?.originalFileName ?? selectedAttachment?.type}
                 </GText>
                 <GButton variant="outline" action="secondary" onPress={() => setSelectedAttachment(null)}>
-                  <GButtonText>Close</GButtonText>
+                  <GButtonText>{t("common.action.close")}</GButtonText>
                 </GButton>
               </GVStack>
             </GModalBody>

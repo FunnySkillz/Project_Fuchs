@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { Modal, Pressable, ScrollView, TextInput, View } from "react-native";
 
+import { useI18n } from "@/contexts/language-context";
 import { ThemedText } from "@/components/themed-text";
 import { useTheme } from "@/hooks/use-theme";
 
@@ -20,18 +21,20 @@ interface SelectProps {
 export function Select({
   value,
   options,
-  placeholder = "Select...",
+  placeholder,
   searchable = true,
   onChange,
 }: SelectProps) {
   const theme = useTheme();
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const resolvedPlaceholder = placeholder ?? t("common.select.placeholder");
 
   const selectedLabel = useMemo(
-    () => options.find((option) => option.value === value)?.label ?? placeholder,
-    [options, placeholder, value]
+    () => options.find((option) => option.value === value)?.label ?? resolvedPlaceholder,
+    [options, resolvedPlaceholder, value]
   );
 
   const filteredOptions = useMemo(() => {
@@ -63,7 +66,7 @@ export function Select({
                 <TextInput
                   value={query}
                   onChangeText={setQuery}
-                  placeholder="Search..."
+                  placeholder={t("common.search.placeholder")}
                   placeholderTextColor={theme.textSecondary}
                   selectionColor={theme.primary}
                   onFocus={() => setIsSearchFocused(true)}
@@ -107,7 +110,7 @@ export function Select({
               {filteredOptions.length === 0 ? (
                 <View className="min-h-control rounded-ui-md border border-ui-borderSoft px-ui-md py-ui-sm justify-center">
                   <ThemedText type="small" themeColor="textSecondary">
-                    No results.
+                    {t("common.search.noResults")}
                   </ThemedText>
                 </View>
               ) : null}
@@ -118,7 +121,7 @@ export function Select({
               accessibilityRole="button"
               style={({ pressed }) => (pressed ? { opacity: 0.75 } : null)}
               className="min-h-control border-t border-ui-borderSoft items-center justify-center">
-              <ThemedText type="smallBold">Close</ThemedText>
+              <ThemedText type="smallBold">{t("common.action.close")}</ThemedText>
             </Pressable>
           </View>
         </View>

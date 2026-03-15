@@ -9,9 +9,12 @@ import "../../global.css";
 import { AppLockGate } from "@/components/app-lock-gate";
 import { AnimatedSplashOverlay } from "@/components/animated-icon";
 import { AppGluestackUIProvider } from "@/components/gluestack-ui-provider";
+import { LanguageContext } from "@/contexts/language-context";
 import { ThemeModeContext } from "@/contexts/theme-mode-context";
 import { InitErrorScreen } from "@/components/init-error-screen";
 import { MigrationError } from "@/db/migrate";
+import { translate, translatePlural, type TranslationKey } from "@/i18n/translate";
+import type { AppLanguage } from "@/i18n/types";
 import { getProfileSettingsRepository } from "@/repositories/create-profile-settings-repository";
 import {
   emitLocalDataDeleted,
@@ -21,6 +24,10 @@ import {
 } from "@/services/app-events";
 import { createInitDebugReport, shareDebugReport } from "@/services/debug-report";
 import { deleteAllLocalData } from "@/services/local-data";
+import {
+  loadLanguagePreference,
+  saveLanguagePreference,
+} from "@/services/language-preference";
 import { hasPinAsync, verifyPinAsync } from "@/services/pin-auth";
 import {
   loadThemePreference,
@@ -37,28 +44,30 @@ interface InitErrorReportPayload {
   occurredAtIso: string;
 }
 
-function friendlyInitErrorMessage(error: unknown): string {
+type TranslateFn = (key: TranslationKey, values?: Record<string, string | number>) => string;
+
+function friendlyInitErrorMessage(error: unknown, t: TranslateFn): string {
   if (error instanceof MigrationError) {
     const versionSuffix =
       typeof error.migrationVersion === "number"
         ? ` (migration v${error.migrationVersion})`
         : "";
-    return `Database migration failed${versionSuffix}. Retry initialization. If it still fails, export debug info and use 'Reset Local Data'.`;
+    return t("app.init.migrationFailedWithVersion", { versionSuffix });
   }
 
   const message = error instanceof Error ? error.message : String(error);
   const lowered = message.toLowerCase();
 
   if (lowered.includes("migration")) {
-    return "Database migration failed. Retry initialization. If it still fails, export debug info and use 'Reset Local Data' to recover.";
+    return t("app.init.migrationFailed");
   }
   if (lowered.includes("database") || lowered.includes("sqlite")) {
-    return "Database initialization failed. Retry first. If the error persists, export debug info and use 'Reset Local Data' to rebuild local storage.";
+    return t("app.init.databaseFailed");
   }
-  return message || "Database initialization failed.";
+  return message || t("app.init.databaseFailedShort");
 }
 
-function buildInitErrorReportPayload(error: unknown): InitErrorReportPayload {
+function buildInitErrorReportPayload(error: unknown, t: TranslateFn): InitErrorReportPayload {
   const rawError = error instanceof Error ? error.message : String(error);
   const errorName = error instanceof Error ? error.name : "UnknownError";
   const stack = error instanceof Error ? error.stack : undefined;
@@ -68,7 +77,7 @@ function buildInitErrorReportPayload(error: unknown): InitErrorReportPayload {
       : undefined;
 
   return {
-    message: friendlyInitErrorMessage(error),
+    message: friendlyInitErrorMessage(error, t),
     rawError,
     errorName,
     stack,
@@ -92,9 +101,17 @@ export default function RootLayout() {
   const [, setShowPinEntry] = React.useState(false);
   const [pinInput, setPinInput] = React.useState("");
   const [themeMode, setThemeModeState] = React.useState<ThemeMode>("system");
+  const [language, setLanguageState] = React.useState<AppLanguage>("en");
+  const [isLanguageReady, setIsLanguageReady] = React.useState(false);
   const authInFlightRef = useRef(false);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
   const shouldAuthenticateOnNextActiveRef = useRef(false);
+
+  const t = useCallback(
+    (key: TranslationKey, values?: Record<string, string | number>) =>
+      translate(language, key, values),
+    [language]
+  );
 
   useEffect(() => {
     LogBox.ignoreLogs([
@@ -134,13 +151,13 @@ export default function RootLayout() {
         }
 
         setIsUnlocked(false);
-        setAuthError("No biometric method available and no PIN configured.");
+        setAuthError(t("auth.noBiometricNoPin"));
         return;
       }
 
       const result = await LocalAuthentication.authenticateAsync({
-        promptMessage: "Unlock SteuerFuchs",
-        cancelLabel: "Cancel",
+        promptMessage: t("auth.unlockPrompt"),
+        cancelLabel: t("common.action.cancel"),
         disableDeviceFallback: false,
       });
 
@@ -153,8 +170,8 @@ export default function RootLayout() {
         setIsUnlocked(false);
         setAuthError(
           result.error === "user_cancel"
-            ? "Authentication canceled. Use Face ID again or enter your PIN."
-            : "Authentication failed. Please retry."
+            ? t("auth.canceledUseFaceOrPin")
+            : t("auth.failedRetry")
         );
         if (hasPin) {
           setShowPinEntry(true);
@@ -163,12 +180,12 @@ export default function RootLayout() {
     } catch (error) {
       console.error("Failed during app lock authentication", error);
       setIsUnlocked(false);
-      setAuthError("Authentication failed. Please retry.");
+      setAuthError(t("auth.failedRetry"));
     } finally {
       authInFlightRef.current = false;
       setIsAuthenticating(false);
     }
-  }, [refreshBiometricAvailability, refreshPinAvailability]);
+  }, [refreshBiometricAvailability, refreshPinAvailability, t]);
 
   const refreshAppLockState = useCallback(async () => {
     const repository = await getProfileSettingsRepository();
@@ -217,7 +234,7 @@ export default function RootLayout() {
 
   const handlePinSubmit = useCallback(async () => {
     if (!pinAvailable) {
-      setAuthError("PIN fallback is not configured.");
+      setAuthError(t("auth.pinFallbackNotConfigured"));
       return;
     }
 
@@ -232,15 +249,15 @@ export default function RootLayout() {
 
       if (result.lockedUntilEpochMs) {
         const seconds = Math.max(1, Math.ceil((result.lockedUntilEpochMs - Date.now()) / 1000));
-        setAuthError(`Too many failed PIN attempts. Try again in ${seconds}s.`);
+        setAuthError(t("auth.pinLockedWithSeconds", { seconds }));
       } else {
-        setAuthError(`Incorrect PIN. ${result.remainingAttempts} attempt(s) remaining before delay.`);
+        setAuthError(t("auth.pinIncorrectWithRemaining", { remaining: result.remainingAttempts }));
       }
     } catch (error) {
       console.error("Failed to verify PIN", error);
-      setAuthError("PIN verification failed. Please retry.");
+      setAuthError(t("auth.pinVerifyFailed"));
     }
-  }, [pinAvailable, pinInput]);
+  }, [pinAvailable, pinInput, t]);
 
   useEffect(() => {
     const unsubscribeDelete = onLocalDataDeleted(() => {
@@ -281,8 +298,8 @@ export default function RootLayout() {
 
   const exportInitDebugInfo = useCallback(async () => {
     const payload = initErrorPayload ?? {
-      message: initError ?? "Database initialization failed.",
-      rawError: initError ?? "Unknown initialization error.",
+      message: initError ?? t("app.init.databaseFailedShort"),
+      rawError: initError ?? t("app.init.unknownInitializationError"),
       errorName: "InitializationError",
       occurredAtIso: new Date().toISOString(),
     };
@@ -295,11 +312,26 @@ export default function RootLayout() {
       timestampIso: payload.occurredAtIso,
     });
     await shareDebugReport(fileUri);
-  }, [initError, initErrorPayload]);
+  }, [initError, initErrorPayload, t]);
 
   const resetLocalDataFromInitError = useCallback(async () => {
     await deleteAllLocalData();
     emitLocalDataDeleted();
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    const restoreLanguagePreference = async () => {
+      const persisted = await loadLanguagePreference();
+      if (active) {
+        setLanguageState(persisted);
+        setIsLanguageReady(true);
+      }
+    };
+    void restoreLanguagePreference();
+    return () => {
+      active = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -321,6 +353,11 @@ export default function RootLayout() {
   const setThemeMode = useCallback((next: ThemeMode) => {
     setThemeModeState(next);
     void saveThemePreference(next);
+  }, []);
+
+  const setLanguage = useCallback((next: AppLanguage) => {
+    setLanguageState(next);
+    void saveLanguagePreference(next);
   }, []);
 
   useEffect(() => {
@@ -376,9 +413,9 @@ export default function RootLayout() {
         }
 
         console.error("Failed to initialize app", error);
-        const payload = buildInitErrorReportPayload(error);
-        setInitError(payload.message);
-        setInitErrorPayload(payload);
+        const localizedPayload = buildInitErrorReportPayload(error, t);
+        setInitError(localizedPayload.message);
+        setInitErrorPayload(localizedPayload);
         setBootstrapState("init_error");
       }
     };
@@ -388,7 +425,7 @@ export default function RootLayout() {
     return () => {
       active = false;
     };
-  }, [authenticate, bootstrapState, refreshPinAvailability]);
+  }, [authenticate, bootstrapState, refreshPinAvailability, t]);
 
   useEffect(() => {
     const subscription = AppState.addEventListener("change", (nextState) => {
@@ -445,48 +482,69 @@ export default function RootLayout() {
     }),
     [resolvedColorMode, setThemeMode, themeMode]
   );
+  const languageContextValue = React.useMemo(
+    () => ({
+      language,
+      locale: (language === "de" ? "de-AT" : "en-AT") as "de-AT" | "en-AT",
+      setLanguage,
+      t: (key: Parameters<typeof translate>[1], values?: Parameters<typeof translate>[2]) =>
+        translate(language, key, values),
+      tPlural: (
+        key: Parameters<typeof translatePlural>[1],
+        count: number,
+        values?: Parameters<typeof translatePlural>[3]
+      ) => translatePlural(language, key, count, values),
+    }),
+    [language, setLanguage]
+  );
 
   return (
     <SafeAreaProvider>
-      <ThemeModeContext.Provider value={themeModeContextValue}>
-        <ThemeProvider value={resolvedColorMode === "dark" ? DarkTheme : DefaultTheme}>
-          <AppGluestackUIProvider colorMode={resolvedColorMode}>
-            <AnimatedSplashOverlay />
-            {bootstrapState === "ready" && !hasProfile && !inOnboarding && <Redirect href="/(onboarding)/welcome" />}
-            {bootstrapState === "ready" && hasProfile && inOnboarding && <Redirect href="/(tabs)/home" />}
-            {bootstrapState === "ready" && (!appLockEnabled || isUnlocked || !hasProfile) && (
-              <Stack screenOptions={{ headerShown: false }} />
-            )}
-            {bootstrapState === "ready" && appLockEnabled && !isUnlocked && (
-              <AppLockGate
-                isAuthenticating={isAuthenticating}
-                errorMessage={authError}
-                pinEnabled={pinAvailable}
-                pinValue={pinInput}
-                onPinValueChange={setPinInput}
-                onPinSubmit={() => void handlePinSubmit()}
-                onUseBiometric={() => {
-                  setShowPinEntry(false);
-                  void authenticate();
-                }}
-                onCancel={() => {
-                  setIsUnlocked(false);
-                  setAuthError("Authentication canceled. Use Face ID again or enter your PIN.");
-                  setShowPinEntry(false);
-                }}
-              />
-            )}
-            {bootstrapState === "init_error" && (
-              <InitErrorScreen
-                message={initError ?? "Database initialization failed."}
-                onRetry={retryInitialization}
-                onExportDebugInfo={exportInitDebugInfo}
-                onResetData={resetLocalDataFromInitError}
-              />
-            )}
-          </AppGluestackUIProvider>
-        </ThemeProvider>
-      </ThemeModeContext.Provider>
+      <LanguageContext.Provider value={languageContextValue}>
+        <ThemeModeContext.Provider value={themeModeContextValue}>
+          <ThemeProvider value={resolvedColorMode === "dark" ? DarkTheme : DefaultTheme}>
+            <AppGluestackUIProvider colorMode={resolvedColorMode}>
+              <AnimatedSplashOverlay />
+              {isLanguageReady && bootstrapState === "ready" && !hasProfile && !inOnboarding && (
+                <Redirect href="/(onboarding)/welcome" />
+              )}
+              {isLanguageReady && bootstrapState === "ready" && hasProfile && inOnboarding && (
+                <Redirect href="/(tabs)/home" />
+              )}
+              {isLanguageReady && bootstrapState === "ready" && (!appLockEnabled || isUnlocked || !hasProfile) && (
+                <Stack screenOptions={{ headerShown: false }} />
+              )}
+              {isLanguageReady && bootstrapState === "ready" && appLockEnabled && !isUnlocked && (
+                <AppLockGate
+                  isAuthenticating={isAuthenticating}
+                  errorMessage={authError}
+                  pinEnabled={pinAvailable}
+                  pinValue={pinInput}
+                  onPinValueChange={setPinInput}
+                  onPinSubmit={() => void handlePinSubmit()}
+                  onUseBiometric={() => {
+                    setShowPinEntry(false);
+                    void authenticate();
+                  }}
+                  onCancel={() => {
+                    setIsUnlocked(false);
+                    setAuthError(t("auth.canceledUseFaceOrPin"));
+                    setShowPinEntry(false);
+                  }}
+                />
+              )}
+              {isLanguageReady && bootstrapState === "init_error" && (
+                <InitErrorScreen
+                  message={initError ?? t("app.init.databaseFailedShort")}
+                  onRetry={retryInitialization}
+                  onExportDebugInfo={exportInitDebugInfo}
+                  onResetData={resetLocalDataFromInitError}
+                />
+              )}
+            </AppGluestackUIProvider>
+          </ThemeProvider>
+        </ThemeModeContext.Provider>
+      </LanguageContext.Provider>
     </SafeAreaProvider>
   );
 }

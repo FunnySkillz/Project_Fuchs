@@ -12,6 +12,8 @@
     "test": "jest --runInBand",
     "test:ci": "jest --runInBand --ci",
     "typecheck": "tsc --noEmit",
+    "i18n:scan": "node ./scripts/check-untranslated-strings.js",
+    "i18n:scan:ci": "node ./scripts/check-untranslated-strings.js --fail-on-findings",
     "release:policy": "node ./scripts/check-release-gate-policy.js",
     "release:preflight": "npm run lint && npm run typecheck && npm run test:ci"
   },

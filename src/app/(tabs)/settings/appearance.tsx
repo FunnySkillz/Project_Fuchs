@@ -3,21 +3,22 @@ import React from "react";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Box, Button, ButtonText, Card, Heading, HStack, Text, VStack } from "@gluestack-ui/themed";
 
+import { useI18n } from "@/contexts/language-context";
 import { useThemeMode } from "@/contexts/theme-mode-context";
 import { useTheme } from "@/hooks/use-theme";
 import type { ThemeMode } from "@/theme/theme-mode";
 
-const themeOptions: { label: string; value: ThemeMode }[] = [
-  { label: "System", value: "system" },
-  { label: "Light", value: "light" },
-  { label: "Dark", value: "dark" },
-];
-
 export default function SettingsAppearanceRoute() {
   const router = useRouter();
   const { mode, resolvedMode, setMode } = useThemeMode();
+  const { t } = useI18n();
   const theme = useTheme();
   const insets = useSafeAreaInsets();
+  const themeOptions: { label: string; value: ThemeMode }[] = [
+    { label: t("settings.appearance.system"), value: "system" },
+    { label: t("settings.appearance.light"), value: "light" },
+    { label: t("settings.appearance.dark"), value: "dark" },
+  ];
   const canGoBack =
     typeof (router as { canGoBack?: () => boolean }).canGoBack === "function"
       ? (router as { canGoBack: () => boolean }).canGoBack()
@@ -35,13 +36,13 @@ export default function SettingsAppearanceRoute() {
               onPress={() => router.replace("/(tabs)/settings")}
               testID="settings-back-to-main-fallback"
             >
-              <ButtonText color={theme.text}>Back to Settings</ButtonText>
+              <ButtonText color={theme.text}>{t("common.action.backToSettings")}</ButtonText>
             </Button>
           )}
 
           <VStack space="xs">
-            <Heading size="xl" color={theme.text}>Appearance</Heading>
-            <Text size="sm" color={theme.textSecondary}>Choose how the app appearance should be resolved.</Text>
+            <Heading size="xl" color={theme.text}>{t("settings.appearance.title")}</Heading>
+            <Text size="sm" color={theme.textSecondary}>{t("settings.appearance.subtitle")}</Text>
           </VStack>
 
           <Card borderWidth="$1" borderColor="$border200">
@@ -70,7 +71,9 @@ export default function SettingsAppearanceRoute() {
                   );
                 })}
               </HStack>
-              <Text size="sm" color={theme.textSecondary}>Resolved mode now: {resolvedMode}</Text>
+              <Text size="sm" color={theme.textSecondary}>
+                {t("settings.appearance.resolvedNow", { mode: resolvedMode })}
+              </Text>
             </VStack>
           </Card>
         </VStack>

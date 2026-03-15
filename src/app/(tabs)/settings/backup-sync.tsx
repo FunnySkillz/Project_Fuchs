@@ -23,6 +23,7 @@ import {
   VStack,
 } from "@gluestack-ui/themed";
 
+import { useI18n } from "@/contexts/language-context";
 import { type ProfileSettings } from "@/models/profile-settings";
 import { getProfileSettingsRepository } from "@/repositories/create-profile-settings-repository";
 import { emitDatabaseRestored, emitProfileSettingsSaved } from "@/services/app-events";
@@ -53,11 +54,11 @@ import {
 
 WebBrowser.maybeCompleteAuthSession();
 const oneDriveAuthProvider = getOneDriveAuthProvider();
-const ONEDRIVE_CONNECT_ERROR_MESSAGE = "Unable to connect to OneDrive. Please try again.";
 
 export default function SettingsBackupSyncRoute() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { t } = useI18n();
   const canGoBack =
     typeof (router as { canGoBack?: () => boolean }).canGoBack === "function"
       ? (router as { canGoBack: () => boolean }).canGoBack()
@@ -101,11 +102,11 @@ export default function SettingsBackupSyncRoute() {
       setOneDriveSelectedFolderState(selectedFolder);
     } catch (error) {
       console.error("Failed to load backup/sync settings", error);
-      setLoadError("Could not load backup and sync settings.");
+      setLoadError(t("settings.backupSync.loadError"));
     } finally {
       setIsLoading(false);
     }
-  }, [oneDriveConfigured]);
+  }, [oneDriveConfigured, t]);
 
   useEffect(() => {
     void reloadSettings();
@@ -127,7 +128,7 @@ export default function SettingsBackupSyncRoute() {
     } catch (error) {
       console.error("Failed to update upload preference", error);
       setSettings({ ...settings, uploadToOneDriveAfterExport: previous });
-      setOneDriveError("Could not update upload preference.");
+      setOneDriveError(t("settings.backupSync.uploadToggleError"));
     }
   };
 
@@ -140,7 +141,9 @@ export default function SettingsBackupSyncRoute() {
       setBackupResult(result);
     } catch (error) {
       console.error("Failed to create backup ZIP", error);
-      setBackupError(friendlyFileErrorMessage(error, "Could not create backup ZIP."));
+      setBackupError(
+        friendlyFileErrorMessage(error, t("settings.backupSync.localBackup.errorCreate"))
+      );
     } finally {
       setBackupBusy(false);
     }
@@ -157,7 +160,7 @@ export default function SettingsBackupSyncRoute() {
       await shareBackupZip(backupResult.fileUri);
     } catch (error) {
       console.error("Failed to share backup ZIP", error);
-      setBackupError(friendlyFileErrorMessage(error, "Could not share backup ZIP."));
+      setBackupError(friendlyFileErrorMessage(error, t("settings.backupSync.localBackup.errorShare")));
     } finally {
       setBackupBusy(false);
     }
@@ -181,7 +184,7 @@ export default function SettingsBackupSyncRoute() {
       }
     } catch (error) {
       console.error("Failed to import backup ZIP", error);
-      setBackupError(friendlyFileErrorMessage(error, "Could not import backup ZIP."));
+      setBackupError(friendlyFileErrorMessage(error, t("settings.backupSync.localBackup.errorImport")));
     } finally {
       setConfirmImportOpen(false);
       setIsConfirmBusy(false);
@@ -199,7 +202,7 @@ export default function SettingsBackupSyncRoute() {
       setOneDriveSelectedFolderState(selected);
     } catch (error) {
       console.error("Failed to connect OneDrive", error);
-      setOneDriveError(ONEDRIVE_CONNECT_ERROR_MESSAGE);
+      setOneDriveError(t("settings.backupSync.oneDrive.connectError"));
     } finally {
       setOneDriveConnecting(false);
       setOneDriveBusy(false);
@@ -216,7 +219,7 @@ export default function SettingsBackupSyncRoute() {
       setOneDriveFolders([]);
     } catch (error) {
       console.error("Failed to disconnect OneDrive", error);
-      setOneDriveError("Could not disconnect OneDrive.");
+      setOneDriveError(t("settings.backupSync.oneDrive.disconnectError"));
     } finally {
       setOneDriveBusy(false);
     }
@@ -229,11 +232,11 @@ export default function SettingsBackupSyncRoute() {
       const folders = await listOneDriveFolders();
       setOneDriveFolders(folders);
       if (folders.length === 0) {
-        setOneDriveError("No folders found in OneDrive root. Create one and retry.");
+        setOneDriveError(t("settings.backupSync.oneDrive.noFolders"));
       }
     } catch (error) {
       console.error("Failed to load OneDrive folders", error);
-      setOneDriveError("Could not load OneDrive folders. Reconnect and try again.");
+      setOneDriveError(t("settings.backupSync.oneDrive.loadFoldersError"));
     } finally {
       setOneDriveBusy(false);
     }
@@ -247,7 +250,7 @@ export default function SettingsBackupSyncRoute() {
       setOneDriveSelectedFolderState({ id: folder.id, path: folder.path });
     } catch (error) {
       console.error("Failed to persist selected OneDrive folder", error);
-      setOneDriveError("Could not save selected OneDrive folder.");
+      setOneDriveError(t("settings.backupSync.oneDrive.selectFolderError"));
     } finally {
       setOneDriveBusy(false);
     }
@@ -263,7 +266,7 @@ export default function SettingsBackupSyncRoute() {
       setOneDriveError(
         error instanceof Error
           ? error.message
-          : "Selected folder is not accessible. Re-select a folder."
+          : t("settings.backupSync.oneDrive.selectedFolderInaccessible")
       );
     } finally {
       setOneDriveBusy(false);
@@ -277,7 +280,7 @@ export default function SettingsBackupSyncRoute() {
     setExportProgress({
       stage: "local",
       progressPercent: 0,
-      message: "Preparing local export...",
+      message: t("settings.backupSync.oneDrive.testExportPreparing"),
     });
     setExportResult(null);
     try {
@@ -299,16 +302,16 @@ export default function SettingsBackupSyncRoute() {
       }
     } catch (error) {
       console.error("Failed to run test export", error);
-      setOneDriveError("Test export failed unexpectedly.");
+      setOneDriveError(t("settings.backupSync.oneDrive.testExportError"));
       setExportProgress(null);
     }
   };
 
   const oneDriveStatusLabel = oneDriveConnected
-    ? "Connected"
+    ? t("settings.backupSync.oneDrive.statusConnected")
     : oneDriveConnecting
-      ? "Connecting..."
-      : "Not connected";
+      ? t("settings.backupSync.oneDrive.statusConnecting")
+      : t("settings.backupSync.oneDrive.statusDisconnected");
 
   if (isLoading || !settings) {
     return (
@@ -316,7 +319,7 @@ export default function SettingsBackupSyncRoute() {
         <Box flex={1} px="$5" py="$6" alignItems="center" justifyContent="center">
           <VStack space="md" alignItems="center">
             <Spinner size="large" />
-            <Text size="sm">Loading backup and sync settings...</Text>
+            <Text size="sm">{t("settings.backupSync.loading")}</Text>
           </VStack>
         </Box>
       </SafeAreaView>
@@ -346,13 +349,13 @@ export default function SettingsBackupSyncRoute() {
                 onPress={() => router.replace("/(tabs)/settings")}
                 testID="settings-back-to-main-fallback"
               >
-                <ButtonText>Back to Settings</ButtonText>
+                <ButtonText>{t("common.action.backToSettings")}</ButtonText>
               </Button>
             )}
 
             <VStack space="xs">
-              <Heading size="xl">Backup & Sync</Heading>
-              <Text size="sm">Manage local backups and optional OneDrive export connectivity.</Text>
+              <Heading size="xl">{t("settings.backupSync.title")}</Heading>
+              <Text size="sm">{t("settings.backupSync.subtitle")}</Text>
             </VStack>
 
             {loadError && (
@@ -363,11 +366,15 @@ export default function SettingsBackupSyncRoute() {
 
             <Card borderWidth="$1" borderColor="$border200">
               <VStack space="md">
-                <Heading size="md">Local backup / restore</Heading>
+                <Heading size="md">{t("settings.backupSync.localBackup.title")}</Heading>
                 {backupError && <Text size="sm" color="$error600">{backupError}</Text>}
                 <HStack space="sm" flexWrap="wrap">
                   <Button action="primary" onPress={() => void handleCreateBackup()} disabled={backupBusy}>
-                    <ButtonText>{backupBusy ? "Working..." : "Create backup ZIP"}</ButtonText>
+                    <ButtonText>
+                      {backupBusy
+                        ? t("settings.backupSync.localBackup.working")
+                        : t("settings.backupSync.localBackup.create")}
+                    </ButtonText>
                   </Button>
                   <Button
                     variant="outline"
@@ -375,7 +382,7 @@ export default function SettingsBackupSyncRoute() {
                     onPress={() => void handleShareBackup()}
                     disabled={backupBusy || !backupResult}
                   >
-                    <ButtonText>Share latest backup</ButtonText>
+                    <ButtonText>{t("settings.backupSync.localBackup.shareLatest")}</ButtonText>
                   </Button>
                   <Button
                     variant="outline"
@@ -383,15 +390,17 @@ export default function SettingsBackupSyncRoute() {
                     onPress={() => setConfirmImportOpen(true)}
                     disabled={backupBusy}
                   >
-                    <ButtonText>Import backup (overwrite)</ButtonText>
+                    <ButtonText>{t("settings.backupSync.localBackup.importOverwrite")}</ButtonText>
                   </Button>
                 </HStack>
                 {backupResult && (
                   <Text size="sm">
-                    Latest backup: {backupResult.fileName} | Size:{" "}
-                    {(backupResult.sizeBytes / 1024 / 1024).toFixed(2)} MB | Attachments:{" "}
-                    {backupResult.manifest.attachmentCount} | Missing:{" "}
-                    {backupResult.manifest.missingAttachmentCount}
+                    {t("settings.backupSync.localBackup.latestSummary", {
+                      fileName: backupResult.fileName,
+                      sizeMb: (backupResult.sizeBytes / 1024 / 1024).toFixed(2),
+                      attachmentCount: backupResult.manifest.attachmentCount,
+                      missingCount: backupResult.manifest.missingAttachmentCount,
+                    })}
                   </Text>
                 )}
                 {restoreSummary && (
@@ -399,9 +408,11 @@ export default function SettingsBackupSyncRoute() {
                     size="sm"
                     color={restoreSummary.missingFilesCount > 0 ? "$warning600" : "$success600"}
                   >
-                    Restored items: {restoreSummary.itemCountRestored} | Attachments:{" "}
-                    {restoreSummary.attachmentCountRestored} | Missing files:{" "}
-                    {restoreSummary.missingFilesCount}
+                    {t("settings.backupSync.localBackup.restoreSummary", {
+                      itemCount: restoreSummary.itemCountRestored,
+                      attachmentCount: restoreSummary.attachmentCountRestored,
+                      missingCount: restoreSummary.missingFilesCount,
+                    })}
                   </Text>
                 )}
               </VStack>
@@ -409,26 +420,32 @@ export default function SettingsBackupSyncRoute() {
 
             <Card borderWidth="$1" borderColor="$border200">
               <VStack space="md">
-                <Heading size="md">OneDrive (export-only)</Heading>
+                <Heading size="md">{t("settings.backupSync.oneDrive.title")}</Heading>
                 <HStack justifyContent="space-between" alignItems="center">
-                  <Text size="sm">Upload to OneDrive after export</Text>
+                  <Text size="sm">{t("settings.backupSync.oneDrive.uploadToggle")}</Text>
                   <Switch
                     value={settings.uploadToOneDriveAfterExport}
                     onValueChange={handleToggleUploadAfterExport}
                   />
                 </HStack>
-                <Text size="sm">Redirect URI: {getOneDriveRedirectUri()}</Text>
-                <Text size="sm">Status: {oneDriveStatusLabel}</Text>
                 <Text size="sm">
-                  Selected folder: {oneDriveSelectedFolder ? oneDriveSelectedFolder.path : "Not selected"}
+                  {t("settings.backupSync.oneDrive.redirectUri", { uri: getOneDriveRedirectUri() })}
+                </Text>
+                <Text size="sm">{t("settings.backupSync.oneDrive.status", { status: oneDriveStatusLabel })}</Text>
+                <Text size="sm">
+                  {t("settings.backupSync.oneDrive.selectedFolder", {
+                    folder: oneDriveSelectedFolder
+                      ? oneDriveSelectedFolder.path
+                      : t("settings.backupSync.oneDrive.notSelected"),
+                  })}
                 </Text>
                 {!oneDriveConfigured && (
                   <VStack space="xs">
                     <Text size="sm" testID="settings-onedrive-config-missing">
-                      OneDrive connection is not configured on this build.
+                      {t("settings.backupSync.oneDrive.notConfigured")}
                     </Text>
                     <Text size="xs" testID="settings-onedrive-config-hint">
-                      To enable this feature, configure the OneDrive client ID.
+                      {t("settings.backupSync.oneDrive.notConfiguredHint")}
                     </Text>
                   </VStack>
                 )}
@@ -440,7 +457,11 @@ export default function SettingsBackupSyncRoute() {
                     disabled={oneDriveBusy}
                     testID="settings-onedrive-connect"
                   >
-                    <ButtonText>{oneDriveConnecting ? "Connecting..." : "Connect OneDrive"}</ButtonText>
+                    <ButtonText>
+                      {oneDriveConnecting
+                        ? t("settings.backupSync.oneDrive.connecting")
+                        : t("settings.backupSync.oneDrive.connect")}
+                    </ButtonText>
                   </Button>
                 ) : oneDriveConfigured ? (
                   <Button
@@ -449,7 +470,11 @@ export default function SettingsBackupSyncRoute() {
                     onPress={() => void handleDisconnectOneDrive()}
                     disabled={oneDriveBusy}
                   >
-                    <ButtonText>{oneDriveBusy ? "Disconnecting..." : "Disconnect OneDrive"}</ButtonText>
+                    <ButtonText>
+                      {oneDriveBusy
+                        ? t("settings.backupSync.oneDrive.disconnecting")
+                        : t("settings.backupSync.oneDrive.disconnect")}
+                    </ButtonText>
                   </Button>
                 ) : null}
 
@@ -461,7 +486,11 @@ export default function SettingsBackupSyncRoute() {
                       onPress={() => void handleLoadOneDriveFolders()}
                       disabled={oneDriveBusy}
                     >
-                      <ButtonText>{oneDriveBusy ? "Loading..." : "Load OneDrive folders"}</ButtonText>
+                      <ButtonText>
+                        {oneDriveBusy
+                          ? t("common.status.loading")
+                          : t("settings.backupSync.oneDrive.loadFolders")}
+                      </ButtonText>
                     </Button>
                     {oneDriveFolders.map((folder) => (
                       <Button
@@ -480,7 +509,7 @@ export default function SettingsBackupSyncRoute() {
                       onPress={() => void handleVerifySelectedFolder()}
                       disabled={oneDriveBusy || !oneDriveSelectedFolder}
                     >
-                      <ButtonText>Verify selected folder access</ButtonText>
+                      <ButtonText>{t("settings.backupSync.oneDrive.verifyFolder")}</ButtonText>
                     </Button>
                   </>
                 )}
@@ -491,23 +520,33 @@ export default function SettingsBackupSyncRoute() {
                   onPress={() => void handleRunTestExport()}
                   disabled={oneDriveBusy}
                 >
-                  <ButtonText>Run test export pipeline</ButtonText>
+                  <ButtonText>{t("settings.backupSync.oneDrive.runTestExport")}</ButtonText>
                 </Button>
 
                 {exportProgress && (
                   <Text size="sm">
-                    {exportProgress.stage.toUpperCase()}: {exportProgress.progressPercent}% -{" "}
-                    {exportProgress.message}
+                    {t("settings.backupSync.oneDrive.exportProgress", {
+                      stage: exportProgress.stage.toUpperCase(),
+                      percent: exportProgress.progressPercent,
+                      message: exportProgress.message,
+                    })}
                   </Text>
                 )}
                 {exportResult && (
                   <Text size="sm">
-                    Local file: {exportResult.localFileName}
                     {exportResult.uploadStatus === "uploaded"
-                      ? ` | Uploaded: ${exportResult.uploadedFileName ?? exportResult.localFileName}`
+                      ? t("settings.backupSync.oneDrive.exportResultUploaded", {
+                          localFileName: exportResult.localFileName,
+                          uploadedFileName:
+                            exportResult.uploadedFileName ?? exportResult.localFileName,
+                        })
                       : exportResult.uploadStatus === "failed"
-                        ? " | Upload failed (local export still saved)"
-                        : " | Upload skipped"}
+                        ? t("settings.backupSync.oneDrive.exportResultFailed", {
+                            localFileName: exportResult.localFileName,
+                          })
+                        : t("settings.backupSync.oneDrive.exportResultSkipped", {
+                            localFileName: exportResult.localFileName,
+                          })}
                   </Text>
                 )}
               </VStack>
@@ -520,12 +559,11 @@ export default function SettingsBackupSyncRoute() {
         <AlertDialogBackdrop />
         <AlertDialogContent>
           <AlertDialogHeader>
-            <Heading size="md">Import backup snapshot?</Heading>
+            <Heading size="md">{t("settings.backupSync.confirmImport.title")}</Heading>
           </AlertDialogHeader>
           <AlertDialogBody>
             <Text size="sm">
-              Importing backup will overwrite your current local data, including DB and
-              attachment files. This action cannot be undone.
+              {t("settings.backupSync.confirmImport.body")}
             </Text>
           </AlertDialogBody>
           <AlertDialogFooter>
@@ -537,7 +575,7 @@ export default function SettingsBackupSyncRoute() {
                 disabled={isConfirmBusy}
                 testID="settings-confirm-cancel"
               >
-                <ButtonText>Cancel</ButtonText>
+                <ButtonText>{t("common.action.cancel")}</ButtonText>
               </Button>
               <Button
                 action="negative"
@@ -545,7 +583,11 @@ export default function SettingsBackupSyncRoute() {
                 disabled={isConfirmBusy}
                 testID="settings-confirm-accept"
               >
-                <ButtonText>{isConfirmBusy ? "Working..." : "Confirm"}</ButtonText>
+                <ButtonText>
+                  {isConfirmBusy
+                    ? t("settings.backupSync.localBackup.working")
+                    : t("common.action.confirm")}
+                </ButtonText>
               </Button>
             </HStack>
           </AlertDialogFooter>

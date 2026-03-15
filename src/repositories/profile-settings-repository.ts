@@ -3,6 +3,7 @@ import { createDefaultProfileSettings } from "@/models/profile-settings";
 import { normalizeProfileSettings } from "@/domain/profile-settings";
 import { PROFILE_SETTINGS_SINGLETON_ID, type SQLiteExecutor } from "@/db/profile-settings-db";
 import { isThemeMode } from "@/theme/theme-mode";
+import type { AppLanguage } from "@/i18n/types";
 
 interface ProfileSettingsRow {
   taxYearDefault: number;
@@ -27,6 +28,8 @@ export interface ProfileSettingsRepository {
   hasValidSettings(): Promise<boolean>;
   getSettings(): Promise<ProfileSettings>;
   upsertSettings(settings: Partial<ProfileSettings>): Promise<ProfileSettings>;
+  getLanguagePreference(): Promise<AppLanguage | null>;
+  setLanguagePreference(next: AppLanguage): Promise<void>;
 }
 
 export class SQLiteProfileSettingsRepository implements ProfileSettingsRepository {
@@ -134,6 +137,35 @@ export class SQLiteProfileSettingsRepository implements ProfileSettingsRepositor
     const merged = normalizeProfileSettings(settings, existing);
     await this.writeSettings(merged);
     return merged;
+  }
+
+  async getLanguagePreference(): Promise<AppLanguage | null> {
+    const row = await this.db.getFirstAsync<{ languagePreference: string | null }>(
+      `SELECT
+        LanguagePreference AS languagePreference
+      FROM ProfileSettings
+      WHERE Id = $id AND DeletedAt IS NULL
+      LIMIT 1;`,
+      { $id: PROFILE_SETTINGS_SINGLETON_ID }
+    );
+
+    if (row?.languagePreference === "en" || row?.languagePreference === "de") {
+      return row.languagePreference;
+    }
+    return null;
+  }
+
+  async setLanguagePreference(next: AppLanguage): Promise<void> {
+    await this.db.runAsync(
+      `UPDATE ProfileSettings
+       SET LanguagePreference = $languagePreference,
+           DeletedAt = NULL
+       WHERE Id = $id;`,
+      {
+        $id: PROFILE_SETTINGS_SINGLETON_ID,
+        $languagePreference: next,
+      }
+    );
   }
 
   private async writeSettings(settings: ProfileSettings): Promise<void> {

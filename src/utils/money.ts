@@ -1,3 +1,5 @@
+import { getCachedLanguagePreference } from "@/services/language-preference";
+
 function normalizeLocalizedAmount(raw: string): string | null {
   const compact = raw.trim().replace(/\s+/g, "").replace(/\u00A0/g, "");
   if (compact.length === 0) {
@@ -40,6 +42,10 @@ function parseNormalizedToCents(normalized: string): number {
   return euros * 100 + cents;
 }
 
+function getSelectedAppLocale(): "de-AT" | "en-AT" {
+  return getCachedLanguagePreference() === "de" ? "de-AT" : "en-AT";
+}
+
 export function parseMoneyToCents(raw: string): number {
   if (raw.trim().startsWith("-")) {
     throw new Error("Amount must be greater than 0.");
@@ -65,12 +71,14 @@ export function parseEuroInputToCents(raw: string): number | null {
   }
 }
 
-export function formatCents(cents: number, localeOrCurrency: string = "de-AT"): string {
-  if (/^[A-Z]{3}$/.test(localeOrCurrency)) {
-    return `${(cents / 100).toFixed(2)} ${localeOrCurrency}`;
+export function formatCents(cents: number, localeOrCurrency?: string): string {
+  const normalizedLocaleOrCurrency = localeOrCurrency ?? getSelectedAppLocale();
+
+  if (/^[A-Z]{3}$/.test(normalizedLocaleOrCurrency)) {
+    return `${(cents / 100).toFixed(2)} ${normalizedLocaleOrCurrency}`;
   }
 
-  return new Intl.NumberFormat(localeOrCurrency, {
+  return new Intl.NumberFormat(normalizedLocaleOrCurrency, {
     style: "currency",
     currency: "EUR",
     maximumFractionDigits: 2,

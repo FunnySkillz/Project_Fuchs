@@ -3,10 +3,12 @@ import React from "react";
 import { ScrollView } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Box, Button, ButtonText, Card, Heading, Text, VStack } from "@gluestack-ui/themed";
+import { useI18n } from "@/contexts/language-context";
 
 export default function SettingsLegalRoute() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { t } = useI18n();
   const canGoBack =
     typeof (router as { canGoBack?: () => boolean }).canGoBack === "function"
       ? (router as { canGoBack: () => boolean }).canGoBack()
@@ -35,48 +37,47 @@ export default function SettingsLegalRoute() {
                 onPress={() => router.replace("/(tabs)/settings")}
                 testID="settings-back-to-main-fallback"
               >
-                <ButtonText>Back to Settings</ButtonText>
+                <ButtonText>{t("common.action.backToSettings")}</ButtonText>
               </Button>
             )}
 
             <VStack space="xs">
-              <Heading size="xl">Legal & Privacy</Heading>
-              <Text size="sm">Important usage notice and privacy summary for SteuerFuchs.</Text>
+              <Heading size="xl">{t("settings.legal.title")}</Heading>
+              <Text size="sm">{t("settings.legal.subtitle")}</Text>
             </VStack>
 
             <Card borderWidth="$1" borderColor="$warning300">
               <VStack space="sm">
-                <Heading size="md">Disclaimer</Heading>
+                <Heading size="md">{t("settings.legal.disclaimer.title")}</Heading>
                 <Text size="sm" bold testID="settings-legal-disclaimer">
-                  No tax advice, estimates only.
+                  {t("settings.legal.disclaimer.estimateOnly")}
                 </Text>
                 <Text size="sm">
-                  SteuerFuchs provides calculation support and export tools. It does not replace professional tax
-                  advice, legal guidance, or official tax filing validation.
+                  {t("settings.legal.disclaimer.body1")}
                 </Text>
+                <Text size="sm">{t("settings.legal.disclaimer.body2")}</Text>
               </VStack>
             </Card>
 
             <Card borderWidth="$1" borderColor="$border200">
               <VStack space="sm">
-                <Heading size="md">Privacy Statement</Heading>
+                <Heading size="md">{t("settings.legal.privacy.title")}</Heading>
                 <Text size="sm" testID="settings-legal-privacy">
-                  Your data is stored locally on your device. SteuerFuchs does not include tracking or analytics.
-                  Files leave your device only when you explicitly export or share them.
+                  {t("settings.legal.privacy.body1")}
                 </Text>
+                <Text size="sm">{t("settings.legal.privacy.body2")}</Text>
                 <Text size="sm">
-                  OneDrive is optional and export-only. It is never required for local-first app usage.
+                  {t("settings.legal.privacy.contact", { email: "steuerfuchs-support@gmail.com" })}
                 </Text>
-                <Text size="sm">Privacy/support contact: support@steuerfuchs.app</Text>
               </VStack>
             </Card>
 
             <Card borderWidth="$1" borderColor="$border200">
               <VStack space="sm">
-                <Heading size="md">Permission Usage</Heading>
-                <Text size="sm">Camera: capture receipt photos.</Text>
-                <Text size="sm">Photos/Files: attach receipt images or PDFs.</Text>
-                <Text size="sm">No hidden background uploads are performed.</Text>
+                <Heading size="md">{t("settings.legal.permissions.title")}</Heading>
+                <Text size="sm">{t("settings.legal.permissions.camera")}</Text>
+                <Text size="sm">{t("settings.legal.permissions.files")}</Text>
+                <Text size="sm">{t("settings.legal.permissions.noHiddenUploads")}</Text>
               </VStack>
             </Card>
           </VStack>

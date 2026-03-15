@@ -3,11 +3,13 @@ import React, { useCallback, useRef } from "react";
 import { Download, LayoutDashboard, Plus, Receipt, Settings } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { useI18n } from "@/contexts/language-context";
 import { useTheme } from "@/hooks/use-theme";
 
 export default function TabsLayout() {
   const router = useRouter();
   const theme = useTheme();
+  const { t } = useI18n();
   const insets = useSafeAreaInsets();
   const safeAreaBottom = Math.max(insets.bottom, 8);
   const isNavigatingToAddRef = useRef(false);
@@ -50,14 +52,14 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="home"
         options={{
-          title: "Home",
+          title: t("navigation.tabs.home"),
           tabBarIcon: ({ color }) => <LayoutDashboard size={22} color={color} strokeWidth={1.8} />,
         }}
       />
       <Tabs.Screen
         name="items"
         options={{
-          title: "Items",
+          title: t("navigation.tabs.items"),
           tabBarIcon: ({ color }) => <Receipt size={22} color={color} strokeWidth={1.8} />,
         }}
       />
@@ -70,7 +72,7 @@ export default function TabsLayout() {
           },
         }}
         options={{
-          title: "Add",
+          title: t("navigation.tabs.add"),
           tabBarButtonTestID: "tab-add",
           tabBarIcon: ({ color }) => <Plus size={22} color={color} strokeWidth={1.8} />,
         }}
@@ -78,14 +80,14 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="export"
         options={{
-          title: "Export",
+          title: t("navigation.tabs.export"),
           tabBarIcon: ({ color }) => <Download size={22} color={color} strokeWidth={1.8} />,
         }}
       />
       <Tabs.Screen
         name="settings"
         options={{
-          title: "Settings",
+          title: t("navigation.tabs.settings"),
           tabBarIcon: ({ color }) => <Settings size={22} color={color} strokeWidth={1.8} />,
         }}
       />

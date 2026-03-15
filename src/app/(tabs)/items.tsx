@@ -35,6 +35,7 @@ import {
   VStack,
 } from "@gluestack-ui/themed";
 
+import { useI18n } from "@/contexts/language-context";
 import { useTheme } from "@/hooks/use-theme";
 import { computeDeductibleImpactCents } from "@/domain/deductible-impact";
 import type { Category } from "@/models/category";
@@ -56,12 +57,12 @@ import { formatCents } from "@/utils/money";
 
 type FilterSheetKind = "year" | "usageType" | "category" | null;
 
-const usageTypeOptions: { label: string; value: ItemUsageType | null }[] = [
-  { label: "All usage types", value: null },
-  { label: "WORK", value: "WORK" },
-  { label: "PRIVATE", value: "PRIVATE" },
-  { label: "MIXED", value: "MIXED" },
-  { label: "OTHER", value: "OTHER" },
+const usageTypeOptionValues: readonly (ItemUsageType | null)[] = [
+  null,
+  "WORK",
+  "PRIVATE",
+  "MIXED",
+  "OTHER",
 ];
 
 const IOS_DELETE_RED = "#FF3B30";
@@ -73,6 +74,8 @@ interface DeleteSwipeActionProps {
   item: Item;
   isDeleting: boolean;
   textOnDeleteColor: string;
+  accessibilityLabel: string;
+  deleteActionText: string;
   onDeletePress: (item: Item) => void;
   onFullSwipeArmChange: (isArmed: boolean) => void;
   dragX?: Animated.AnimatedInterpolation<number>;
@@ -82,6 +85,8 @@ function DeleteSwipeAction({
   item,
   isDeleting,
   textOnDeleteColor,
+  accessibilityLabel,
+  deleteActionText,
   onDeletePress,
   onFullSwipeArmChange,
   dragX,
@@ -130,14 +135,14 @@ function DeleteSwipeAction({
         <Pressable
           onPress={() => onDeletePress(item)}
           testID={`items-delete-action-${item.id}`}
-          accessibilityLabel={`Delete ${item.title}`}
+          accessibilityLabel={accessibilityLabel}
           accessibilityRole="button"
           disabled={isDeleting}
           style={styles.deleteActionPressable}
         >
           <Trash2 color={textOnDeleteColor} size={16} strokeWidth={2} />
           <Text size="xs" bold style={{ color: textOnDeleteColor }}>
-            Delete
+            {deleteActionText}
           </Text>
         </Pressable>
       </Animated.View>
@@ -165,6 +170,7 @@ function missingNotesForItem(item: Item): boolean {
 export default function ItemsRoute() {
   const router = useRouter();
   const theme = useTheme();
+  const { t } = useI18n();
   const insets = useSafeAreaInsets();
   const tabBarHeight = useBottomTabBarHeight();
   const params = useLocalSearchParams<{
@@ -203,6 +209,14 @@ export default function ItemsRoute() {
   const categoryMap = useMemo(
     () => new Map(categories.map((category) => [category.id, category])),
     [categories]
+  );
+  const usageTypeOptions = useMemo(
+    () =>
+      usageTypeOptionValues.map((value) => ({
+        value,
+        label: value ? value : t("items.filter.usage.all"),
+      })),
+    [t]
   );
   const targetYear = parsedYear ?? settings?.taxYearDefault ?? new Date().getFullYear();
 
@@ -301,11 +315,11 @@ export default function ItemsRoute() {
       console.error("Failed to load items list", error);
       setAllItems([]);
       setMissingReceiptItemIds(new Set());
-      setLoadError("Could not load items.");
+      setLoadError(t("items.loadError"));
     } finally {
       setIsLoading(false);
     }
-  }, [categoryId, missingNotes, missingReceipt, parsedYear, usageType]);
+  }, [categoryId, missingNotes, missingReceipt, parsedYear, t, usageType]);
 
   useFocusEffect(
     useCallback(() => {
@@ -358,15 +372,23 @@ export default function ItemsRoute() {
     return sorted;
   }, [allItems, deductibleImpactByItemId, search, sortMode]);
 
-  const yearChipLabel = parsedYear ? `Year: ${parsedYear}` : "Year: All";
-  const usageTypeChipLabel = usageType ? `Usage: ${usageType}` : "Usage: All";
+  const yearChipLabel = parsedYear
+    ? t("items.filter.year.label", { year: parsedYear })
+    : t("items.filter.year.all");
+  const usageTypeChipLabel = usageType
+    ? t("items.filter.usage.label", { usage: usageType })
+    : t("items.filter.usage.allLabel");
   const categoryChipLabel = categoryId
-    ? `Category: ${categoryMap.get(categoryId)?.name ?? "Unknown"}`
-    : "Category: All";
+    ? t("items.filter.category.label", {
+        category: categoryMap.get(categoryId)?.name ?? t("items.category.unknown"),
+      })
+    : t("items.filter.category.all");
 
   const rowPriceAndDate = (item: Item) => {
-    const categoryName = item.categoryId ? categoryMap.get(item.categoryId)?.name ?? "Unknown" : "No category";
-    return `${categoryName} • ${item.purchaseDate}`;
+    const categoryName = item.categoryId
+      ? categoryMap.get(item.categoryId)?.name ?? t("items.category.unknown")
+      : t("items.category.none");
+    return `${categoryName} \u2022 ${item.purchaseDate}`;
   };
   const listBottomPadding = tabBarHeight + insets.bottom + 24;
 
@@ -432,13 +454,13 @@ export default function ItemsRoute() {
         void loadData();
       } catch (error) {
         console.error("Failed to delete item from list", error);
-        setLoadError("Could not delete item.");
+        setLoadError(t("items.deleteError"));
         void loadData();
       } finally {
         setIsDeletingItem(false);
       }
     },
-    [closeOpenedSwipeable, isDeletingItem, loadData]
+    [closeOpenedSwipeable, isDeletingItem, loadData, t]
   );
 
   const requestDelete = useCallback(
@@ -460,10 +482,10 @@ export default function ItemsRoute() {
         await performDelete(item);
       } catch (error) {
         console.error("Failed to inspect attachments before item delete", error);
-        setLoadError("Could not delete item.");
+        setLoadError(t("items.deleteError"));
       }
     },
-    [closeOpenedSwipeable, isDeletingItem, performDelete]
+    [closeOpenedSwipeable, isDeletingItem, performDelete, t]
   );
 
   const confirmDeleteCandidate = useCallback(() => {
@@ -501,6 +523,8 @@ export default function ItemsRoute() {
         item={item}
         isDeleting={isDeletingItem}
         textOnDeleteColor={theme.textOnPrimary}
+        accessibilityLabel={t("items.deleteAction.accessibilityLabel", { title: item.title })}
+        deleteActionText={t("common.action.delete")}
         onDeletePress={(selectedItem) => {
           void requestDelete(selectedItem);
         }}
@@ -510,7 +534,7 @@ export default function ItemsRoute() {
         dragX={dragX}
       />
     ),
-    [isDeletingItem, requestDelete, theme.textOnPrimary]
+    [isDeletingItem, requestDelete, t, theme.textOnPrimary]
   );
 
   return (
@@ -524,18 +548,18 @@ export default function ItemsRoute() {
             ListHeaderComponent={
               <VStack space="lg" maxWidth={900} width="$full" alignSelf="center" pb="$4">
                 <VStack space="xs">
-                  <Heading size="2xl">Items</Heading>
-                  <Text size="sm">Search, filter and review deductible impact by item.</Text>
+                  <Heading size="2xl">{t("items.title")}</Heading>
+                  <Text size="sm">{t("items.subtitle")}</Text>
                 </VStack>
 
                 <Input variant="outline" size="md">
-                  <InputField
-                    value={search}
-                    onChangeText={setSearch}
-                    placeholder="Search title or vendor"
-                    testID="items-search-input"
-                  />
-                </Input>
+                    <InputField
+                      value={search}
+                      onChangeText={setSearch}
+                      placeholder={t("items.searchPlaceholder")}
+                      testID="items-search-input"
+                    />
+                  </Input>
 
                 <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                   <HStack space="sm" alignItems="center" pr="$2">
@@ -564,7 +588,7 @@ export default function ItemsRoute() {
                       onPress={() => setMissingReceipt((current) => !current)}
                       testID="items-filter-missing-receipt"
                     >
-                      <ButtonText>Missing receipt</ButtonText>
+                      <ButtonText>{t("items.filter.missingReceipt")}</ButtonText>
                     </Button>
                     <Button
                       size="sm"
@@ -573,7 +597,7 @@ export default function ItemsRoute() {
                       onPress={() => setMissingNotes((current) => !current)}
                       testID="items-filter-missing-notes"
                     >
-                      <ButtonText>Missing notes</ButtonText>
+                      <ButtonText>{t("items.filter.missingNotes")}</ButtonText>
                     </Button>
                     <Button
                       size="sm"
@@ -594,24 +618,24 @@ export default function ItemsRoute() {
                   <Card borderWidth="$1" borderColor="$border200">
                     <HStack space="sm" alignItems="center">
                       <Spinner size="small" />
-                      <Text>Loading items...</Text>
+                      <Text>{t("items.loading")}</Text>
                     </HStack>
                   </Card>
                 ) : loadError ? (
                   <Card borderWidth="$1" borderColor="$error300">
                     <VStack space="sm">
                       <Text bold size="md">
-                        Could not load items
+                        {t("items.couldNotLoad")}
                       </Text>
                       <Text size="sm">{loadError}</Text>
                       <Button onPress={() => void loadData()} alignSelf="flex-start">
-                        <ButtonText>Retry</ButtonText>
+                        <ButtonText>{t("common.action.retry")}</ButtonText>
                       </Button>
                     </VStack>
                   </Card>
                 ) : (
                   <Card borderWidth="$1" borderColor="$border200">
-                    <Text size="sm">No items found. Adjust filters or add a new item.</Text>
+                    <Text size="sm">{t("items.emptyState.title")}</Text>
                   </Card>
                 )}
               </VStack>
@@ -654,17 +678,21 @@ export default function ItemsRoute() {
                           </HStack>
 
                           <Text size="sm">{rowPriceAndDate(item)}</Text>
-                          <Text size="sm">Deductible this year: {formatCents(deductibleImpact)}</Text>
+                          <Text size="sm">
+                            {t("items.row.deductibleThisYear", {
+                              amount: formatCents(deductibleImpact),
+                            })}
+                          </Text>
 
                           <HStack space="sm" flexWrap="wrap">
                             {hasMissingReceipt && (
                               <Badge size="sm" action="warning" variant="outline">
-                                <BadgeText>Missing receipt</BadgeText>
+                                <BadgeText>{t("items.badge.missingReceipt")}</BadgeText>
                               </Badge>
                             )}
                             {hasMissingNotes && (
                               <Badge size="sm" action="warning" variant="outline">
-                                <BadgeText>Missing notes</BadgeText>
+                                <BadgeText>{t("items.badge.missingNotes")}</BadgeText>
                               </Badge>
                             )}
                           </HStack>
@@ -692,7 +720,7 @@ export default function ItemsRoute() {
                       setActiveSheet(null);
                     }}
                   >
-                    <ActionsheetItemText>All years</ActionsheetItemText>
+                    <ActionsheetItemText>{t("items.filter.year.allOption")}</ActionsheetItemText>
                   </ActionsheetItem>
                   {availableYears.map((optionYear) => (
                     <ActionsheetItem
@@ -729,7 +757,7 @@ export default function ItemsRoute() {
                       setActiveSheet(null);
                     }}
                   >
-                    <ActionsheetItemText>All categories</ActionsheetItemText>
+                    <ActionsheetItemText>{t("items.filter.category.allOption")}</ActionsheetItemText>
                   </ActionsheetItem>
                   {categories.map((category) => (
                     <ActionsheetItem
@@ -755,10 +783,10 @@ export default function ItemsRoute() {
             <AlertDialogBackdrop />
             <AlertDialogContent>
               <AlertDialogHeader>
-                <Heading size="md">Delete item?</Heading>
+                <Heading size="md">{t("items.deleteDialog.title")}</Heading>
               </AlertDialogHeader>
               <AlertDialogBody>
-                <Text size="sm">This will delete the item and its attachments from this device.</Text>
+                <Text size="sm">{t("items.deleteDialog.body")}</Text>
               </AlertDialogBody>
               <AlertDialogFooter>
                 <HStack space="sm">
@@ -768,7 +796,7 @@ export default function ItemsRoute() {
                     onPress={() => setDeleteCandidateItem(null)}
                     testID="items-delete-confirm-cancel"
                   >
-                    <ButtonText>Cancel</ButtonText>
+                    <ButtonText>{t("common.action.cancel")}</ButtonText>
                   </Button>
                   <Button
                     action="negative"
@@ -776,7 +804,9 @@ export default function ItemsRoute() {
                     disabled={isDeletingItem}
                     testID="items-delete-confirm-delete"
                   >
-                    <ButtonText>{isDeletingItem ? "Deleting..." : "Delete"}</ButtonText>
+                    <ButtonText>
+                      {isDeletingItem ? t("items.deleteDialog.deleting") : t("common.action.delete")}
+                    </ButtonText>
                   </Button>
                 </HStack>
               </AlertDialogFooter>
@@ -826,3 +856,4 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
   },
 });
+

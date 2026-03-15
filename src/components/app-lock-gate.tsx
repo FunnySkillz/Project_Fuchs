@@ -6,6 +6,7 @@ import { Button, ButtonText } from "@gluestack-ui/themed";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { Spacing } from "@/constants/theme";
+import { useI18n } from "@/contexts/language-context";
 import { useTheme } from "@/hooks/use-theme";
 
 interface Props {
@@ -30,6 +31,7 @@ export function AppLockGate({
   onCancel,
 }: Props) {
   const theme = useTheme();
+  const { t } = useI18n();
   const insets = useSafeAreaInsets();
 
   return (
@@ -37,10 +39,10 @@ export function AppLockGate({
       <View style={[styles.container, { paddingBottom: Math.max(insets.bottom, Spacing.four) }]}>
         <ThemedView type="backgroundElement" style={styles.card}>
           <ThemedText type="subtitle" style={styles.center}>
-            App Locked
+            {t("appLock.title")}
           </ThemedText>
           <ThemedText themeColor="textSecondary" style={styles.center}>
-            Authenticate with biometrics or enter your PIN.
+            {t("appLock.subtitle")}
           </ThemedText>
 
           {pinEnabled && (
@@ -59,7 +61,7 @@ export function AppLockGate({
                 keyboardType="number-pad"
                 secureTextEntry
                 maxLength={6}
-                placeholder="Enter PIN"
+                placeholder={t("appLock.pinPlaceholder")}
                 placeholderTextColor={theme.textSecondary}
                 testID="app-lock-pin-input"
               />
@@ -80,7 +82,7 @@ export function AppLockGate({
                   },
                 ]}
               >
-                <ButtonText color={theme.textOnPrimary}>Unlock</ButtonText>
+                <ButtonText color={theme.textOnPrimary}>{t("appLock.unlock")}</ButtonText>
               </Button>
             </>
           )}
@@ -95,7 +97,7 @@ export function AppLockGate({
             <View style={styles.orRow}>
               <View style={[styles.orLine, { backgroundColor: theme.border }]} />
               <ThemedText type="small" themeColor="textSecondary">
-                OR
+                {t("appLock.or")}
               </ThemedText>
               <View style={[styles.orLine, { backgroundColor: theme.border }]} />
             </View>
@@ -116,7 +118,9 @@ export function AppLockGate({
               isDisabled={isAuthenticating}
               testID="app-lock-use-face-id"
             >
-              <ButtonText color={theme.text}>{isAuthenticating ? "Authenticating..." : "Use Face ID"}</ButtonText>
+              <ButtonText color={theme.text}>
+                {isAuthenticating ? t("appLock.authenticating") : t("appLock.useBiometric")}
+              </ButtonText>
             </Button>
             <Button
               variant="link"
@@ -125,7 +129,7 @@ export function AppLockGate({
               onPress={onCancel}
               testID="app-lock-cancel"
             >
-              <ButtonText color={theme.textSecondary}>Cancel</ButtonText>
+              <ButtonText color={theme.textSecondary}>{t("appLock.cancel")}</ButtonText>
             </Button>
           </View>
         </ThemedView>

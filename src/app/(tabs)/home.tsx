@@ -16,6 +16,7 @@ import {
 } from "@gluestack-ui/themed";
 
 import { computeDeductibleImpactCents } from "@/domain/deductible-impact";
+import { useI18n } from "@/contexts/language-context";
 import { getCategoryRepository, getItemRepository } from "@/repositories/create-core-repositories";
 import { getProfileSettingsRepository } from "@/repositories/create-profile-settings-repository";
 import { onProfileSettingsSaved } from "@/services/app-events";
@@ -35,6 +36,7 @@ interface DashboardStats {
 export default function HomeRoute() {
   const router = useRouter();
   const colorScheme = useColorScheme();
+  const { t, tPlural } = useI18n();
   const isNavigatingToItemsRef = React.useRef(false);
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -76,11 +78,11 @@ export default function HomeRoute() {
       });
     } catch (error) {
       console.error("Failed to load dashboard data", error);
-      setLoadError("Could not load dashboard metrics.");
+      setLoadError(t("home.loadErrorMetrics"));
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useFocusEffect(
     useCallback(() => {
@@ -116,7 +118,7 @@ export default function HomeRoute() {
         <Box flex={1} px="$5" py="$6" justifyContent="center" alignItems="center">
           <VStack space="md" alignItems="center">
             <Spinner size="large" />
-            <Text size="sm">Loading home overview...</Text>
+            <Text size="sm">{t("home.loadingOverview")}</Text>
           </VStack>
         </Box>
       </SafeAreaView>
@@ -128,17 +130,17 @@ export default function HomeRoute() {
       <SafeAreaView style={{ flex: 1 }} edges={["top"]}>
         <Box flex={1} px="$5" py="$6">
           <VStack space="lg" maxWidth={760} width="$full" alignSelf="center">
-            <Heading size="xl">Steuerausgleich</Heading>
+            <Heading size="xl">{t("home.dashboardTitle")}</Heading>
             <Card borderWidth="$1" borderColor="$error300">
               <VStack space="sm">
                 <Text bold size="md">
-                  Could not load dashboard
+                  {t("home.couldNotLoadDashboard")}
                 </Text>
-                <Text size="sm">{loadError ?? "Unknown error while loading dashboard."}</Text>
+                <Text size="sm">{loadError ?? t("home.unknownLoadError")}</Text>
               </VStack>
             </Card>
             <Button onPress={() => void loadDashboard()} alignSelf="flex-start">
-              <ButtonText>Retry</ButtonText>
+              <ButtonText>{t("common.action.retry")}</ButtonText>
             </Button>
           </VStack>
         </Box>
@@ -151,7 +153,7 @@ export default function HomeRoute() {
   const hasMissingNotes = stats.missingNotesCount > 0;
   const hasAttentionItems = hasMissingReceipt || hasMissingNotes;
 
-  const formatCountLabel = (count: number) => `${count} item${count === 1 ? "" : "s"}`;
+  const formatCountLabel = (count: number) => tPlural("items.list.itemCount", count);
   const isDarkMode = colorScheme === "dark";
   const secondaryTextColor = isDarkMode ? Colors.dark.textSecondary : Colors.light.textSecondary;
   const cardBackgroundColor = isDarkMode ? Colors.dark.backgroundElement : Colors.light.backgroundElement;
@@ -166,23 +168,25 @@ export default function HomeRoute() {
       <Box flex={1} px="$5" py="$6">
         <VStack maxWidth={760} width="$full" alignSelf="center" space="lg">
           <VStack space="xs">
-            <Heading size="2xl">Steuerausgleich {stats.year}</Heading>
-            <Text size="sm">Estimated deductible this year</Text>
+            <Heading size="2xl">{t("home.titleWithYear", { year: stats.year })}</Heading>
+            <Text size="sm">{t("home.estimatedDeductibleThisYear")}</Text>
           </VStack>
 
           <Card borderWidth="$1" borderColor="$border200">
             <VStack space="sm">
-              <Text size="sm">Estimated deductible this year</Text>
+              <Text size="sm">{t("home.estimatedDeductibleThisYear")}</Text>
               <Heading size="3xl">{formatCents(stats.deductibleThisYearCents)}</Heading>
               <Text size="sm">
-                Estimated tax refund impact: {formatCents(stats.estimatedRefundImpactCents)}
+                {t("home.estimatedRefundImpact", {
+                  amount: formatCents(stats.estimatedRefundImpactCents),
+                })}
               </Text>
             </VStack>
           </Card>
 
           {hasItems ? (
             <VStack space="sm">
-              <Heading size="md">Attention needed</Heading>
+              <Heading size="md">{t("home.attentionNeeded")}</Heading>
               {hasAttentionItems ? (
                 <VStack space="sm">
                   {hasMissingReceipt && (
@@ -198,7 +202,7 @@ export default function HomeRoute() {
                             <Receipt size={18} color={warningIconColor} />
                             <VStack space="xs" flex={1}>
                               <Text bold size="sm">
-                                Missing receipts
+                                {t("home.missingReceipts")}
                               </Text>
                               <Text size="xs" color={secondaryTextColor}>
                                 {formatCountLabel(stats.missingReceiptCount)}
@@ -225,7 +229,7 @@ export default function HomeRoute() {
                             justifyContent="space-between"
                           >
                             <Text size="sm" color={warningActionTextColor}>
-                              Review items
+                              {t("home.reviewItems")}
                             </Text>
                             <ChevronRight size={14} color={warningActionTextColor} />
                           </HStack>
@@ -247,7 +251,7 @@ export default function HomeRoute() {
                             <FileText size={18} color={warningIconColor} />
                             <VStack space="xs" flex={1}>
                               <Text bold size="sm">
-                                Missing notes
+                                {t("home.missingNotes")}
                               </Text>
                               <Text size="xs" color={secondaryTextColor}>
                                 {formatCountLabel(stats.missingNotesCount)}
@@ -274,7 +278,7 @@ export default function HomeRoute() {
                             justifyContent="space-between"
                           >
                             <Text size="sm" color={warningActionTextColor}>
-                              Add missing notes
+                              {t("home.addMissingNotes")}
                             </Text>
                             <ChevronRight size={14} color={warningActionTextColor} />
                           </HStack>
@@ -285,16 +289,16 @@ export default function HomeRoute() {
                 </VStack>
               ) : (
                 <Text size="sm" color={secondaryTextColor}>
-                  Everything looks good.
+                  {t("home.everythingLooksGood")}
                 </Text>
               )}
             </VStack>
           ) : (
             <VStack space="sm">
               <Text bold size="md">
-                No items added yet.
+                {t("home.noItemsTitle")}
               </Text>
-              <Text size="sm">Use the center + button to add your first item.</Text>
+              <Text size="sm">{t("home.noItemsHint")}</Text>
             </VStack>
           )}
         </VStack>

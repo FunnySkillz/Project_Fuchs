@@ -1,6 +1,7 @@
 import React from "react";
 import { Pressable, StyleSheet } from "react-native";
 
+import { useI18n } from "@/contexts/language-context";
 import { ThemedText } from "@/components/themed-text";
 import { UiTokens } from "@/components/ui/tokens";
 import { useTheme } from "@/hooks/use-theme";
@@ -14,9 +15,11 @@ interface DatePickerTriggerProps {
 export function DatePickerTrigger({
   value,
   onPress,
-  placeholder = "Select date",
+  placeholder,
 }: DatePickerTriggerProps) {
   const theme = useTheme();
+  const { t } = useI18n();
+  const resolvedPlaceholder = placeholder ?? t("common.date.selectDate");
 
   return (
     <Pressable
@@ -30,7 +33,7 @@ export function DatePickerTrigger({
       ]}
       onPress={onPress}
     >
-      <ThemedText>{value ?? placeholder}</ThemedText>
+      <ThemedText>{value ?? resolvedPlaceholder}</ThemedText>
     </Pressable>
   );
 }

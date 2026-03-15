@@ -3,6 +3,7 @@ import React, { useCallback, useRef } from "react";
 import { ScrollView } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Box, Card, Heading, Pressable, Text, VStack } from "@gluestack-ui/themed";
+import { useI18n } from "@/contexts/language-context";
 
 interface SettingsEntry {
   title: string;
@@ -11,43 +12,49 @@ interface SettingsEntry {
   testID: string;
 }
 
-const primaryEntries: SettingsEntry[] = [
-  {
-    title: "Appearance",
-    description: "Theme mode and visual behavior.",
-    route: "/(tabs)/settings/appearance" as Href,
-    testID: "settings-nav-appearance",
-  },
-  {
-    title: "Tax & Calculation",
-    description: "Tax defaults and deduction assumptions.",
-    route: "/(tabs)/settings/tax-calculation" as Href,
-    testID: "settings-nav-tax",
-  },
-  {
-    title: "Security",
-    description: "App lock and PIN fallback.",
-    route: "/(tabs)/settings/security" as Href,
-    testID: "settings-nav-security",
-  },
-  {
-    title: "Backup & Sync",
-    description: "Backup restore, OneDrive, and export pipeline.",
-    route: "/(tabs)/settings/backup-sync" as Href,
-    testID: "settings-nav-backup-sync",
-  },
-  {
-    title: "Legal & Privacy",
-    description: "Disclaimer, privacy statement, and permission usage.",
-    route: "/(tabs)/settings/legal" as Href,
-    testID: "settings-nav-legal",
-  },
-];
-
 export default function TabSettingsRoute() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { t } = useI18n();
   const isNavigatingRef = useRef(false);
+  const primaryEntries: SettingsEntry[] = [
+    {
+      title: t("settings.main.appearance.title"),
+      description: t("settings.main.appearance.description"),
+      route: "/(tabs)/settings/appearance" as Href,
+      testID: "settings-nav-appearance",
+    },
+    {
+      title: t("settings.main.language.title"),
+      description: t("settings.main.language.description"),
+      route: "/(tabs)/settings/language" as Href,
+      testID: "settings-nav-language",
+    },
+    {
+      title: t("settings.main.taxCalculation.title"),
+      description: t("settings.main.taxCalculation.description"),
+      route: "/(tabs)/settings/tax-calculation" as Href,
+      testID: "settings-nav-tax",
+    },
+    {
+      title: t("settings.main.security.title"),
+      description: t("settings.main.security.description"),
+      route: "/(tabs)/settings/security" as Href,
+      testID: "settings-nav-security",
+    },
+    {
+      title: t("settings.main.backupSync.title"),
+      description: t("settings.main.backupSync.description"),
+      route: "/(tabs)/settings/backup-sync" as Href,
+      testID: "settings-nav-backup-sync",
+    },
+    {
+      title: t("settings.main.legal.title"),
+      description: t("settings.main.legal.description"),
+      route: "/(tabs)/settings/legal" as Href,
+      testID: "settings-nav-legal",
+    },
+  ];
 
   useFocusEffect(
     useCallback(() => {
@@ -82,8 +89,8 @@ export default function TabSettingsRoute() {
         >
           <VStack space="lg">
             <VStack space="xs">
-              <Heading size="2xl">Settings</Heading>
-              <Text size="sm">Choose a section to manage app behavior and preferences.</Text>
+              <Heading size="2xl">{t("settings.main.title")}</Heading>
+              <Text size="sm">{t("settings.main.subtitle")}</Text>
             </VStack>
 
             {primaryEntries.map((entry) => (
@@ -102,15 +109,15 @@ export default function TabSettingsRoute() {
             ))}
 
             <VStack space="sm" pt="$2">
-              <Heading size="sm">Danger Zone</Heading>
+              <Heading size="sm">{t("settings.main.dangerZone.sectionTitle")}</Heading>
               <Pressable
                 onPress={() => pushSettingsRoute("/(tabs)/settings/danger-zone" as Href)}
                 testID="settings-nav-danger-zone"
               >
                 <Card borderWidth="$1" borderColor="$error300">
                   <VStack space="xs">
-                    <Heading size="md">Delete Local Data</Heading>
-                    <Text size="sm">Irreversible local reset and data wipe.</Text>
+                    <Heading size="md">{t("settings.main.dangerZone.cardTitle")}</Heading>
+                    <Text size="sm">{t("settings.main.dangerZone.cardDescription")}</Text>
                   </VStack>
                 </Card>
               </Pressable>
