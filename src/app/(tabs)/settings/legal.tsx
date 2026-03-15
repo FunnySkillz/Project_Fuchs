@@ -64,6 +64,10 @@ export default function SettingsLegalRoute() {
                   Your data is stored locally on your device. SteuerFuchs does not include tracking or analytics.
                   Files leave your device only when you explicitly export or share them.
                 </Text>
+                <Text size="sm">
+                  OneDrive is optional and export-only. It is never required for local-first app usage.
+                </Text>
+                <Text size="sm">Privacy/support contact: support@steuerfuchs.app</Text>
               </VStack>
             </Card>
 

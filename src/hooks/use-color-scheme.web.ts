@@ -2,10 +2,12 @@ import { useColorScheme as useNativeColorScheme } from "react-native";
 
 import { useThemeMode } from "@/contexts/theme-mode-context";
 
+export type AppColorScheme = "light" | "dark";
+
 /**
  * Uses the app-level theme mode on web to keep behavior identical to native.
  */
-export function useColorScheme() {
+export function useColorScheme(): AppColorScheme {
   const systemColorScheme = useNativeColorScheme();
   const { mode } = useThemeMode();
 
@@ -15,5 +17,5 @@ export function useColorScheme() {
   if (mode === "dark") {
     return "dark";
   }
-  return systemColorScheme ?? "light";
+  return systemColorScheme === "dark" ? "dark" : "light";
 }

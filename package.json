@@ -12,6 +12,7 @@
     "test": "jest --runInBand",
     "test:ci": "jest --runInBand --ci",
     "typecheck": "tsc --noEmit",
+    "release:policy": "node ./scripts/check-release-gate-policy.js",
     "release:preflight": "npm run lint && npm run typecheck && npm run test:ci"
   },
   "dependencies": {

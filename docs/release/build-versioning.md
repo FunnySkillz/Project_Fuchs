@@ -77,3 +77,26 @@ After build completion:
    - export PDF/ZIP
    - backup/restore
 3. Confirm startup and navigation work without crashes.
+
+## Release Policy Gate
+
+Release policy is tracked in:
+
+- `docs/release/release-gate-policy.json`
+
+Validation command:
+
+```bash
+npm run release:policy
+```
+
+Policy interface:
+
+- `monetization_enabled: boolean`
+- `legal_profile: "private_individual" | "trader"`
+- `legal_migration_complete: boolean`
+- `submission_ready: boolean`
+
+Rule:
+
+- If `monetization_enabled` is `true`, then `legal_profile` must be `trader` and `legal_migration_complete` must be `true`.

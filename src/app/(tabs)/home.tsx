@@ -19,7 +19,8 @@ import { computeDeductibleImpactCents } from "@/domain/deductible-impact";
 import { getCategoryRepository, getItemRepository } from "@/repositories/create-core-repositories";
 import { getProfileSettingsRepository } from "@/repositories/create-profile-settings-repository";
 import { onProfileSettingsSaved } from "@/services/app-events";
-import { useTheme } from "@/hooks/use-theme";
+import { Colors } from "@/constants/theme";
+import { useColorScheme } from "@/hooks/use-color-scheme";
 import { formatCents } from "@/utils/money";
 
 interface DashboardStats {
@@ -33,7 +34,7 @@ interface DashboardStats {
 
 export default function HomeRoute() {
   const router = useRouter();
-  const theme = useTheme();
+  const colorScheme = useColorScheme();
   const isNavigatingToItemsRef = React.useRef(false);
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -151,9 +152,14 @@ export default function HomeRoute() {
   const hasAttentionItems = hasMissingReceipt || hasMissingNotes;
 
   const formatCountLabel = (count: number) => `${count} item${count === 1 ? "" : "s"}`;
-  const warningIconColor = theme.warning ?? theme.danger;
-  const warningActionTextColor = theme.warningText ?? theme.text;
-  const warningActionBackground = theme.warningBackground ?? theme.backgroundSelected;
+  const isDarkMode = colorScheme === "dark";
+  const secondaryTextColor = isDarkMode ? Colors.dark.textSecondary : Colors.light.textSecondary;
+  const cardBackgroundColor = isDarkMode ? Colors.dark.backgroundElement : Colors.light.backgroundElement;
+  const warningIconColor = isDarkMode ? Colors.dark.warning : Colors.light.warning;
+  const warningActionTextColor = isDarkMode ? Colors.dark.warningText : Colors.light.warningText;
+  const warningActionBackground = isDarkMode
+    ? Colors.dark.warningBackground
+    : Colors.light.warningBackground;
 
   return (
     <SafeAreaView style={{ flex: 1 }} edges={["top"]}>
@@ -184,7 +190,7 @@ export default function HomeRoute() {
                       borderWidth="$1"
                       borderColor="$border200"
                       testID="home-missing-receipts-card"
-                      style={{ backgroundColor: theme.backgroundElement }}
+                      style={{ backgroundColor: cardBackgroundColor }}
                     >
                       <VStack space="sm">
                         <HStack alignItems="center" justifyContent="space-between" space="sm">
@@ -194,12 +200,12 @@ export default function HomeRoute() {
                               <Text bold size="sm">
                                 Missing receipts
                               </Text>
-                              <Text size="xs" color={theme.textSecondary}>
+                              <Text size="xs" color={secondaryTextColor}>
                                 {formatCountLabel(stats.missingReceiptCount)}
                               </Text>
                             </VStack>
                           </HStack>
-                          <Text size="xs" color={theme.textSecondary}>
+                          <Text size="xs" color={secondaryTextColor}>
                             {formatCountLabel(stats.missingReceiptCount)}
                           </Text>
                         </HStack>
@@ -233,7 +239,7 @@ export default function HomeRoute() {
                       borderWidth="$1"
                       borderColor="$border200"
                       testID="home-missing-notes-card"
-                      style={{ backgroundColor: theme.backgroundElement }}
+                      style={{ backgroundColor: cardBackgroundColor }}
                     >
                       <VStack space="sm">
                         <HStack alignItems="center" justifyContent="space-between" space="sm">
@@ -243,12 +249,12 @@ export default function HomeRoute() {
                               <Text bold size="sm">
                                 Missing notes
                               </Text>
-                              <Text size="xs" color={theme.textSecondary}>
+                              <Text size="xs" color={secondaryTextColor}>
                                 {formatCountLabel(stats.missingNotesCount)}
                               </Text>
                             </VStack>
                           </HStack>
-                          <Text size="xs" color={theme.textSecondary}>
+                          <Text size="xs" color={secondaryTextColor}>
                             {formatCountLabel(stats.missingNotesCount)}
                           </Text>
                         </HStack>
@@ -278,7 +284,7 @@ export default function HomeRoute() {
                   )}
                 </VStack>
               ) : (
-                <Text size="sm" color={theme.textSecondary}>
+                <Text size="sm" color={secondaryTextColor}>
                   Everything looks good.
                 </Text>
               )}

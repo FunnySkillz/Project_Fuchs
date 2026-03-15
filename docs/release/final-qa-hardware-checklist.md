@@ -5,8 +5,13 @@ Use this checklist for the final signed production release validation.
 ## 0) Preconditions
 
 - [ ] `release:preflight` checks pass.
+- [ ] `release:policy` checks pass.
 - [ ] EAS Android credentials configured interactively once.
 - [ ] EAS iOS credentials configured interactively once.
+- [ ] App Store Connect metadata is filled:
+  - Support URL
+  - Privacy Policy URL
+  - App Review contact (name/email/phone)
 
 One-time credential setup (interactive):
 

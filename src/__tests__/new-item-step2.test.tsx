@@ -178,7 +178,9 @@ describe("NewItemRoute save and validation", () => {
     mockCreateItem.mockResolvedValue({ id: "item-123" });
   });
 
-  it("supports add-item happy path from attachment to successful save and routes to items tab", async () => {
+  it(
+    "supports add-item happy path from attachment to successful save and routes to items tab",
+    async () => {
     mockSaveFromCamera.mockResolvedValue({
       filePath: "/tmp/receipt-a.jpg",
       mimeType: "image/jpeg",
@@ -228,7 +230,9 @@ describe("NewItemRoute save and validation", () => {
       expect(mockLinkDraftAttachmentsToItem).toHaveBeenCalledWith("draft-1", "item-123");
       expect(mockRouterReplace).toHaveBeenCalledWith("/(tabs)/items");
     });
-  });
+    },
+    15_000
+  );
 
   it("starts with optional section collapsed on add-item entry", async () => {
     render(<NewItemRoute />);

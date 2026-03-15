@@ -2,7 +2,9 @@ import { useColorScheme as useNativeColorScheme } from "react-native";
 
 import { useThemeMode } from "@/contexts/theme-mode-context";
 
-export function useColorScheme() {
+export type AppColorScheme = "light" | "dark";
+
+export function useColorScheme(): AppColorScheme {
   const systemColorScheme = useNativeColorScheme();
   const { mode } = useThemeMode();
 
@@ -12,5 +14,5 @@ export function useColorScheme() {
   if (mode === "dark") {
     return "dark";
   }
-  return systemColorScheme ?? "light";
+  return systemColorScheme === "dark" ? "dark" : "light";
 }

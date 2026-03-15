@@ -234,7 +234,8 @@ describe("ItemEditRoute", () => {
           usefulLifeMonthsOverride: 48,
         })
       );
-      expect(mockRouterReplace).toHaveBeenCalledWith("/item/item-1");
+      expect(mockNavigationGoBack).toHaveBeenCalled();
+      expect(mockRouterReplace).not.toHaveBeenCalled();
     });
   });
 
@@ -298,8 +299,8 @@ describe("ItemEditRoute", () => {
     fireEvent.press(screen.getByTestId("discard-confirm"));
 
     await waitFor(() => {
-      expect(mockNavigationGoBack).not.toHaveBeenCalled();
-      expect(mockRouterReplace).toHaveBeenCalledWith("/item/item-1");
+      expect(mockNavigationGoBack).toHaveBeenCalled();
+      expect(mockRouterReplace).not.toHaveBeenCalled();
     });
   });
 
@@ -310,8 +311,8 @@ describe("ItemEditRoute", () => {
     fireEvent.press(screen.getByTestId("edititem-cancel"));
 
     await waitFor(() => {
-      expect(mockNavigationGoBack).not.toHaveBeenCalled();
-      expect(mockRouterReplace).toHaveBeenCalledWith("/item/item-1");
+      expect(mockNavigationGoBack).toHaveBeenCalled();
+      expect(mockRouterReplace).not.toHaveBeenCalled();
       expect(mockRouterBack).not.toHaveBeenCalled();
     });
   });
@@ -356,7 +357,8 @@ describe("ItemEditRoute", () => {
 
     await waitFor(() => {
       expect(mockNavigationGoBack).not.toHaveBeenCalled();
-      expect(mockRouterReplace).toHaveBeenCalledWith("/item/item-1");
+      expect(mockNavigationDispatch).toHaveBeenCalledWith({ type: "GO_BACK" });
+      expect(mockRouterReplace).not.toHaveBeenCalled();
       expect(consoleErrorSpy).not.toHaveBeenCalled();
     });
     consoleErrorSpy.mockRestore();
@@ -378,9 +380,10 @@ describe("ItemEditRoute", () => {
       });
     });
 
-    expect(preventDefault).toHaveBeenCalled();
+    expect(preventDefault).not.toHaveBeenCalled();
     expect(screen.queryByTestId("discard-modal")).toBeNull();
     expect(mockNavigationGoBack).not.toHaveBeenCalled();
-    expect(mockRouterReplace).toHaveBeenCalledWith("/item/item-1");
+    expect(mockNavigationDispatch).not.toHaveBeenCalled();
+    expect(mockRouterReplace).not.toHaveBeenCalled();
   });
 });

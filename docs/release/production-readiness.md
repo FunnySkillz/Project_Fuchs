@@ -44,6 +44,11 @@ Define a binary release gate for V1. V1 ships only when all must-have checks are
   Exit criteria:
   - `npx tsc --noEmit` passes.
   - Required unit/integration tests pass in CI.
+- [ ] PASS: Release policy gate passes.
+  Exit criteria:
+  - `npm run release:policy` passes.
+  - `docs/release/release-gate-policy.json` fields are valid.
+  - If monetization is enabled, legal migration is complete and legal profile is `trader`.
 - [ ] PASS: Lint baseline is clean enough to enforce.
   Exit criteria:
   - No new lint warnings/errors introduced by release branch.
@@ -66,6 +71,18 @@ Define a binary release gate for V1. V1 ships only when all must-have checks are
 - [ ] PASS: Security controls match platform capability.
   Exit criteria:
   - PIN/lock behavior is implemented only where support is real (no fake security claims).
+
+### 5) Store Metadata and Legal Package
+- [ ] PASS: App Store metadata is complete.
+  Exit criteria:
+  - Support URL is set in App Store Connect.
+  - Privacy Policy URL is set in App Store Connect.
+  - App Review contact name/email/phone is set in App Store Connect.
+- [ ] PASS: Legal package is complete for selected legal profile.
+  Exit criteria:
+  - Website `/impressum` includes full name, full address, email, country, and responsible publisher statement.
+  - Website `/privacy` includes local-first, permissions, export/OneDrive behavior, and privacy contact.
+  - In-app legal copy does not contradict website legal pages.
 
 ## Manual QA Checklist (Light/Dark + Core Flows)
 
@@ -99,6 +116,7 @@ Define a binary release gate for V1. V1 ships only when all must-have checks are
    - `npx tsc --noEmit`
    - `npm test`
    - `npm run lint` (or project lint command)
+   - `npm run release:policy`
 4. Run manual QA checklist above on a release candidate build.
 5. Build artifacts:
    - `eas build --platform android --profile production`
