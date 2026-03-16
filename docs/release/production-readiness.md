@@ -48,6 +48,14 @@ Define a binary release gate for V1. V1 ships only when all must-have checks are
   Exit criteria:
   - EN is treated as master dictionary.
   - `npm run i18n:parity` passes (DE keys exactly match EN keys).
+- [ ] PASS: UTF-8 encoding guard is green.
+  Exit criteria:
+  - `npm run encoding:check` passes.
+  - No replacement characters (`U+FFFD`) or BOM-encoded source files are present.
+- [ ] PASS: Legal-sensitive DE copy freeze check is green.
+  Exit criteria:
+  - `npm run legal:de:freeze` passes.
+  - Legal/privacy disclaimer copy in app remains semantic-equivalent and orthography-only.
 - [ ] PASS: Release policy gate passes.
   Exit criteria:
   - `npm run release:policy` passes.
@@ -136,6 +144,7 @@ Define a binary release gate for V1. V1 ships only when all must-have checks are
 - [ ] Exported filenames remain stable/non-localized.
 - [ ] German copy does not break layouts (buttons, tabs, dialogs, empty states).
 - [ ] Accessibility labels are correct in EN and DE.
+- [ ] Items/Export search still works with umlaut sample data (title/vendor search path unchanged).
 
 ## Release Steps (EAS + Versioning)
 
@@ -148,7 +157,9 @@ Define a binary release gate for V1. V1 ships only when all must-have checks are
    - `npx tsc --noEmit`
    - `npm test`
    - `npm run lint` (or project lint command)
+   - `npm run encoding:check`
    - `npm run i18n:parity`
+   - `npm run legal:de:freeze`
    - `npm run release:policy`
 4. Run manual QA checklist above on a release candidate build.
 5. Build artifacts:

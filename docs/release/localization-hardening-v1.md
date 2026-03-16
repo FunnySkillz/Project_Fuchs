@@ -9,6 +9,7 @@
 ## Safety Rules
 - EN is the master dictionary.
 - DE must keep exact key parity with EN (`npm run i18n:parity`).
+- Source text files must stay UTF-8 without BOM (`npm run encoding:check`).
 - Missing DE key fallback remains EN at runtime.
 - Missing EN key behavior:
   - Development: fail hard.
@@ -16,11 +17,14 @@
 - Missing interpolation param behavior:
   - Development: fail hard.
   - Production: keep template fallback and log warning.
+- Legal-sensitive DE copy is frozen in this release pass (`npm run legal:de:freeze`).
+  - For `settings.legal.*` and onboarding legal disclaimer text, only orthography-safe changes are allowed.
 
 ## Release Checks (Required)
 - Deep links / restore-state routes show localized titles and localized body text.
 - Accessibility labels are localized in EN and DE.
 - Legal EN/DE semantic sync is verified.
+- Item/Export search behavior remains based on user-entered title/vendor text.
 - Language is resolved before first visible render.
 - No localized UI flash on startup.
 
@@ -38,9 +42,12 @@
 - Export filenames remain stable/non-localized.
 - German text does not break layouts (buttons, tabs, dialogs, empty states).
 - Accessibility labels verified in EN and DE.
+- Item/Export search with umlaut sample data keeps expected matches.
 
 ## Go / No-Go Rule
 Ship only when all are true:
 - Dictionary parity check passes.
+- UTF-8 encoding check passes.
+- DE legal copy freeze check passes.
 - Release gate policy passes.
 - Manual localization QA matrix is signed off.

@@ -19,6 +19,20 @@ describe("i18n translate safety", () => {
     });
   });
 
+  it("renders corrected German orthography for critical UI keys", () => {
+    (globalThis as Record<string, unknown>).__DEV__ = true;
+
+    jest.isolateModules(() => {
+      jest.dontMock("@/i18n/messages/de");
+      const { translate, translatePlural } = require("@/i18n/translate");
+
+      expect(translate("de", "navigation.tabs.items")).toBe("Einträge");
+      expect(translate("de", "common.action.back")).toBe("Zurück");
+      expect(translatePlural("de", "items.list.itemCount", 1)).toBe("1 Eintrag");
+      expect(translatePlural("de", "items.list.itemCount", 2)).toBe("2 Einträge");
+    });
+  });
+
   it("fails hard in development when interpolation params are missing", () => {
     (globalThis as Record<string, unknown>).__DEV__ = true;
 
