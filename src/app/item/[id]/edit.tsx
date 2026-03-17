@@ -58,6 +58,7 @@ import {
 } from "@/services/friendly-errors";
 import { useI18n } from "@/contexts/language-context";
 import { useTheme } from "@/hooks/use-theme";
+import { useColorScheme } from "@/hooks/use-color-scheme";
 import { validateItemInput } from "@/domain/item-validation";
 import { resolveWorkPercent } from "@/domain/work-percent";
 import { addMonthsToYmd, formatYmdFromDateLocal, parseYmd } from "@/utils/date";
@@ -154,6 +155,7 @@ export default function ItemEditRoute() {
   const router = useRouter();
   const navigation = useNavigation<any>();
   const theme = useTheme();
+  const colorScheme = useColorScheme();
   const { t } = useI18n();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ id?: string | string[] }>();
@@ -1014,7 +1016,7 @@ export default function ItemEditRoute() {
                     style={{ backgroundColor: theme.background }}
                   >
                     <VStack space="sm">
-                      <iosSwiftUI.Host matchContents>
+                      <iosSwiftUI.Host matchContents colorScheme={colorScheme}>
                         <iosSwiftUI.DatePicker
                           title={t("item.form.selectPurchaseDate")}
                           selection={datePickerValue}
@@ -1056,6 +1058,8 @@ export default function ItemEditRoute() {
                         mode="date"
                         value={datePickerValue}
                         display="spinner"
+                        themeVariant={colorScheme}
+                        textColor={theme.text}
                         onChange={onIosFallbackPurchaseDatePickerChange}
                       />
                       <HStack justifyContent="flex-end" space="sm">

@@ -60,6 +60,7 @@ import {
   type ZipExportProgress,
 } from "@/services/zip-export";
 import { useTheme } from "@/hooks/use-theme";
+import { useColorScheme } from "@/hooks/use-color-scheme";
 
 type FilterSheetKind = "usageType" | "category" | null;
 type ExportFormat = "PDF" | "ZIP";
@@ -67,6 +68,30 @@ type ExportFieldKey = "taxYear";
 type FocusTarget = { focus?: () => void };
 
 const usageOptionValues: readonly (ItemUsageType | null)[] = [null, "WORK", "PRIVATE", "MIXED", "OTHER"];
+const TAX_YEAR_MIN = 1900;
+const TAX_YEAR_MAX = 2100;
+
+const iosSwiftUI = (() => {
+  if (Platform.OS !== "ios") {
+    return null;
+  }
+
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const swiftUI = require("@expo/ui/swift-ui");
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const modifiers = require("@expo/ui/swift-ui/modifiers");
+    return {
+      Host: swiftUI.Host,
+      Picker: swiftUI.Picker,
+      Text: swiftUI.Text,
+      pickerStyle: modifiers.pickerStyle,
+      tag: modifiers.tag,
+    };
+  } catch {
+    return null;
+  }
+})();
 
 function parseYearInput(rawYear: string): number | undefined {
   const trimmed = rawYear.trim();
@@ -92,7 +117,7 @@ function getTaxYearValidationMessage(
     return t("export.taxYear.validation.format");
   }
   const parsed = Number.parseInt(trimmed, 10);
-  if (!Number.isFinite(parsed) || parsed < 1900 || parsed > 2100) {
+  if (!Number.isFinite(parsed) || parsed < TAX_YEAR_MIN || parsed > TAX_YEAR_MAX) {
     return t("export.taxYear.validation.range");
   }
   return null;
@@ -179,6 +204,7 @@ const ExportItemRow = React.memo(function ExportItemRow({
 export default function ExportRoute() {
   const insets = useSafeAreaInsets();
   const theme = useTheme();
+  const colorScheme = useColorScheme();
   const { t } = useI18n();
   const sessionDefaults = useMemo(() => getExportSelectionSessionState(), []);
   const fieldYRef = useRef<Partial<Record<ExportFieldKey, number>>>({});
@@ -209,6 +235,7 @@ export default function ExportRoute() {
   const [isSelectionOpen, setIsSelectionOpen] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [activeSheet, setActiveSheet] = useState<FilterSheetKind>(null);
+  const [isIosYearPickerOpen, setIsIosYearPickerOpen] = useState(false);
 
   const [yearItems, setYearItems] = useState<Item[]>([]);
   const [missingReceiptItemIds, setMissingReceiptItemIds] = useState<Set<string>>(new Set());
@@ -224,6 +251,24 @@ export default function ExportRoute() {
   const taxYearError = useMemo(() => getTaxYearValidationMessage(taxYear, t), [t, taxYear]);
   const isGenerateFormValid = taxYearError === null;
   const shouldShowTaxYearError = Boolean((submitAttempted || touchedFields.taxYear) && taxYearError);
+  const supportsIosNativeYearPicker = Platform.OS === "ios" && iosSwiftUI !== null;
+  const initialPickerYear = parsedTaxYear ?? settings?.taxYearDefault ?? new Date().getFullYear();
+  const clampedPickerYear = Math.max(TAX_YEAR_MIN, Math.min(TAX_YEAR_MAX, initialPickerYear));
+  const [iosYearPickerValue, setIosYearPickerValue] = useState<number>(clampedPickerYear);
+  const availableTaxYears = useMemo(
+    () =>
+      Array.from(
+        { length: TAX_YEAR_MAX - TAX_YEAR_MIN + 1 },
+        (_, index) => TAX_YEAR_MIN + index
+      ),
+    []
+  );
+  const taxYearDisplayValue =
+    taxYear.trim().length > 0
+      ? taxYear
+      : settings
+        ? String(settings.taxYearDefault)
+        : t("export.taxYear.placeholderExample");
   const categoryMap = useMemo(
     () => new Map(categories.map((category) => [category.id, category])),
     [categories]
@@ -255,6 +300,13 @@ export default function ExportRoute() {
   const savedDirectoryLabel = savedDirectoryUri
     ? formatDirectoryUriForDisplay(savedDirectoryUri)
     : t("settings.backupSync.oneDrive.notSelected");
+
+  useEffect(() => {
+    if (isIosYearPickerOpen) {
+      return;
+    }
+    setIosYearPickerValue(clampedPickerYear);
+  }, [clampedPickerYear, isIosYearPickerOpen]);
 
   useEffect(() => {
     updateExportSelectionSessionState({
@@ -478,8 +530,27 @@ export default function ExportRoute() {
       return;
     }
     scrollToField("taxYear");
+    if (supportsIosNativeYearPicker) {
+      setIsIosYearPickerOpen(true);
+      return;
+    }
     focusField("taxYear");
-  }, [focusField, scrollToField, taxYearError]);
+  }, [focusField, scrollToField, supportsIosNativeYearPicker, taxYearError]);
+
+  const openIosYearPicker = useCallback(() => {
+    setIosYearPickerValue(clampedPickerYear);
+    setIsIosYearPickerOpen(true);
+  }, [clampedPickerYear]);
+
+  const closeIosYearPicker = useCallback(() => {
+    setIsIosYearPickerOpen(false);
+  }, []);
+
+  const confirmIosYearPicker = useCallback(() => {
+    setTaxYear(String(iosYearPickerValue));
+    setTouchedFields((current) => ({ ...current, taxYear: true }));
+    setIsIosYearPickerOpen(false);
+  }, [iosYearPickerValue]);
 
   const saveCopyToSelectedDirectory = useCallback(
     async (input: { fileUri: string; fileName: string; format: ExportFormat }) => {
@@ -688,31 +759,82 @@ export default function ExportRoute() {
                     fieldYRef.current.taxYear = event.nativeEvent.layout.y;
                   }}
                 >
-                  <Input
-                    variant="outline"
-                    size="md"
-                    borderColor={shouldShowTaxYearError ? "$error600" : "$border200"}
-                  >
-                    <InputField
-                      ref={(node) => {
-                        inputRef.current.taxYear = node as FocusTarget | null;
-                      }}
-                      value={taxYear}
-                      onChangeText={setTaxYear}
-                      keyboardType="number-pad"
-                      maxLength={4}
-                      placeholder={
-                        settings
-                          ? String(settings.taxYearDefault)
-                          : t("export.taxYear.placeholderExample")
-                      }
-                      testID="export-tax-year-input"
-                      accessibilityState={({ invalid: shouldShowTaxYearError } as any)}
-                      onBlur={() => {
-                        setTouchedFields((current) => ({ ...current, taxYear: true }));
-                      }}
-                    />
-                  </Input>
+                  {supportsIosNativeYearPicker ? (
+                    <VStack space="sm">
+                      <Button
+                        variant="outline"
+                        action="secondary"
+                        onPress={openIosYearPicker}
+                        testID="export-tax-year-picker-trigger"
+                        accessibilityLabel={t("export.taxYear.label")}
+                        accessibilityState={({ invalid: shouldShowTaxYearError } as any)}
+                      >
+                        <ButtonText>{taxYearDisplayValue}</ButtonText>
+                      </Button>
+                      {isIosYearPickerOpen && iosSwiftUI && (
+                        <Card borderWidth="$1" borderColor="$border200" style={{ backgroundColor: theme.background }}>
+                          <VStack space="sm">
+                            <iosSwiftUI.Host matchContents colorScheme={colorScheme}>
+                              <iosSwiftUI.Picker
+                                selection={iosYearPickerValue}
+                                modifiers={[iosSwiftUI.pickerStyle("wheel")]}
+                                onSelectionChange={(selection: number | null) => {
+                                  if (typeof selection === "number") {
+                                    setIosYearPickerValue(selection);
+                                  }
+                                }}
+                              >
+                                {availableTaxYears.map((year) => (
+                                  <iosSwiftUI.Text key={year} modifiers={[iosSwiftUI.tag(year)]}>
+                                    {String(year)}
+                                  </iosSwiftUI.Text>
+                                ))}
+                              </iosSwiftUI.Picker>
+                            </iosSwiftUI.Host>
+                            <HStack justifyContent="flex-end" space="sm">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                action="secondary"
+                                onPress={closeIosYearPicker}
+                              >
+                                <ButtonText>{t("common.action.cancel")}</ButtonText>
+                              </Button>
+                              <Button size="sm" onPress={confirmIosYearPicker}>
+                                <ButtonText>{t("common.action.done")}</ButtonText>
+                              </Button>
+                            </HStack>
+                          </VStack>
+                        </Card>
+                      )}
+                    </VStack>
+                  ) : (
+                    <Input
+                      variant="outline"
+                      size="md"
+                      borderColor={shouldShowTaxYearError ? "$error600" : "$border200"}
+                    >
+                      <InputField
+                        ref={(node) => {
+                          inputRef.current.taxYear = node as FocusTarget | null;
+                        }}
+                        value={taxYear}
+                        onChangeText={setTaxYear}
+                        keyboardType="number-pad"
+                        maxLength={4}
+                        placeholder={
+                          settings
+                            ? String(settings.taxYearDefault)
+                            : t("export.taxYear.placeholderExample")
+                        }
+                        testID="export-tax-year-input"
+                        accessibilityState={({ invalid: shouldShowTaxYearError } as any)}
+                        onBlur={() => {
+                          setTouchedFields((current) => ({ ...current, taxYear: true }));
+                        }}
+                      />
+                    </Input>
+                  )}
                 </Box>
                 {shouldShowTaxYearError ? (
                   <Text

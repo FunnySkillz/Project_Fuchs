@@ -59,6 +59,7 @@ import * as Sharing from "expo-sharing";
 
 import { validateItemInput } from "@/domain/item-validation";
 import { useTheme } from "@/hooks/use-theme";
+import { useColorScheme } from "@/hooks/use-color-scheme";
 import type { AttachmentType } from "@/models/attachment";
 import type { Category } from "@/models/category";
 import type { ItemUsageType } from "@/models/item";
@@ -193,6 +194,7 @@ export default function NewItemRoute() {
   const router = useRouter();
   const navigation = useNavigation<any>();
   const theme = useTheme();
+  const colorScheme = useColorScheme();
   const { t } = useI18n();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ draftId?: string | string[] }>();
@@ -1367,7 +1369,7 @@ export default function NewItemRoute() {
                           style={{ backgroundColor: theme.background }}
                         >
                           <GVStack space="sm">
-                            <iosSwiftUI.Host matchContents>
+                            <iosSwiftUI.Host matchContents colorScheme={colorScheme}>
                               <iosSwiftUI.DatePicker
                                 title={t("item.form.selectPurchaseDate")}
                                 selection={datePickerValue}
@@ -1409,6 +1411,8 @@ export default function NewItemRoute() {
                               mode="date"
                               value={datePickerValue}
                               display="spinner"
+                              themeVariant={colorScheme}
+                              textColor={theme.text}
                               onChange={onIosFallbackPurchaseDatePickerChange}
                             />
                             <GHStack justifyContent="flex-end" space="sm">
