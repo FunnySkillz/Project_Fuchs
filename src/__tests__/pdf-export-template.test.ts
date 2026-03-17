@@ -168,4 +168,83 @@ describe("pdf-export-template", () => {
     expect(html).toContain('src="data:image/jpeg;base64,abc123"');
     expect(html).toContain("invoice.pdf");
   });
+
+  it("uses localized template labels from the document model", () => {
+    const model = createBaseModel();
+    model.labels = {
+      subtitleTaxYear: "Steuerjahr",
+      meta: {
+        generated: "Erstellt",
+        locale: "Sprache/Format",
+        currency: "Waehrung",
+        detailPages: "Detailseiten",
+        timestamp: "Zeitstempel",
+        yes: "Ja",
+        no: "Nein",
+      },
+      table: {
+        title: "Titel",
+        date: "Datum",
+        category: "Kategorie",
+        usagePercent: "Nutzung %",
+        price: "Preis",
+        deductible: "Absetzbar",
+        totals: "Summen",
+      },
+      sections: {
+        itemDetails: "Eintragsdetails",
+        attachmentAppendix: "Anhang",
+        nonImageAttachments: "Nicht-Bild Anhaenge",
+      },
+      detail: {
+        purchaseDate: "Kaufdatum",
+        category: "Kategorie",
+        vendor: "Haendler",
+        usage: "Nutzungsart",
+        workShare: "Arbeitsanteil",
+        price: "Preis",
+        deductible: "Absetzbar",
+        warranty: "Garantie",
+        notes: "Notizen",
+        attachments: "Anhaenge",
+      },
+      appendix: {
+        imageGroupedHint: "Bildvorschauen nach Eintrag gruppiert.",
+        noImageAttachments: "Keine Bildanhaenge gefunden.",
+        noImageAttachmentsInItem: "Keine Bildanhaenge verfuegbar.",
+        noNonImageAttachments: "Keine Nicht-Bild Anhaenge.",
+      },
+      nonImageTable: {
+        item: "Eintrag",
+        file: "Datei",
+        type: "Typ",
+        mime: "MIME",
+        size: "Groesse",
+        status: "Status",
+      },
+      attachment: {
+        statusMissing: "fehlt",
+        statusPreviewUnavailable: "Vorschau nicht verfuegbar",
+        statusOk: "ok",
+        placeholderImageMissing: "Bilddatei fehlt",
+        placeholderPreviewUnavailable: "Vorschau nicht verfuegbar",
+        placeholderNoImageAttachment: "Kein Bildanhang",
+        placeholderNoImagePreviewForItem: "Keine Bildvorschau fuer diesen Eintrag.",
+        noAttachments: "Keine Anhaenge",
+        noFilesLinked: "Keine Dateien verknuepft.",
+      },
+    };
+
+    const options: PdfRenderOptions = {
+      pageSize: "A4",
+      imageLayout: "HYBRID",
+      imageQuality: "HIGH",
+    };
+
+    const html = renderPdfHtml(model, options);
+    expect(html).toContain("Steuerjahr");
+    expect(html).toContain("Erstellt:");
+    expect(html).toContain("Titel");
+    expect(html).toContain("Summen");
+  });
 });

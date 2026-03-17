@@ -66,6 +66,70 @@ export interface PdfNonImageAttachmentRow {
   status: string;
 }
 
+export interface PdfTemplateLabels {
+  subtitleTaxYear: string;
+  meta: {
+    generated: string;
+    locale: string;
+    currency: string;
+    detailPages: string;
+    timestamp: string;
+    yes: string;
+    no: string;
+  };
+  table: {
+    title: string;
+    date: string;
+    category: string;
+    usagePercent: string;
+    price: string;
+    deductible: string;
+    totals: string;
+  };
+  sections: {
+    itemDetails: string;
+    attachmentAppendix: string;
+    nonImageAttachments: string;
+  };
+  detail: {
+    purchaseDate: string;
+    category: string;
+    vendor: string;
+    usage: string;
+    workShare: string;
+    price: string;
+    deductible: string;
+    warranty: string;
+    notes: string;
+    attachments: string;
+  };
+  appendix: {
+    imageGroupedHint: string;
+    noImageAttachments: string;
+    noImageAttachmentsInItem: string;
+    noNonImageAttachments: string;
+  };
+  nonImageTable: {
+    item: string;
+    file: string;
+    type: string;
+    mime: string;
+    size: string;
+    status: string;
+  };
+  attachment: {
+    statusMissing: string;
+    statusPreviewUnavailable: string;
+    statusOk: string;
+    placeholderImageMissing: string;
+    placeholderPreviewUnavailable: string;
+    placeholderNoImageAttachment: string;
+    placeholderNoImagePreviewForItem: string;
+    noAttachments: string;
+    noFilesLinked: string;
+  };
+}
+
 export interface PdfDocumentModel {
   appName: string;
   reportTitle: string;
@@ -87,12 +151,77 @@ export interface PdfDocumentModel {
   nonImageAttachments: PdfNonImageAttachmentRow[];
   disclaimerText: string;
   footerLine: string;
+  labels?: PdfTemplateLabels;
 }
 
 export const DEFAULT_PDF_RENDER_OPTIONS: PdfRenderOptions = {
   pageSize: "A4",
   imageLayout: "HYBRID",
   imageQuality: "HIGH",
+};
+
+const DEFAULT_TEMPLATE_LABELS: PdfTemplateLabels = {
+  subtitleTaxYear: "Tax Year",
+  meta: {
+    generated: "Generated",
+    locale: "Locale",
+    currency: "Currency",
+    detailPages: "Detail pages",
+    timestamp: "Timestamp",
+    yes: "Yes",
+    no: "No",
+  },
+  table: {
+    title: "Title",
+    date: "Date",
+    category: "Category",
+    usagePercent: "Usage %",
+    price: "Price",
+    deductible: "Deductible",
+    totals: "Totals",
+  },
+  sections: {
+    itemDetails: "Item Details",
+    attachmentAppendix: "Attachment Appendix",
+    nonImageAttachments: "Non-image Attachments",
+  },
+  detail: {
+    purchaseDate: "Purchase Date",
+    category: "Category",
+    vendor: "Vendor",
+    usage: "Usage",
+    workShare: "Work Share",
+    price: "Price",
+    deductible: "Deductible",
+    warranty: "Warranty",
+    notes: "Notes",
+    attachments: "Attachments",
+  },
+  appendix: {
+    imageGroupedHint: "Image previews grouped by item.",
+    noImageAttachments: "No image attachments were found for the selected items.",
+    noImageAttachmentsInItem: "No image attachments available.",
+    noNonImageAttachments: "No non-image attachments.",
+  },
+  nonImageTable: {
+    item: "Item",
+    file: "File",
+    type: "Type",
+    mime: "MIME",
+    size: "Size",
+    status: "Status",
+  },
+  attachment: {
+    statusMissing: "missing",
+    statusPreviewUnavailable: "preview unavailable",
+    statusOk: "ok",
+    placeholderImageMissing: "Image file missing",
+    placeholderPreviewUnavailable: "Preview unavailable",
+    placeholderNoImageAttachment: "No image attachment",
+    placeholderNoImagePreviewForItem: "No image preview for this item.",
+    noAttachments: "No attachments",
+    noFilesLinked: "No files linked to this item.",
+  },
 };
 
 const PAGE_DIMENSIONS: Record<PdfPageSize, PdfPrintDimensions> = {
@@ -117,28 +246,31 @@ function escapeHtml(value: string): string {
     .replaceAll("'", "&#039;");
 }
 
-function renderAttachmentStatus(attachment: PdfAttachmentPreview): string {
+function renderAttachmentStatus(
+  attachment: PdfAttachmentPreview,
+  labels: PdfTemplateLabels
+): string {
   if (!attachment.exists) {
-    return "missing";
+    return labels.attachment.statusMissing;
   }
   if (attachment.embedError) {
-    return "preview unavailable";
+    return labels.attachment.statusPreviewUnavailable;
   }
-  return "ok";
+  return labels.attachment.statusOk;
 }
 
-function renderImageCard(attachment: PdfAttachmentPreview): string {
-  const status = renderAttachmentStatus(attachment);
+function renderImageCard(attachment: PdfAttachmentPreview, labels: PdfTemplateLabels): string {
+  const status = renderAttachmentStatus(attachment, labels);
   const caption = `${attachment.displayName} | ${attachment.type} | ${attachment.fileSizeLabel}`;
   if (!attachment.exists) {
     return `<article class="image-card image-card-missing">
-      <div class="image-frame image-placeholder">Image file missing</div>
+      <div class="image-frame image-placeholder">${escapeHtml(labels.attachment.placeholderImageMissing)}</div>
       <p class="image-caption">${escapeHtml(caption)} | ${escapeHtml(status)}</p>
     </article>`;
   }
   if (!attachment.imageDataUri) {
     return `<article class="image-card image-card-missing">
-      <div class="image-frame image-placeholder">Preview unavailable</div>
+      <div class="image-frame image-placeholder">${escapeHtml(labels.attachment.placeholderPreviewUnavailable)}</div>
       <p class="image-caption">${escapeHtml(caption)} | ${escapeHtml(status)}</p>
     </article>`;
   }
@@ -150,51 +282,56 @@ function renderImageCard(attachment: PdfAttachmentPreview): string {
   </article>`;
 }
 
-function renderDetailAttachmentLine(attachment: PdfAttachmentPreview): string {
-  const status = renderAttachmentStatus(attachment);
+function renderDetailAttachmentLine(
+  attachment: PdfAttachmentPreview,
+  labels: PdfTemplateLabels
+): string {
+  const status = renderAttachmentStatus(attachment, labels);
   return `<li>
     <span class="attachment-name">${escapeHtml(attachment.displayName)}</span>
     <span class="attachment-meta">${escapeHtml(attachment.type)} | ${escapeHtml(attachment.mimeType)} | ${escapeHtml(attachment.fileSizeLabel)} | ${escapeHtml(status)}</span>
   </li>`;
 }
 
-function renderDetailSection(detail: PdfDetailSection): string {
+function renderDetailSection(detail: PdfDetailSection, labels: PdfTemplateLabels): string {
   const primaryImageMarkup = detail.primaryImage
-    ? renderImageCard(detail.primaryImage)
+    ? renderImageCard(detail.primaryImage, labels)
     : `<article class="image-card image-card-missing">
-        <div class="image-frame image-placeholder">No image attachment</div>
-        <p class="image-caption">No image preview for this item.</p>
+        <div class="image-frame image-placeholder">${escapeHtml(labels.attachment.placeholderNoImageAttachment)}</div>
+        <p class="image-caption">${escapeHtml(labels.attachment.placeholderNoImagePreviewForItem)}</p>
       </article>`;
 
   const attachmentLines =
     detail.attachments.length === 0
       ? `<li>
-          <span class="attachment-name">No attachments</span>
-          <span class="attachment-meta">No files linked to this item.</span>
+          <span class="attachment-name">${escapeHtml(labels.attachment.noAttachments)}</span>
+          <span class="attachment-meta">${escapeHtml(labels.attachment.noFilesLinked)}</span>
         </li>`
-      : detail.attachments.map((attachment) => renderDetailAttachmentLine(attachment)).join("");
+      : detail.attachments
+          .map((attachment) => renderDetailAttachmentLine(attachment, labels))
+          .join("");
 
   return `<section class="detail-card" data-item-id="${escapeHtml(detail.itemId)}">
     <h3>${escapeHtml(detail.title)}</h3>
     <div class="detail-grid">
-      <div class="detail-kv"><span class="detail-k">Purchase Date</span><span class="detail-v">${escapeHtml(detail.purchaseDate)}</span></div>
-      <div class="detail-kv"><span class="detail-k">Category</span><span class="detail-v">${escapeHtml(detail.category)}</span></div>
-      <div class="detail-kv"><span class="detail-k">Vendor</span><span class="detail-v">${escapeHtml(detail.vendor)}</span></div>
-      <div class="detail-kv"><span class="detail-k">Usage</span><span class="detail-v">${escapeHtml(detail.usageLabel)}</span></div>
-      <div class="detail-kv"><span class="detail-k">Work Share</span><span class="detail-v">${escapeHtml(detail.workPercentLabel)}</span></div>
-      <div class="detail-kv"><span class="detail-k">Price</span><span class="detail-v">${escapeHtml(detail.priceLabel)}</span></div>
-      <div class="detail-kv"><span class="detail-k">Deductible</span><span class="detail-v">${escapeHtml(detail.deductibleLabel)}</span></div>
-      <div class="detail-kv"><span class="detail-k">Warranty</span><span class="detail-v">${escapeHtml(detail.warrantyLabel)}</span></div>
+      <div class="detail-kv"><span class="detail-k">${escapeHtml(labels.detail.purchaseDate)}</span><span class="detail-v">${escapeHtml(detail.purchaseDate)}</span></div>
+      <div class="detail-kv"><span class="detail-k">${escapeHtml(labels.detail.category)}</span><span class="detail-v">${escapeHtml(detail.category)}</span></div>
+      <div class="detail-kv"><span class="detail-k">${escapeHtml(labels.detail.vendor)}</span><span class="detail-v">${escapeHtml(detail.vendor)}</span></div>
+      <div class="detail-kv"><span class="detail-k">${escapeHtml(labels.detail.usage)}</span><span class="detail-v">${escapeHtml(detail.usageLabel)}</span></div>
+      <div class="detail-kv"><span class="detail-k">${escapeHtml(labels.detail.workShare)}</span><span class="detail-v">${escapeHtml(detail.workPercentLabel)}</span></div>
+      <div class="detail-kv"><span class="detail-k">${escapeHtml(labels.detail.price)}</span><span class="detail-v">${escapeHtml(detail.priceLabel)}</span></div>
+      <div class="detail-kv"><span class="detail-k">${escapeHtml(labels.detail.deductible)}</span><span class="detail-v">${escapeHtml(detail.deductibleLabel)}</span></div>
+      <div class="detail-kv"><span class="detail-k">${escapeHtml(labels.detail.warranty)}</span><span class="detail-v">${escapeHtml(detail.warrantyLabel)}</span></div>
     </div>
     <div class="detail-notes">
-      <p class="detail-k">Notes</p>
+      <p class="detail-k">${escapeHtml(labels.detail.notes)}</p>
       <p class="detail-v">${escapeHtml(detail.notes)}</p>
     </div>
     <div class="primary-image-wrap">
       ${primaryImageMarkup}
     </div>
     <div class="detail-attachments">
-      <h4>Attachments</h4>
+      <h4>${escapeHtml(labels.detail.attachments)}</h4>
       <ul>${attachmentLines}</ul>
     </div>
   </section>`;
@@ -215,7 +352,7 @@ function renderTableRows(rows: PdfTableRow[]): string {
     .join("");
 }
 
-function renderDetailPages(model: PdfDocumentModel): string {
+function renderDetailPages(model: PdfDocumentModel, labels: PdfTemplateLabels): string {
   if (!model.includeDetailPages) {
     return "";
   }
@@ -223,24 +360,26 @@ function renderDetailPages(model: PdfDocumentModel): string {
     return "";
   }
   return `<section class="detail-section">
-    <h2>Item Details</h2>
-    ${model.detailSections.map((detail) => renderDetailSection(detail)).join("")}
+    <h2>${escapeHtml(labels.sections.itemDetails)}</h2>
+    ${model.detailSections.map((detail) => renderDetailSection(detail, labels)).join("")}
   </section>`;
 }
 
-function renderImageAppendix(model: PdfDocumentModel): string {
+function renderImageAppendix(model: PdfDocumentModel, labels: PdfTemplateLabels): string {
   if (!model.includeDetailPages) {
     return "";
   }
   const groupMarkup =
     model.imageAppendixGroups.length === 0
-      ? `<p class="muted">No image attachments were found for the selected items.</p>`
+      ? `<p class="muted">${escapeHtml(labels.appendix.noImageAttachments)}</p>`
       : model.imageAppendixGroups
           .map((group) => {
             const cards =
               group.images.length === 0
-                ? `<p class="muted">No image attachments available.</p>`
-                : `<div class="image-grid">${group.images.map((image) => renderImageCard(image)).join("")}</div>`;
+                ? `<p class="muted">${escapeHtml(labels.appendix.noImageAttachmentsInItem)}</p>`
+                : `<div class="image-grid">${group.images
+                    .map((image) => renderImageCard(image, labels))
+                    .join("")}</div>`;
             return `<section class="appendix-group" data-item-id="${escapeHtml(group.itemId)}">
               <h3>${escapeHtml(group.itemTitle)}</h3>
               ${cards}
@@ -250,16 +389,16 @@ function renderImageAppendix(model: PdfDocumentModel): string {
 
   const nonImageRows =
     model.nonImageAttachments.length === 0
-      ? `<p class="muted">No non-image attachments.</p>`
+      ? `<p class="muted">${escapeHtml(labels.appendix.noNonImageAttachments)}</p>`
       : `<table class="appendix-table">
           <thead>
             <tr>
-              <th>Item</th>
-              <th>File</th>
-              <th>Type</th>
-              <th>MIME</th>
-              <th class="num">Size</th>
-              <th>Status</th>
+              <th>${escapeHtml(labels.nonImageTable.item)}</th>
+              <th>${escapeHtml(labels.nonImageTable.file)}</th>
+              <th>${escapeHtml(labels.nonImageTable.type)}</th>
+              <th>${escapeHtml(labels.nonImageTable.mime)}</th>
+              <th class="num">${escapeHtml(labels.nonImageTable.size)}</th>
+              <th>${escapeHtml(labels.nonImageTable.status)}</th>
             </tr>
           </thead>
           <tbody>
@@ -279,10 +418,10 @@ function renderImageAppendix(model: PdfDocumentModel): string {
         </table>`;
 
   return `<section class="appendix-section">
-    <h2>Attachment Appendix</h2>
-    <p class="muted">Image previews grouped by item.</p>
+    <h2>${escapeHtml(labels.sections.attachmentAppendix)}</h2>
+    <p class="muted">${escapeHtml(labels.appendix.imageGroupedHint)}</p>
     ${groupMarkup}
-    <h3>Non-image Attachments</h3>
+    <h3>${escapeHtml(labels.sections.nonImageAttachments)}</h3>
     ${nonImageRows}
   </section>`;
 }
@@ -303,10 +442,12 @@ export function getPrintDimensionsForPageSize(pageSize: PdfPageSize): PdfPrintDi
 
 export function renderPdfHtml(model: PdfDocumentModel, options: PdfRenderOptions): string {
   const pageConfig = getPrintDimensionsForPageSize(options.pageSize);
+  const labels = model.labels ?? DEFAULT_TEMPLATE_LABELS;
 
   const tableRows = renderTableRows(model.tableRows);
-  const detailPages = renderDetailPages(model);
-  const imageAppendix = options.imageLayout === "HYBRID" ? renderImageAppendix(model) : "";
+  const detailPages = renderDetailPages(model, labels);
+  const imageAppendix =
+    options.imageLayout === "HYBRID" ? renderImageAppendix(model, labels) : "";
 
   return `<!doctype html>
 <html>
@@ -625,13 +766,25 @@ export function renderPdfHtml(model: PdfDocumentModel, options: PdfRenderOptions
     <div class="report-root">
       <header class="header">
         <p class="title">${escapeHtml(model.reportTitle)}</p>
-        <p class="subtitle">${escapeHtml(model.appName)} | Tax Year ${model.taxYear}</p>
+        <p class="subtitle">${escapeHtml(model.appName)} | ${escapeHtml(
+    labels.subtitleTaxYear
+  )} ${model.taxYear}</p>
         <div class="meta-strip">
-          <span class="meta-chip">Generated: ${escapeHtml(model.generatedDateLabel)}</span>
-          <span class="meta-chip">Locale: ${escapeHtml(model.locale)}</span>
-          <span class="meta-chip">Currency: ${escapeHtml(model.currency)}</span>
-          <span class="meta-chip">Detail pages: ${model.includeDetailPages ? "Yes" : "No"}</span>
-          <span class="meta-chip">Timestamp: ${escapeHtml(model.generatedAtIso)}</span>
+          <span class="meta-chip">${escapeHtml(labels.meta.generated)}: ${escapeHtml(
+    model.generatedDateLabel
+  )}</span>
+          <span class="meta-chip">${escapeHtml(labels.meta.locale)}: ${escapeHtml(
+    model.locale
+  )}</span>
+          <span class="meta-chip">${escapeHtml(labels.meta.currency)}: ${escapeHtml(
+    model.currency
+  )}</span>
+          <span class="meta-chip">${escapeHtml(labels.meta.detailPages)}: ${
+    model.includeDetailPages ? escapeHtml(labels.meta.yes) : escapeHtml(labels.meta.no)
+  }</span>
+          <span class="meta-chip">${escapeHtml(labels.meta.timestamp)}: ${escapeHtml(
+    model.generatedAtIso
+  )}</span>
         </div>
       </header>
 
@@ -654,12 +807,12 @@ export function renderPdfHtml(model: PdfDocumentModel, options: PdfRenderOptions
         <table class="items-table">
           <thead>
             <tr>
-              <th class="col-title">Title</th>
-              <th class="col-date">Date</th>
-              <th class="col-category">Category</th>
-              <th class="num col-usage">Usage %</th>
-              <th class="num col-price">Price</th>
-              <th class="num col-deductible">Deductible</th>
+              <th class="col-title">${escapeHtml(labels.table.title)}</th>
+              <th class="col-date">${escapeHtml(labels.table.date)}</th>
+              <th class="col-category">${escapeHtml(labels.table.category)}</th>
+              <th class="num col-usage">${escapeHtml(labels.table.usagePercent)}</th>
+              <th class="num col-price">${escapeHtml(labels.table.price)}</th>
+              <th class="num col-deductible">${escapeHtml(labels.table.deductible)}</th>
             </tr>
           </thead>
           <tbody>
@@ -667,7 +820,7 @@ export function renderPdfHtml(model: PdfDocumentModel, options: PdfRenderOptions
           </tbody>
           <tfoot>
             <tr>
-              <td colspan="4">Totals</td>
+              <td colspan="4">${escapeHtml(labels.table.totals)}</td>
               <td class="num">${escapeHtml(model.deductibleLabel)}</td>
               <td class="num">${escapeHtml(model.deductibleTotal)}</td>
             </tr>

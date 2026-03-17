@@ -3,7 +3,7 @@ import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
 
 import { computeDeductibleImpactCents } from "@/domain/deductible-impact";
-import { getLocaleForLanguage } from "@/i18n/translate";
+import { getLocaleForLanguage, translate, type TranslationKey } from "@/i18n/translate";
 import type { Attachment } from "@/models/attachment";
 import type { Category } from "@/models/category";
 import type { Item } from "@/models/item";
@@ -23,6 +23,7 @@ import {
   type PdfImageAppendixGroup,
   type PdfNonImageAttachmentRow,
   type PdfRenderOptions,
+  type PdfTemplateLabels,
   type PdfTableRow,
 } from "@/services/pdf-export-template";
 import { getCachedLanguagePreference } from "@/services/language-preference";
@@ -70,13 +71,16 @@ function isImageMimeType(mimeType: string): boolean {
   return mimeType.startsWith("image/");
 }
 
-function getAttachmentDisplayName(attachment: AttachmentWithExistence): string {
-  return attachment.originalFileName ?? attachment.filePath.split("/").pop() ?? "Unnamed";
+function getAttachmentDisplayName(
+  attachment: AttachmentWithExistence,
+  unnamedLabel: string
+): string {
+  return attachment.originalFileName ?? attachment.filePath.split("/").pop() ?? unnamedLabel;
 }
 
-function formatFileSizeLabel(fileSizeBytes: number | null): string {
+function formatFileSizeLabel(fileSizeBytes: number | null, unknownSizeLabel: string): string {
   if (!fileSizeBytes || !Number.isFinite(fileSizeBytes) || fileSizeBytes <= 0) {
-    return "Unknown size";
+    return unknownSizeLabel;
   }
   if (fileSizeBytes < 1024) {
     return `${Math.round(fileSizeBytes)} B`;
@@ -157,15 +161,19 @@ async function resolveImageSourcePath(
 
 async function buildAttachmentPreview(
   attachment: AttachmentWithExistence,
-  imageQuality: PdfRenderOptions["imageQuality"]
+  imageQuality: PdfRenderOptions["imageQuality"],
+  labels: {
+    unnamedAttachment: string;
+    unknownSize: string;
+  }
 ): Promise<PdfAttachmentPreview> {
   const fileSizeBytes = await resolveAttachmentFileSize(attachment);
   const preview: PdfAttachmentPreview = {
     id: attachment.id,
-    displayName: getAttachmentDisplayName(attachment),
+    displayName: getAttachmentDisplayName(attachment, labels.unnamedAttachment),
     type: attachment.type,
     mimeType: attachment.mimeType,
-    fileSizeLabel: formatFileSizeLabel(fileSizeBytes),
+    fileSizeLabel: formatFileSizeLabel(fileSizeBytes, labels.unknownSize),
     exists: attachment.__exists,
     isImage: isImageMimeType(attachment.mimeType),
     imageDataUri: null,
@@ -245,14 +253,82 @@ async function buildPdfDocumentModel(params: {
   const categoryMap = new Map(categories.map((category) => [category.id, category]));
   const language = getCachedLanguagePreference();
   const locale = getLocaleForLanguage(language);
+  const t = (
+    key: TranslationKey,
+    values?: Record<string, string | number>
+  ): string => translate(language, key, values);
+
+  const templateLabels: PdfTemplateLabels = {
+    subtitleTaxYear: t("export.taxYear.label"),
+    meta: {
+      generated: t("export.pdf.meta.generated"),
+      locale: t("export.pdf.meta.locale"),
+      currency: t("export.pdf.meta.currency"),
+      detailPages: t("export.pdf.meta.detailPages"),
+      timestamp: t("export.pdf.meta.timestamp"),
+      yes: t("export.pdf.meta.yes"),
+      no: t("export.pdf.meta.no"),
+    },
+    table: {
+      title: t("export.pdf.table.title"),
+      date: t("export.pdf.table.date"),
+      category: t("export.pdf.table.category"),
+      usagePercent: t("export.pdf.table.usagePercent"),
+      price: t("export.pdf.table.price"),
+      deductible: t("export.pdf.table.deductible"),
+      totals: t("export.pdf.table.totals"),
+    },
+    sections: {
+      itemDetails: t("export.pdf.section.itemDetails"),
+      attachmentAppendix: t("export.pdf.section.attachmentAppendix"),
+      nonImageAttachments: t("export.pdf.section.nonImageAttachments"),
+    },
+    detail: {
+      purchaseDate: t("item.form.purchaseDate"),
+      category: t("item.form.category"),
+      vendor: t("item.form.vendor"),
+      usage: t("item.form.usageType"),
+      workShare: t("export.pdf.detail.workShare"),
+      price: t("item.form.price"),
+      deductible: t("export.pdf.detail.deductible"),
+      warranty: t("export.pdf.detail.warranty"),
+      notes: t("item.form.notes"),
+      attachments: t("item.attachments.title"),
+    },
+    appendix: {
+      imageGroupedHint: t("export.pdf.appendix.imageGroupedHint"),
+      noImageAttachments: t("export.pdf.appendix.noImageAttachments"),
+      noImageAttachmentsInItem: t("export.pdf.appendix.noImageAttachmentsInItem"),
+      noNonImageAttachments: t("export.pdf.appendix.noNonImageAttachments"),
+    },
+    nonImageTable: {
+      item: t("export.pdf.nonImage.item"),
+      file: t("export.pdf.nonImage.file"),
+      type: t("export.pdf.nonImage.type"),
+      mime: t("export.pdf.nonImage.mime"),
+      size: t("export.pdf.nonImage.size"),
+      status: t("export.pdf.nonImage.status"),
+    },
+    attachment: {
+      statusMissing: t("export.pdf.attachment.status.missing"),
+      statusPreviewUnavailable: t("export.pdf.attachment.status.previewUnavailable"),
+      statusOk: t("export.pdf.attachment.status.ok"),
+      placeholderImageMissing: t("export.pdf.attachment.placeholder.imageMissing"),
+      placeholderPreviewUnavailable: t("export.pdf.attachment.placeholder.previewUnavailable"),
+      placeholderNoImageAttachment: t("export.pdf.attachment.placeholder.noImageAttachment"),
+      placeholderNoImagePreviewForItem: t("export.pdf.attachment.placeholder.noImagePreviewForItem"),
+      noAttachments: t("export.pdf.attachment.noAttachments"),
+      noFilesLinked: t("export.pdf.attachment.noFilesLinked"),
+    },
+  };
 
   const deductibleByItemId = new Map<string, number>();
   const tableRows: PdfTableRow[] = [];
 
   for (const item of selectedItems) {
     const categoryName = item.categoryId
-      ? categoryMap.get(item.categoryId)?.name ?? "Unknown"
-      : "None";
+      ? categoryMap.get(item.categoryId)?.name ?? t("items.category.unknown")
+      : t("items.category.none");
     const workPercent = resolveWorkPercent(item, settings.defaultWorkPercent);
     const deductibleThisYear = computeDeductibleImpactCents(item, settings, categoryMap, taxYear);
     deductibleByItemId.set(item.id, deductibleThisYear);
@@ -283,7 +359,12 @@ async function buildPdfDocumentModel(params: {
       selectedItems.map(async (item) => {
         const attachments = attachmentsByItemId.get(item.id) ?? [];
         const previews = await Promise.all(
-          attachments.map((attachment) => buildAttachmentPreview(attachment, renderOptions.imageQuality))
+          attachments.map((attachment) =>
+            buildAttachmentPreview(attachment, renderOptions.imageQuality, {
+              unnamedAttachment: t("item.attachments.unnamedFile"),
+              unknownSize: t("export.pdf.attachment.unknownSize"),
+            })
+          )
         );
         return [item.id, previews] as const;
       })
@@ -292,8 +373,8 @@ async function buildPdfDocumentModel(params: {
 
     for (const item of selectedItems) {
       const categoryName = item.categoryId
-        ? categoryMap.get(item.categoryId)?.name ?? "Unknown"
-        : "None";
+        ? categoryMap.get(item.categoryId)?.name ?? t("items.category.unknown")
+        : t("items.category.none");
       const workPercent = resolveWorkPercent(item, settings.defaultWorkPercent);
       const previews = previewsByItemId.get(item.id) ?? [];
       const imageAttachments = previews.filter((preview) => preview.isImage);
@@ -314,7 +395,9 @@ async function buildPdfDocumentModel(params: {
         priceLabel: formatCents(item.totalCents),
         deductibleLabel: formatCents(deductibleByItemId.get(item.id) ?? 0),
         warrantyLabel:
-          item.warrantyMonths && item.warrantyMonths > 0 ? `${item.warrantyMonths} months` : "None",
+          item.warrantyMonths && item.warrantyMonths > 0
+            ? `${item.warrantyMonths}`
+            : t("item.detail.none"),
         notes: item.notes?.trim() || "-",
         primaryImage,
         attachments: previews,
@@ -335,7 +418,9 @@ async function buildPdfDocumentModel(params: {
           attachmentType: attachment.type,
           mimeType: attachment.mimeType,
           fileSizeLabel: attachment.fileSizeLabel,
-          status: attachment.exists ? "ok" : "missing",
+          status: attachment.exists
+            ? templateLabels.attachment.statusOk
+            : templateLabels.attachment.statusMissing,
         });
       }
     }
@@ -343,16 +428,16 @@ async function buildPdfDocumentModel(params: {
 
   return {
     appName: "SteuerFuchs",
-    reportTitle: "Tax Export Report",
+    reportTitle: t("export.pdf.reportTitle"),
     taxYear,
     generatedDateLabel: formatGeneratedDateLabel(generatedAt, locale),
     generatedAtIso: generatedAt.toISOString(),
     locale,
     currency: "EUR",
     includeDetailPages,
-    selectedItemsLabel: "Selected Items",
-    deductibleLabel: "Deductible This Year",
-    refundLabel: "Estimated Refund",
+    selectedItemsLabel: t("export.totals.selectedItems"),
+    deductibleLabel: t("export.totals.deductible"),
+    refundLabel: t("export.totals.refund"),
     selectedItemCount: selectedItems.length,
     deductibleTotal: formatCents(deductibleTotalCents),
     estimatedRefundTotal: formatCents(estimatedRefundCents),
@@ -360,9 +445,9 @@ async function buildPdfDocumentModel(params: {
     detailSections,
     imageAppendixGroups,
     nonImageAttachments,
-    disclaimerText:
-      "This document is generated from local app data and is not legal or tax advice. Please review all entries before filing.",
-    footerLine: `Generated by SteuerFuchs | Tax year ${taxYear}`,
+    disclaimerText: t("export.pdf.disclaimer"),
+    footerLine: t("export.pdf.footerLine", { year: taxYear }),
+    labels: templateLabels,
   };
 }
 
