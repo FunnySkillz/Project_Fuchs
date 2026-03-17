@@ -7,7 +7,6 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import "../../global.css";
 
 import { AppLockGate } from "@/components/app-lock-gate";
-import { AnimatedSplashOverlay } from "@/components/animated-icon";
 import { AppGluestackUIProvider } from "@/components/gluestack-ui-provider";
 import { LanguageContext } from "@/contexts/language-context";
 import { ThemeModeContext } from "@/contexts/theme-mode-context";
@@ -504,7 +503,6 @@ export default function RootLayout() {
         <ThemeModeContext.Provider value={themeModeContextValue}>
           <ThemeProvider value={resolvedColorMode === "dark" ? DarkTheme : DefaultTheme}>
             <AppGluestackUIProvider colorMode={resolvedColorMode}>
-              <AnimatedSplashOverlay />
               {isLanguageReady && bootstrapState === "ready" && !hasProfile && !inOnboarding && (
                 <Redirect href="/(onboarding)/welcome" />
               )}
