@@ -1,6 +1,7 @@
 import { useFocusEffect } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Platform, ScrollView } from "react-native";
+import { Picker } from "@react-native-picker/picker";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   Actionsheet,
@@ -60,7 +61,6 @@ import {
   type ZipExportProgress,
 } from "@/services/zip-export";
 import { useTheme } from "@/hooks/use-theme";
-import { useColorScheme } from "@/hooks/use-color-scheme";
 
 type FilterSheetKind = "usageType" | "category" | null;
 type ExportFormat = "PDF" | "ZIP";
@@ -70,28 +70,6 @@ type FocusTarget = { focus?: () => void };
 const usageOptionValues: readonly (ItemUsageType | null)[] = [null, "WORK", "PRIVATE", "MIXED", "OTHER"];
 const TAX_YEAR_MIN = 1900;
 const TAX_YEAR_MAX = 2100;
-
-const iosSwiftUI = (() => {
-  if (Platform.OS !== "ios") {
-    return null;
-  }
-
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const swiftUI = require("@expo/ui/swift-ui");
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const modifiers = require("@expo/ui/swift-ui/modifiers");
-    return {
-      Host: swiftUI.Host,
-      Picker: swiftUI.Picker,
-      Text: swiftUI.Text,
-      pickerStyle: modifiers.pickerStyle,
-      tag: modifiers.tag,
-    };
-  } catch {
-    return null;
-  }
-})();
 
 function parseYearInput(rawYear: string): number | undefined {
   const trimmed = rawYear.trim();
@@ -204,7 +182,6 @@ const ExportItemRow = React.memo(function ExportItemRow({
 export default function ExportRoute() {
   const insets = useSafeAreaInsets();
   const theme = useTheme();
-  const colorScheme = useColorScheme();
   const { t } = useI18n();
   const sessionDefaults = useMemo(() => getExportSelectionSessionState(), []);
   const fieldYRef = useRef<Partial<Record<ExportFieldKey, number>>>({});
@@ -251,7 +228,7 @@ export default function ExportRoute() {
   const taxYearError = useMemo(() => getTaxYearValidationMessage(taxYear, t), [t, taxYear]);
   const isGenerateFormValid = taxYearError === null;
   const shouldShowTaxYearError = Boolean((submitAttempted || touchedFields.taxYear) && taxYearError);
-  const supportsIosNativeYearPicker = Platform.OS === "ios" && iosSwiftUI !== null;
+  const supportsIosNativeYearPicker = Platform.OS === "ios";
   const initialPickerYear = parsedTaxYear ?? settings?.taxYearDefault ?? new Date().getFullYear();
   const clampedPickerYear = Math.max(TAX_YEAR_MIN, Math.min(TAX_YEAR_MAX, initialPickerYear));
   const [iosYearPickerValue, setIosYearPickerValue] = useState<number>(clampedPickerYear);
@@ -771,26 +748,26 @@ export default function ExportRoute() {
                       >
                         <ButtonText>{taxYearDisplayValue}</ButtonText>
                       </Button>
-                      {isIosYearPickerOpen && iosSwiftUI && (
+                      {isIosYearPickerOpen && (
                         <Card borderWidth="$1" borderColor="$border200" style={{ backgroundColor: theme.background }}>
                           <VStack space="sm">
-                            <iosSwiftUI.Host matchContents colorScheme={colorScheme}>
-                              <iosSwiftUI.Picker
-                                selection={iosYearPickerValue}
-                                modifiers={[iosSwiftUI.pickerStyle("wheel")]}
-                                onSelectionChange={(selection: number | null) => {
+                            <Box borderWidth="$1" borderColor="$border200" borderRadius="$md" overflow="hidden">
+                              <Picker
+                                selectedValue={iosYearPickerValue}
+                                onValueChange={(selection) => {
                                   if (typeof selection === "number") {
                                     setIosYearPickerValue(selection);
                                   }
                                 }}
+                                itemStyle={{ color: theme.text, fontSize: 22 }}
+                                style={{ color: theme.text, height: 180 }}
+                                testID="export-tax-year-picker-ios"
                               >
                                 {availableTaxYears.map((year) => (
-                                  <iosSwiftUI.Text key={year} modifiers={[iosSwiftUI.tag(year)]}>
-                                    {String(year)}
-                                  </iosSwiftUI.Text>
+                                  <Picker.Item key={year} label={String(year)} value={year} />
                                 ))}
-                              </iosSwiftUI.Picker>
-                            </iosSwiftUI.Host>
+                              </Picker>
+                            </Box>
                             <HStack justifyContent="flex-end" space="sm">
                               <Button
                                 size="sm"

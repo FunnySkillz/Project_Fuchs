@@ -37,6 +37,7 @@
     "@react-native-aria/slider": "^0.2.12",
     "@react-native-aria/utils": "^0.2.12",
     "@react-native-community/datetimepicker": "8.6.0",
+    "@react-native-picker/picker": "2.11.4",
     "@react-navigation/bottom-tabs": "^7.7.3",
     "@react-navigation/elements": "^2.8.1",
     "@react-navigation/native": "^7.1.28",

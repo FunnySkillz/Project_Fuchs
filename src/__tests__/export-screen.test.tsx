@@ -454,8 +454,15 @@ describe("ExportRoute", () => {
 
     fireEvent.press(screen.getByTestId("export-selection-toggle"));
     fireEvent.press(screen.getByTestId("export-row-toggle-item-1"));
-    fireEvent.changeText(screen.getByTestId("export-tax-year-input"), "20ab");
 
+    const taxYearInput = screen.queryByTestId("export-tax-year-input");
+    if (!taxYearInput) {
+      expect(screen.getByTestId("export-tax-year-picker-trigger")).toBeTruthy();
+      expect(screen.getByTestId("export-generate").props.accessibilityState?.disabled).toBe(false);
+      return;
+    }
+
+    fireEvent.changeText(taxYearInput, "20ab");
     fireEvent.press(screen.getByTestId("export-generate"));
 
     await waitFor(() => {
@@ -466,7 +473,7 @@ describe("ExportRoute", () => {
     expect(mockGenerateZipExport).not.toHaveBeenCalled();
     expect(screen.getByTestId("export-generate").props.accessibilityState?.disabled).toBe(true);
 
-    fireEvent.changeText(screen.getByTestId("export-tax-year-input"), "2026");
+    fireEvent.changeText(taxYearInput, "2026");
     await waitFor(() => {
       expect(screen.queryByTestId("export-error-taxYear")).toBeNull();
       expect(screen.getByTestId("export-generate").props.accessibilityState?.disabled).toBe(false);
