@@ -67,7 +67,7 @@ export default function SettingsLegalRoute() {
                 </Text>
                 <Text size="sm">{t("settings.legal.privacy.body2")}</Text>
                 <Text size="sm">
-                  {t("settings.legal.privacy.contact", { email: "steuerfuchs-support@gmail.com" })}
+                  {t("settings.legal.privacy.contact", { email: "sebastijan.bogdan@outlook.com" })}
                 </Text>
               </VStack>
             </Card>
