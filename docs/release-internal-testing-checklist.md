@@ -58,6 +58,7 @@ eas build --platform ios --profile preview
 - [ ] Export PDF works and opens share sheet.
 - [ ] Export ZIP works and opens share sheet.
 - [ ] Backup/restore flow works.
+- [ ] Language switch EN/DE updates current screens and export content language.
 
 ## 5. Release Readiness Notes
 

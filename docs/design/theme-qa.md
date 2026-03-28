@@ -1,6 +1,6 @@
 # Theme QA Checklist
 
-Last updated: 2026-03-12
+Last updated: 2026-03-28
 
 Use this checklist to keep theme behavior and background rendering consistent across light/dark modes.
 
@@ -38,7 +38,8 @@ Use this checklist to keep theme behavior and background rendering consistent ac
 - [x] Home cards, badges, and action surfaces are readable in light/dark.
 - [x] Items filter states and row cards are readable in light/dark.
 - [x] Export filter states and totals cards are readable in light/dark.
-- [x] Settings appearance/security/backup cards are readable in light/dark.
+- [x] Export iOS year-picker card and controls are readable in light/dark.
+- [x] Settings index cards (appearance/language/tax/security/backup/legal) are readable in light/dark.
 - [x] Danger/destructive actions remain readable in both modes.
 
 ## Manual QA Checklist

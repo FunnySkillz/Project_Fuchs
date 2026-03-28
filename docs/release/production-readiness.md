@@ -133,7 +133,7 @@ Define a binary release gate for V1. V1 ships only when all must-have checks are
 - [ ] Unsaved edit/create flows require explicit discard confirmation before exit.
 - [ ] Delete attachment and delete item paths complete safely.
 - [ ] Export: PDF/ZIP generation and progress UI complete.
-- [ ] Settings: backup create, backup import overwrite confirmation, restore reinit.
+- [ ] Settings: appearance/language changes persist; backup create/import overwrite confirmation and restore reinit work.
 
 ### Localization Matrix (Manual, Required)
 - [ ] Device locale German -> first launch resolves DE.

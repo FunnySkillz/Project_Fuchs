@@ -15,7 +15,7 @@ Data stays on-device unless the user explicitly shares/exports it.
 - Supports local backup/restore and optional OneDrive upload for export-only workflows.
 - Provides app lock controls (biometric + PIN fallback), legal/privacy copy, and destructive local reset.
 
-## Current Functionality Snapshot (March 12, 2026)
+## Current Functionality Snapshot (March 28, 2026)
 
 ### Onboarding and App Shell
 
@@ -23,6 +23,7 @@ Data stays on-device unless the user explicitly shares/exports it.
   - New installs route to `/(onboarding)/welcome` and `/(onboarding)/profile-setup`.
   - Existing profiles route to `/(tabs)/home`.
 - App initializes SQLite + migrations and shows an init error screen on startup failure.
+- App resolves persisted language preference (`en`/`de`) before first visible render to avoid localized flash.
 - Init error recovery includes:
   - Retry initialization
   - Export debug report
@@ -73,12 +74,18 @@ Data stays on-device unless the user explicitly shares/exports it.
   - ZIP (embedded PDF + attachments + missing attachment note if needed)
 - Tracks export runs by tax year.
 - Supports share/re-share of generated outputs.
+- Tax year entry:
+  - iOS uses a native wheel picker (`@react-native-picker/picker`) with cancel/done controls.
+  - Android/Web use validated 4-digit numeric input (`1900-2100`).
 - Android-only saved destination folder copy is supported through SAF.
 
 ### Settings
 
 - Appearance:
   - Theme mode selection (`system`, `light`, `dark`) persisted in `ProfileSettings`.
+- Language:
+  - App language selection (`English`, `Deutsch`) persisted in `ProfileSettings`.
+  - Runtime number/currency/percent formatting updates with selected locale (`en-AT`, `de-AT`).
 - Tax & Calculation:
   - Tax profile fields (tax year, monthly gross, salary payments 12/14)
   - Auto-estimated Austrian marginal rate + optional manual override
@@ -149,13 +156,14 @@ See:
   - `src/domain`: tax rules/validation
   - `src/repositories`: persistence access
   - `src/services`: exports, backup/restore, auth, file handling
+  - `src/i18n`: translation dictionaries + formatters
   - `src/app`: route-level screens
 
 ## Testing
 
 - Unit tests: domain logic and validation
 - Integration tests: DB migrations/repositories, backup/restore, attachment lifecycle
-- Screen/workflow tests: onboarding, home/items/export/settings flows
+- Screen/workflow tests: onboarding, home/items/export/settings flows (including i18n + navigation guards)
 
 Run:
 
@@ -188,6 +196,8 @@ eas build --platform ios --profile production
   - `docs/release/production-readiness.md`
   - `docs/release/final-qa-hardware-checklist.md`
   - `docs/release/build-versioning.md`
+  - `docs/release/localization-hardening-v1.md`
+  - `docs/release/release-gate-policy.json`
 - ADRs:
   - `docs/adr/0001-auth-strategy.md`
   - `docs/adr/0002-v1-scope.md`

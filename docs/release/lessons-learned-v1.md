@@ -1,6 +1,6 @@
 # SteuerFuchs Lessons Learned (V1)
 
-Last updated: 2026-03-10
+Last updated: 2026-03-28
 
 ## Purpose
 
@@ -107,7 +107,7 @@ Capture recurring project struggles and convert them into concrete engineering r
 
 **Action for future**
 - Maintain central test mocks for cross-cutting dependencies.
-- Add a lightweight “test harness health” check when introducing new app-wide dependencies.
+- Add a lightweight "test harness health" check when introducing new app-wide dependencies.
 
 ## Summary Rules We Keep
 

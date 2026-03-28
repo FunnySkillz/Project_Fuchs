@@ -64,7 +64,7 @@ Devices:
 - [ ] Data remains consistent after restore.
 
 ### Settings changes
-- [ ] Change theme/tax/security settings.
+- [ ] Change appearance/language/tax/security settings.
 - [ ] Changes persist after app restart.
 
 ### Localization verification (EN/DE)
@@ -82,7 +82,7 @@ Devices:
 - [ ] No crashes.
 - [ ] No ANRs / app freezes.
 - [ ] No navigation dead-ends.
-- [ ] iOS stack-header screens have no extra top gap (`Settings -> Appearance`, `Item Detail`, `Edit Item`).
+- [ ] iOS stack-header screens have no extra top gap (`Settings -> Appearance`, `Settings -> Language`, `Item Detail`, `Edit Item`).
 - [ ] iOS swipe-back works on read-only screens with navigation history.
 
 Observed issues:

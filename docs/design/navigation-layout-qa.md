@@ -1,6 +1,6 @@
 # Navigation and Layout QA Guide
 
-Last updated: 2026-03-12
+Last updated: 2026-03-28
 
 Use this guide for stack-based screens (Item and Settings stacks) so iOS header spacing and swipe-back behavior stay consistent.
 
@@ -48,7 +48,13 @@ This keeps spacing deterministic across iOS versions and prevents auto-inset dri
 - Only show explicit fallback buttons like `Back to Settings` / `Back to Items` when `canGoBack` is false.
 - Use `router.replace(...)` for fallback destinations to avoid creating dead-end loops.
 
-### 6) Tab Scene Background Ownership
+### 6) Rapid-Tap Route Push Guards
+
+- For card/tap entry points that call `router.push(...)`, guard against duplicate pushes on rapid taps.
+- Use an in-flight ref pattern reset via `useFocusEffect` when returning to the source route.
+- Keep this on high-traffic transitions (tab add route, settings cards, list-to-detail routes).
+
+### 7) Tab Scene Background Ownership
 
 - For tab root screens (`home`, `items`, `export`, `settings`), keep page background centralized in:
   - `src/app/(tabs)/_layout.tsx`
@@ -58,10 +64,11 @@ This keeps spacing deterministic across iOS versions and prevents auto-inset dri
 
 ## Manual QA Checklist (Layout + Navigation)
 
-- [ ] iOS: no extra top gap under header on `Settings -> Appearance`, `Item Detail`, and `Edit Item`.
+- [ ] iOS: no extra top gap under header on `Settings -> Appearance`, `Settings -> Language`, `Item Detail`, and `Edit Item`.
 - [ ] iOS: swipe-back works on read-only/detail routes when opened from a list/settings screen.
 - [ ] iOS/Android: unsaved edit/create flows block accidental exit and show discard confirmation.
 - [ ] iOS/Android: loading, error, and content states keep consistent top alignment.
 - [ ] iOS/Android: no navigation dead-ends when entering screens directly (fallback back buttons visible when needed).
+- [ ] iOS/Android: rapid repeated taps do not create duplicate route history entries.
 - [ ] iOS/Android: Home, Items, Export, and Settings root scenes use the same background tone.
 - [ ] iOS: top/bottom overscroll bounce does not flash a different background on tab root screens.

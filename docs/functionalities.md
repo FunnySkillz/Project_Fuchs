@@ -1,6 +1,6 @@
 # SteuerFuchs Functionality Reference
 
-Last updated: 2026-03-12
+Last updated: 2026-03-28
 
 This document is the implementation-level feature catalog for the current app behavior.
 It is intended for product, QA, and engineering alignment.
@@ -9,7 +9,11 @@ It is intended for product, QA, and engineering alignment.
 
 ### Startup
 
-- App boot initializes local database and applies migrations (`v1` to `v6`).
+- App boot initializes local database and applies migrations (`v1` to `v7`).
+- App boot restores language preference before first visible render:
+  - Supported languages are `en` and `de`.
+  - If no saved preference exists, device locale is resolved (`de*` -> `de`, otherwise `en`) and persisted.
+- App boot restores persisted theme preference (`system`/`light`/`dark`).
 - If initialization fails, user sees an init error screen with:
   - Retry initialization
   - Export debug report
@@ -49,6 +53,7 @@ It is intended for product, QA, and engineering alignment.
 - Settings stack:
   - Settings index
   - Appearance
+  - Language
   - Tax & Calculation
   - Security
   - Backup & Sync
@@ -144,6 +149,10 @@ It is intended for product, QA, and engineering alignment.
 ### Export Screen
 
 - Item selection and filtering before export.
+- Tax year input:
+  - iOS uses native wheel picker (`@react-native-picker/picker`) with explicit cancel/done actions.
+  - Non-iOS platforms use validated 4-digit numeric input.
+  - Accepted range is `1900-2100`.
 - Formats:
   - PDF export
   - ZIP export (includes generated PDF + attachment folders)
@@ -201,6 +210,15 @@ It is intended for product, QA, and engineering alignment.
   - `dark`
 - Preference persists to profile settings.
 
+### Language
+
+- App language:
+  - `English`
+  - `Deutsch`
+- Preference persists to profile settings (`LanguagePreference`).
+- Current screens update without app restart after language switch.
+- Number/currency/percent formatting follows selected locale (`en-AT`/`de-AT`).
+
 ### Tax & Calculation
 
 - Profile and rule fields:
@@ -253,6 +271,9 @@ It is intended for product, QA, and engineering alignment.
   - `Item`
   - `Attachment`
   - `ExportRun`
+- `ProfileSettings` also stores:
+  - Theme mode preference
+  - Language preference (`en`/`de`)
 - Soft-delete strategy is used for core entities.
 
 ### File Storage
@@ -276,6 +297,7 @@ It is intended for product, QA, and engineering alignment.
   - `sceneStyle: { backgroundColor: theme.background }`
 - Settings stack background is controlled by stack `contentStyle`.
 - Stack screens with visible native header use bottom safe-area ownership pattern.
+- Rapid-tap duplicate route pushes are guarded on key entry points (`tabs`, `settings`, list-to-detail flows) using in-flight refs reset on focus.
 
 See:
 
