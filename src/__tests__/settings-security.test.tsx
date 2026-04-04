@@ -8,6 +8,7 @@ const mockUpsertSettings = jest.fn();
 const mockHasPinAsync = jest.fn();
 const mockVerifyPinAsync = jest.fn();
 const mockSetPinAsync = jest.fn();
+const mockClearPinAsync = jest.fn();
 const mockHasHardwareAsync = jest.fn();
 const mockIsEnrolledAsync = jest.fn();
 const mockAuthenticateAsync = jest.fn();
@@ -63,6 +64,7 @@ jest.mock("@/services/app-events", () => ({
 }));
 
 jest.mock("@/services/pin-auth", () => ({
+  clearPinAsync: () => mockClearPinAsync(),
   hasPinAsync: () => mockHasPinAsync(),
   isValidPin: (pin: string) => /^\d{4,6}$/.test(pin),
   setPinAsync: (pin: string) => mockSetPinAsync(pin),
@@ -77,11 +79,13 @@ jest.mock("expo-local-authentication", () => ({
 
 describe("SettingsSecurityRoute validation UX", () => {
   beforeEach(() => {
+    jest.spyOn(console, "error").mockImplementation(() => undefined);
     mockGetSettings.mockReset();
     mockUpsertSettings.mockReset();
     mockHasPinAsync.mockReset();
     mockVerifyPinAsync.mockReset();
     mockSetPinAsync.mockReset();
+    mockClearPinAsync.mockReset();
     mockHasHardwareAsync.mockReset();
     mockIsEnrolledAsync.mockReset();
     mockAuthenticateAsync.mockReset();
@@ -101,6 +105,7 @@ describe("SettingsSecurityRoute validation UX", () => {
     mockHasHardwareAsync.mockResolvedValue(true);
     mockIsEnrolledAsync.mockResolvedValue(true);
     mockAuthenticateAsync.mockResolvedValue({ success: true });
+    mockClearPinAsync.mockResolvedValue(undefined);
   });
 
   it("shows inline PIN validation errors on submit and enables submit after fixing", async () => {
@@ -179,6 +184,140 @@ describe("SettingsSecurityRoute validation UX", () => {
 
     await waitFor(() => {
       expect(mockUpsertSettings).toHaveBeenCalledWith(expect.objectContaining({ appLockEnabled: true }));
+    });
+  });
+
+  it("renders remove button only when a PIN exists", async () => {
+    mockHasPinAsync.mockResolvedValue(false);
+    const { unmount } = render(<SettingsSecurityRoute />);
+    expect(await screen.findByText("Security")).toBeTruthy();
+    expect(screen.queryByTestId("settings-security-remove-pin")).toBeNull();
+    unmount();
+
+    mockHasPinAsync.mockResolvedValue(true);
+    render(<SettingsSecurityRoute />);
+    expect(await screen.findByText("Security")).toBeTruthy();
+    expect(screen.getByTestId("settings-security-remove-pin")).toBeTruthy();
+  });
+
+  it("requires current PIN before removing PIN", async () => {
+    mockHasPinAsync.mockResolvedValue(true);
+
+    render(<SettingsSecurityRoute />);
+    expect(await screen.findByText("Security")).toBeTruthy();
+
+    fireEvent.press(screen.getByTestId("settings-security-remove-pin"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("settings-security-error-currentPin")).toBeTruthy();
+      expect(mockVerifyPinAsync).not.toHaveBeenCalled();
+      expect(mockClearPinAsync).not.toHaveBeenCalled();
+    });
+  });
+
+  it("removes PIN and disables app lock after successful current PIN verification", async () => {
+    mockHasPinAsync.mockResolvedValue(true);
+    mockVerifyPinAsync.mockResolvedValue({
+      success: true,
+      remainingAttempts: 5,
+      lockedUntilEpochMs: null,
+    });
+
+    render(<SettingsSecurityRoute />);
+    expect(await screen.findByText("Security")).toBeTruthy();
+
+    fireEvent.changeText(screen.getByTestId("settings-security-current-pin-input"), "1234");
+    fireEvent.press(screen.getByTestId("settings-security-remove-pin"));
+
+    await waitFor(() => {
+      expect(mockVerifyPinAsync).toHaveBeenCalledWith("1234");
+      expect(mockClearPinAsync).toHaveBeenCalledTimes(1);
+      expect(mockUpsertSettings).toHaveBeenCalledWith(expect.objectContaining({ appLockEnabled: false }));
+      expect(screen.getByText("PIN removed and app lock disabled.")).toBeTruthy();
+    });
+
+    expect(screen.queryByTestId("settings-security-remove-pin")).toBeNull();
+    expect(screen.queryByTestId("settings-security-current-pin-input")).toBeNull();
+  });
+
+  it("shows current PIN incorrect when removal verification fails without lockout", async () => {
+    mockHasPinAsync.mockResolvedValue(true);
+    mockVerifyPinAsync.mockResolvedValue({
+      success: false,
+      remainingAttempts: 3,
+      lockedUntilEpochMs: null,
+    });
+
+    render(<SettingsSecurityRoute />);
+    expect(await screen.findByText("Security")).toBeTruthy();
+
+    fireEvent.changeText(screen.getByTestId("settings-security-current-pin-input"), "9999");
+    fireEvent.press(screen.getByTestId("settings-security-remove-pin"));
+
+    await waitFor(() => {
+      expect(screen.getAllByText("Current PIN is incorrect.").length).toBeGreaterThan(0);
+      expect(mockClearPinAsync).not.toHaveBeenCalled();
+    });
+  });
+
+  it("shows lockout countdown when removal verification is locked", async () => {
+    mockHasPinAsync.mockResolvedValue(true);
+    mockVerifyPinAsync.mockResolvedValue({
+      success: false,
+      remainingAttempts: 0,
+      lockedUntilEpochMs: Date.now() + 5000,
+    });
+
+    render(<SettingsSecurityRoute />);
+    expect(await screen.findByText("Security")).toBeTruthy();
+
+    fireEvent.changeText(screen.getByTestId("settings-security-current-pin-input"), "1111");
+    fireEvent.press(screen.getByTestId("settings-security-remove-pin"));
+
+    await waitFor(() => {
+      expect(screen.getAllByText(/Too many failed PIN attempts/).length).toBeGreaterThan(0);
+      expect(mockClearPinAsync).not.toHaveBeenCalled();
+    });
+  });
+
+  it("shows remove error when clear PIN fails", async () => {
+    mockHasPinAsync.mockResolvedValue(true);
+    mockVerifyPinAsync.mockResolvedValue({
+      success: true,
+      remainingAttempts: 5,
+      lockedUntilEpochMs: null,
+    });
+    mockClearPinAsync.mockRejectedValue(new Error("secure store down"));
+
+    render(<SettingsSecurityRoute />);
+    expect(await screen.findByText("Security")).toBeTruthy();
+
+    fireEvent.changeText(screen.getByTestId("settings-security-current-pin-input"), "1234");
+    fireEvent.press(screen.getByTestId("settings-security-remove-pin"));
+
+    await waitFor(() => {
+      expect(screen.getByText("Could not remove PIN.")).toBeTruthy();
+    });
+  });
+
+  it("shows remove error when disabling app lock persistence fails", async () => {
+    mockHasPinAsync.mockResolvedValue(true);
+    mockVerifyPinAsync.mockResolvedValue({
+      success: true,
+      remainingAttempts: 5,
+      lockedUntilEpochMs: null,
+    });
+    mockUpsertSettings.mockRejectedValue(new Error("db write failed"));
+
+    render(<SettingsSecurityRoute />);
+    expect(await screen.findByText("Security")).toBeTruthy();
+
+    fireEvent.changeText(screen.getByTestId("settings-security-current-pin-input"), "1234");
+    fireEvent.press(screen.getByTestId("settings-security-remove-pin"));
+
+    await waitFor(() => {
+      expect(mockClearPinAsync).toHaveBeenCalledTimes(1);
+      expect(screen.getByText("Could not remove PIN.")).toBeTruthy();
     });
   });
 });
