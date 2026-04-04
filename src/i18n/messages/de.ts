@@ -121,7 +121,7 @@ export const deMessages: Partial<typeof enMessages> = {
   "settings.security.appLock.confirmError":
     "Biometrische Authentifizierung konnte nicht verifiziert werden.",
   "settings.security.pin.title": "PIN-Fallback",
-  "settings.security.pin.configured": "PIN ist eingerichtet. Du kannst sie unten ändern.",
+  "settings.security.pin.configured": "PIN ist eingerichtet. Du kannst sie unten ändern oder entfernen.",
   "settings.security.pin.notConfigured": "Richte einen PIN-Fallback für die App-Sperre ein.",
   "settings.security.pin.currentRequired": "Aktuelle PIN ist erforderlich.",
   "settings.security.pin.invalidFormat": "PIN muss 4 bis 6 Ziffern haben.",
@@ -137,6 +137,10 @@ export const deMessages: Partial<typeof enMessages> = {
   "settings.security.pin.saving": "PIN wird gespeichert...",
   "settings.security.pin.change": "PIN ändern",
   "settings.security.pin.set": "PIN setzen",
+  "settings.security.pin.remove": "PIN entfernen und App-Sperre deaktivieren",
+  "settings.security.pin.removing": "PIN wird entfernt...",
+  "settings.security.pin.removed": "PIN entfernt und App-Sperre deaktiviert.",
+  "settings.security.pin.removeError": "PIN konnte nicht entfernt werden.",
   "settings.backupSync.title": "Backup & Sync",
   "settings.backupSync.subtitle":
     "Verwalte lokale Backups und die optionale OneDrive-Exportverbindung.",
