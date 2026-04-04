@@ -21,7 +21,7 @@ import {
 import { useI18n } from "@/contexts/language-context";
 import { getProfileSettingsRepository } from "@/repositories/create-profile-settings-repository";
 import { emitProfileSettingsSaved } from "@/services/app-events";
-import { hasPinAsync, isValidPin, setPinAsync, verifyPinAsync } from "@/services/pin-auth";
+import { clearPinAsync, hasPinAsync, isValidPin, setPinAsync, verifyPinAsync } from "@/services/pin-auth";
 
 type PinFieldKey = "currentPin" | "newPin" | "confirmPin";
 const pinFieldOrder: PinFieldKey[] = ["currentPin", "newPin", "confirmPin"];
@@ -54,6 +54,7 @@ export default function SettingsSecurityRoute() {
   const [pinError, setPinError] = useState<string | null>(null);
   const [pinSuccess, setPinSuccess] = useState<string | null>(null);
   const [isSavingPin, setIsSavingPin] = useState(false);
+  const [isRemovingPin, setIsRemovingPin] = useState(false);
   const [pinSubmitAttempted, setPinSubmitAttempted] = useState(false);
   const [pinTouchedFields, setPinTouchedFields] = useState<Partial<Record<PinFieldKey, boolean>>>({});
   const [currentPinVerificationError, setCurrentPinVerificationError] = useState<string | null>(null);
@@ -194,7 +195,7 @@ export default function SettingsSecurityRoute() {
   }, [confirmPin, currentPin, currentPinVerificationError, newPin, pinExists, t]);
 
   const isPinFormValid = Object.keys(pinValidationErrors).length === 0;
-  const isPinSubmitDisabled = (pinSubmitAttempted && !isPinFormValid) || isSavingPin;
+  const isPinSubmitDisabled = (pinSubmitAttempted && !isPinFormValid) || isSavingPin || isRemovingPin;
 
   const shouldShowPinFieldError = useCallback(
     (field: PinFieldKey) =>
@@ -234,7 +235,7 @@ export default function SettingsSecurityRoute() {
   }, [focusPinField, pinValidationErrors, scrollToPinField]);
 
   const handleSavePin = async () => {
-    if (isSavingPin) {
+    if (isSavingPin || isRemovingPin) {
       return;
     }
 
@@ -275,6 +276,65 @@ export default function SettingsSecurityRoute() {
       setPinError(t("settings.security.pin.saveError"));
     } finally {
       setIsSavingPin(false);
+    }
+  };
+
+  const handleRemovePin = async () => {
+    if (isSavingPin || isRemovingPin || !pinExists) {
+      return;
+    }
+
+    setPinSubmitAttempted(true);
+    setPinError(null);
+    setPinSuccess(null);
+    setSaveError(null);
+    setSaveSuccess(null);
+    setCurrentPinVerificationError(null);
+
+    if (currentPin.trim().length === 0) {
+      setPinError(t("settings.security.pin.currentRequired"));
+      focusPinField("currentPin");
+      scrollToPinField("currentPin");
+      return;
+    }
+
+    setIsRemovingPin(true);
+    try {
+      const check = await verifyPinAsync(currentPin);
+      if (!check.success) {
+        if (check.lockedUntilEpochMs) {
+          const seconds = Math.max(1, Math.ceil((check.lockedUntilEpochMs - Date.now()) / 1000));
+          const lockoutMessage = t("auth.pinLockedWithSeconds", { seconds });
+          setCurrentPinVerificationError(lockoutMessage);
+          setPinError(lockoutMessage);
+        } else {
+          setCurrentPinVerificationError(t("settings.security.pin.currentIncorrect"));
+          setPinError(t("settings.security.pin.currentIncorrect"));
+        }
+        focusPinField("currentPin");
+        scrollToPinField("currentPin");
+        return;
+      }
+
+      await clearPinAsync();
+      const repository = await getProfileSettingsRepository();
+      await repository.upsertSettings({ appLockEnabled: false });
+      emitProfileSettingsSaved();
+
+      setAppLockEnabled(false);
+      setPinExists(false);
+      setCurrentPin("");
+      setNewPin("");
+      setConfirmPin("");
+      setPinSubmitAttempted(false);
+      setPinTouchedFields({});
+      setCurrentPinVerificationError(null);
+      setPinSuccess(t("settings.security.pin.removed"));
+    } catch (error) {
+      console.error("Failed to remove PIN", error);
+      setPinError(t("settings.security.pin.removeError"));
+    } finally {
+      setIsRemovingPin(false);
     }
   };
 
@@ -491,6 +551,24 @@ export default function SettingsSecurityRoute() {
                     </ButtonText>
                   </Button>
                 </Box>
+
+                {pinExists && (
+                  <Box testID="settings-security-btn-remove">
+                    <Button
+                      variant="outline"
+                      action="secondary"
+                      onPress={() => void handleRemovePin()}
+                      disabled={isSavingPin || isRemovingPin}
+                      testID="settings-security-remove-pin"
+                    >
+                      <ButtonText>
+                        {isRemovingPin
+                          ? t("settings.security.pin.removing")
+                          : t("settings.security.pin.remove")}
+                      </ButtonText>
+                    </Button>
+                  </Box>
+                )}
               </VStack>
             </Card>
           </VStack>
