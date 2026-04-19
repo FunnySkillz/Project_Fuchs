@@ -64,6 +64,8 @@ describe("database integrity integration", () => {
           "TR_Attachment_UpdatedAt",
           "TR_ExportRun_UpdatedAt",
           "IX_Item_NotDeleted",
+          "IX_Item_PurchaseKind",
+          "IX_Item_SubscriptionEndDate",
           "IX_Attachment_NotDeleted",
           "IX_ExportRun_TaxYear",
         ])
