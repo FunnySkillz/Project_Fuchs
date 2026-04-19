@@ -416,6 +416,12 @@ export const enMessages = {
   "item.form.required.title": "Title is required.",
   "item.form.required.purchaseDate": "Purchase date is required.",
   "item.form.required.totalCents": "Price is required and must be greater than 0.",
+  "item.validation.billingCadenceRequiredForSubscription":
+    "Select a billing cadence for subscriptions.",
+  "item.validation.subscriptionEndDateInvalid":
+    "Enter a valid subscription end date (YYYY-MM-DD).",
+  "item.validation.subscriptionEndDateBeforeStart":
+    "Subscription end date must be on or after the start date.",
   "item.form.usefulLife.errorPositiveMonths":
     "Useful life override must be a positive number of months.",
   "item.form.category": "Category",
