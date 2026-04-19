@@ -1,6 +1,6 @@
 # SteuerFuchs Lessons Learned (V1)
 
-Last updated: 2026-03-28
+Last updated: 2026-04-19
 
 ## Purpose
 
@@ -108,6 +108,30 @@ Capture recurring project struggles and convert them into concrete engineering r
 **Action for future**
 - Maintain central test mocks for cross-cutting dependencies.
 - Add a lightweight "test harness health" check when introducing new app-wide dependencies.
+
+## 9) Runtime Intl Feature Gaps Can Crash UI
+
+**Struggle**
+- Home crashed when rendering item counts because `translatePlural()` relied on `Intl.PluralRules`.
+- In some runtime setups, `Intl.PluralRules` can be unavailable, causing a `TypeError`.
+
+**Lesson learned**
+- i18n helpers must degrade gracefully when optional runtime Intl features are missing.
+- Never assume `Intl.PluralRules` is always present on every JS engine/configuration.
+
+**How to fix**
+- Guard pluralization in `src/i18n/translate.ts`:
+  - Use `Intl.PluralRules` when available.
+  - If unavailable or it throws, fall back to deterministic minimal rules:
+    - `count === 1` -> `one`
+    - otherwise -> `other`
+- Add a regression test that simulates `Intl.PluralRules` missing (`src/__tests__/i18n-translate.test.ts`).
+
+**Action for future**
+- For every new i18n helper that depends on platform/runtime APIs, add:
+  - capability check + fallback path,
+  - one test for missing API behavior.
+- Prefer shared helper-level resilience over per-screen defensive code.
 
 ## Summary Rules We Keep
 
