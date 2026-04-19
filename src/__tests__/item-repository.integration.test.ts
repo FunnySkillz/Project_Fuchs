@@ -135,4 +135,45 @@ describe("SQLiteItemRepository integration", () => {
     },
     45_000
   );
+
+  it("filters subscriptions by overlap year and missing receipt list", async () => {
+    await withTempSqliteExecutor(async (db) => {
+      await runMigrations(db);
+      const itemRepository = new SQLiteItemRepository(db);
+
+      const ongoing = await itemRepository.create({
+        title: "ChatGPT Plus",
+        purchaseDate: "2025-09-01",
+        totalCents: 2_000,
+        usageType: "WORK",
+        purchaseKind: "SUBSCRIPTION",
+        billingCadence: "MONTHLY",
+        subscriptionEndDate: null,
+      });
+      const endedBeforeYear = await itemRepository.create({
+        title: "Old Tool",
+        purchaseDate: "2024-01-01",
+        totalCents: 1_000,
+        usageType: "WORK",
+        purchaseKind: "SUBSCRIPTION",
+        billingCadence: "MONTHLY",
+        subscriptionEndDate: "2025-12-31",
+      });
+      const oneTime = await itemRepository.create({
+        title: "Monitor",
+        purchaseDate: "2026-03-03",
+        totalCents: 19_990,
+        usageType: "WORK",
+      });
+
+      const year2026 = await itemRepository.list({ year: 2026 });
+      expect(year2026.map((item) => item.id).sort()).toEqual(
+        [ongoing.id, oneTime.id].sort()
+      );
+      expect(year2026.some((item) => item.id === endedBeforeYear.id)).toBe(false);
+
+      const missingReceiptIds = await itemRepository.listMissingReceiptItemIds({ year: 2026 });
+      expect(missingReceiptIds.sort()).toEqual([ongoing.id, oneTime.id].sort());
+    });
+  });
 });
