@@ -1,7 +1,12 @@
 import * as Crypto from "expo-crypto";
 
 import type { SQLiteExecutor } from "@/db/profile-settings-db";
-import type { Item, ItemUsageType } from "@/models/item";
+import type {
+  Item,
+  ItemPurchaseKind,
+  ItemUsageType,
+  SubscriptionBillingCadence,
+} from "@/models/item";
 
 interface ItemRow {
   id: string;
@@ -16,6 +21,9 @@ interface ItemRow {
   warrantyMonths: number | null;
   notes: string | null;
   usefulLifeMonthsOverride: number | null;
+  purchaseKind: string | null;
+  billingCadence: string | null;
+  subscriptionEndDate: string | null;
   createdAt: string;
   updatedAt: string;
   deletedAt: string | null;
@@ -32,6 +40,9 @@ export interface CreateItemInput {
   warrantyMonths?: number | null;
   notes?: string | null;
   usefulLifeMonthsOverride?: number | null;
+  purchaseKind?: ItemPurchaseKind;
+  billingCadence?: SubscriptionBillingCadence | null;
+  subscriptionEndDate?: string | null;
 }
 
 export interface UpdateItemInput extends CreateItemInput {
@@ -61,7 +72,55 @@ export interface ItemRepository {
   listMissingReceiptItemIds(filters?: Omit<ItemListFilters, "missingReceipt">): Promise<string[]>;
 }
 
+function normalizePurchaseKind(value: ItemPurchaseKind | undefined): ItemPurchaseKind {
+  return value === "SUBSCRIPTION" ? "SUBSCRIPTION" : "ONE_TIME";
+}
+
+function normalizeBillingCadence(
+  purchaseKind: ItemPurchaseKind,
+  value: SubscriptionBillingCadence | null | undefined
+): SubscriptionBillingCadence | null {
+  if (purchaseKind !== "SUBSCRIPTION") {
+    return null;
+  }
+  if (value === "YEARLY") {
+    return "YEARLY";
+  }
+  if (value === "MONTHLY") {
+    return "MONTHLY";
+  }
+  return null;
+}
+
+function normalizeSubscriptionEndDate(
+  purchaseKind: ItemPurchaseKind,
+  value: string | null | undefined
+): string | null {
+  if (purchaseKind !== "SUBSCRIPTION") {
+    return null;
+  }
+  return value ?? null;
+}
+
+function mapPurchaseKind(value: string | null): ItemPurchaseKind {
+  return value === "SUBSCRIPTION" ? "SUBSCRIPTION" : "ONE_TIME";
+}
+
+function mapBillingCadence(value: string | null): SubscriptionBillingCadence | null {
+  if (value === "YEARLY") {
+    return "YEARLY";
+  }
+  if (value === "MONTHLY") {
+    return "MONTHLY";
+  }
+  return null;
+}
+
 function mapItemRow(row: ItemRow): Item {
+  const purchaseKind = mapPurchaseKind(row.purchaseKind);
+  const billingCadence = purchaseKind === "SUBSCRIPTION" ? mapBillingCadence(row.billingCadence) : null;
+  const subscriptionEndDate = purchaseKind === "SUBSCRIPTION" ? row.subscriptionEndDate : null;
+
   return {
     id: row.id,
     title: row.title,
@@ -75,10 +134,37 @@ function mapItemRow(row: ItemRow): Item {
     warrantyMonths: row.warrantyMonths,
     notes: row.notes,
     usefulLifeMonthsOverride: row.usefulLifeMonthsOverride,
+    purchaseKind,
+    billingCadence,
+    subscriptionEndDate,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     deletedAt: row.deletedAt,
   };
+}
+
+function pushYearClause(
+  clauses: string[],
+  params: Record<string, string | number | null>,
+  year: number
+): void {
+  params.$yearStart = `${year}-01-01`;
+  params.$yearEnd = `${year}-12-31`;
+  clauses.push(
+    `(
+      (
+        COALESCE(i.PurchaseKind, 'ONE_TIME') <> 'SUBSCRIPTION'
+        AND i.PurchaseDate >= $yearStart
+        AND i.PurchaseDate <= $yearEnd
+      )
+      OR
+      (
+        COALESCE(i.PurchaseKind, 'ONE_TIME') = 'SUBSCRIPTION'
+        AND i.PurchaseDate <= $yearEnd
+        AND COALESCE(i.SubscriptionEndDate, '9999-12-31') >= $yearStart
+      )
+    )`
+  );
 }
 
 export class SQLiteItemRepository implements ItemRepository {
@@ -86,6 +172,10 @@ export class SQLiteItemRepository implements ItemRepository {
 
   async create(input: CreateItemInput): Promise<Item> {
     const id = Crypto.randomUUID();
+    const purchaseKind = normalizePurchaseKind(input.purchaseKind);
+    const billingCadence = normalizeBillingCadence(purchaseKind, input.billingCadence);
+    const subscriptionEndDate = normalizeSubscriptionEndDate(purchaseKind, input.subscriptionEndDate);
+
     await this.db.runAsync(
       `INSERT INTO Item (
         Id,
@@ -99,7 +189,10 @@ export class SQLiteItemRepository implements ItemRepository {
         Vendor,
         WarrantyMonths,
         Notes,
-        UsefulLifeMonthsOverride
+        UsefulLifeMonthsOverride,
+        PurchaseKind,
+        BillingCadence,
+        SubscriptionEndDate
       ) VALUES (
         $id,
         $title,
@@ -112,7 +205,10 @@ export class SQLiteItemRepository implements ItemRepository {
         $vendor,
         $warrantyMonths,
         $notes,
-        $usefulLifeMonthsOverride
+        $usefulLifeMonthsOverride,
+        $purchaseKind,
+        $billingCadence,
+        $subscriptionEndDate
       );`,
       {
         $id: id,
@@ -126,6 +222,9 @@ export class SQLiteItemRepository implements ItemRepository {
         $warrantyMonths: input.warrantyMonths ?? null,
         $notes: input.notes ?? null,
         $usefulLifeMonthsOverride: input.usefulLifeMonthsOverride ?? null,
+        $purchaseKind: purchaseKind,
+        $billingCadence: billingCadence,
+        $subscriptionEndDate: subscriptionEndDate,
       }
     );
 
@@ -137,6 +236,10 @@ export class SQLiteItemRepository implements ItemRepository {
   }
 
   async update(input: UpdateItemInput): Promise<Item> {
+    const purchaseKind = normalizePurchaseKind(input.purchaseKind);
+    const billingCadence = normalizeBillingCadence(purchaseKind, input.billingCadence);
+    const subscriptionEndDate = normalizeSubscriptionEndDate(purchaseKind, input.subscriptionEndDate);
+
     await this.db.runAsync(
       `UPDATE Item
        SET Title = $title,
@@ -148,7 +251,10 @@ export class SQLiteItemRepository implements ItemRepository {
            Vendor = $vendor,
            WarrantyMonths = $warrantyMonths,
            Notes = $notes,
-           UsefulLifeMonthsOverride = $usefulLifeMonthsOverride
+           UsefulLifeMonthsOverride = $usefulLifeMonthsOverride,
+           PurchaseKind = $purchaseKind,
+           BillingCadence = $billingCadence,
+           SubscriptionEndDate = $subscriptionEndDate
        WHERE Id = $id AND DeletedAt IS NULL;`,
       {
         $id: input.id,
@@ -162,6 +268,9 @@ export class SQLiteItemRepository implements ItemRepository {
         $warrantyMonths: input.warrantyMonths ?? null,
         $notes: input.notes ?? null,
         $usefulLifeMonthsOverride: input.usefulLifeMonthsOverride ?? null,
+        $purchaseKind: purchaseKind,
+        $billingCadence: billingCadence,
+        $subscriptionEndDate: subscriptionEndDate,
       }
     );
 
@@ -219,6 +328,9 @@ export class SQLiteItemRepository implements ItemRepository {
         WarrantyMonths AS warrantyMonths,
         Notes AS notes,
         UsefulLifeMonthsOverride AS usefulLifeMonthsOverride,
+        PurchaseKind AS purchaseKind,
+        BillingCadence AS billingCadence,
+        SubscriptionEndDate AS subscriptionEndDate,
         CreatedAt AS createdAt,
         UpdatedAt AS updatedAt,
         DeletedAt AS deletedAt
@@ -239,8 +351,7 @@ export class SQLiteItemRepository implements ItemRepository {
     }
 
     if (filters.year !== undefined) {
-      clauses.push("substr(i.PurchaseDate, 1, 4) = $year");
-      params.$year = String(filters.year);
+      pushYearClause(clauses, params, filters.year);
     }
     if (filters.usageType !== undefined) {
       clauses.push("i.UsageType = $usageType");
@@ -279,6 +390,9 @@ export class SQLiteItemRepository implements ItemRepository {
         i.WarrantyMonths AS warrantyMonths,
         i.Notes AS notes,
         i.UsefulLifeMonthsOverride AS usefulLifeMonthsOverride,
+        i.PurchaseKind AS purchaseKind,
+        i.BillingCadence AS billingCadence,
+        i.SubscriptionEndDate AS subscriptionEndDate,
         i.CreatedAt AS createdAt,
         i.UpdatedAt AS updatedAt,
         i.DeletedAt AS deletedAt
@@ -309,8 +423,7 @@ export class SQLiteItemRepository implements ItemRepository {
       clauses.push("i.DeletedAt IS NULL");
     }
     if (filters.year !== undefined) {
-      clauses.push("substr(i.PurchaseDate, 1, 4) = $year");
-      params.$year = String(filters.year);
+      pushYearClause(clauses, params, filters.year);
     }
     if (filters.usageType !== undefined) {
       clauses.push("i.UsageType = $usageType");
