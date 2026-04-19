@@ -138,22 +138,14 @@ export function translatePlural(
   count: number,
   values?: InterpolationValues
 ): string {
-  const locale = getLocaleForLanguage(language);
   const message = resolvePluralMessage(language, key);
   const category = (() => {
     if (count === 0 && message.zero) {
       return "zero";
     }
 
-    const pluralRulesCtor = globalThis.Intl?.PluralRules;
-    if (typeof pluralRulesCtor === "function") {
-      try {
-        return new pluralRulesCtor(locale).select(count);
-      } catch {
-        // Fall back to a deterministic minimal rule-set if runtime plural rules fail.
-      }
-    }
-
+    // Keep pluralization deterministic without relying on Intl.PluralRules.
+    // The currently supported locales (en/de) both use a one/other rule.
     return count === 1 ? "one" : "other";
   })();
   const template =
