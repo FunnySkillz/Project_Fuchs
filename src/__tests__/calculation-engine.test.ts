@@ -339,6 +339,35 @@ describe("estimateTaxImpact", () => {
     expect(result.deductibleThisYearCents).toBe(12_000);
   });
 
+  it("truncates finite subscription schedule rows at selected tax year", () => {
+    const result = estimateTaxImpact(
+      {
+        totalCents: 1_000,
+        usageType: "WORK",
+        workPercent: null,
+        purchaseDate: "2025-07-01",
+        subscriptionEndDate: "2027-03-31",
+        purchaseKind: "SUBSCRIPTION",
+        billingCadence: "MONTHLY",
+        usefulLifeMonths: 36,
+      },
+      {
+        gwgThresholdCents: 100_000,
+        applyHalfYearRule: false,
+        marginalRateBps: 4_000,
+        defaultWorkPercent: 100,
+      },
+      2026
+    );
+
+    expect(result.scheduleByYear).toEqual([
+      { year: 2025, deductibleCents: 6_000 },
+      { year: 2026, deductibleCents: 12_000 },
+    ]);
+    expect(result.deductibleThisYearCents).toBe(12_000);
+    expect(result.scheduleByYear.some((entry) => entry.year > 2026)).toBe(false);
+  });
+
   it("prorates yearly subscription amount across years by covered months", () => {
     const result = estimateTaxImpact(
       {
