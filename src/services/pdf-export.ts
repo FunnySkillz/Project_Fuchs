@@ -217,6 +217,17 @@ function buildUsageLabel(item: Item, workPercent: number): string {
   return item.usageType;
 }
 
+function buildPurchasePeriodLabel(item: Item, t: (key: TranslationKey, values?: Record<string, string | number>) => string): string {
+  if (item.purchaseKind !== "SUBSCRIPTION") {
+    return item.purchaseDate;
+  }
+  const endLabel = item.subscriptionEndDate ?? t("item.form.subscriptionOngoing");
+  const cadenceLabel = item.billingCadence === "YEARLY"
+    ? t("item.form.billingCadence.yearly")
+    : t("item.form.billingCadence.monthly");
+  return `${item.purchaseDate} -> ${endLabel} (${cadenceLabel})`;
+}
+
 function formatGeneratedDateLabel(date: Date, locale: string): string {
   try {
     return new Intl.DateTimeFormat(locale, {
@@ -334,7 +345,7 @@ async function buildPdfDocumentModel(params: {
     deductibleByItemId.set(item.id, deductibleThisYear);
     tableRows.push({
       title: item.title,
-      date: item.purchaseDate,
+      date: buildPurchasePeriodLabel(item, t),
       category: categoryName,
       usagePercent: `${workPercent}%`,
       price: formatCents(item.totalCents),
@@ -387,7 +398,7 @@ async function buildPdfDocumentModel(params: {
       detailSections.push({
         itemId: item.id,
         title: item.title,
-        purchaseDate: item.purchaseDate,
+        purchaseDate: buildPurchasePeriodLabel(item, t),
         vendor: item.vendor?.trim() || "-",
         category: categoryName,
         usageLabel: buildUsageLabel(item, workPercent),
