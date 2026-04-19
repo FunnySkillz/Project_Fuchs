@@ -64,7 +64,11 @@ import {
 import { useI18n } from "@/contexts/language-context";
 import { useTheme } from "@/hooks/use-theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
-import { validateItemInput } from "@/domain/item-validation";
+import {
+  resolveItemValidationMessage,
+  validateItemInput,
+  type ItemValidationError,
+} from "@/domain/item-validation";
 import { resolveWorkPercent } from "@/domain/work-percent";
 import { addMonthsToYmd, formatYmdFromDateLocal, parseYmd } from "@/utils/date";
 import { parseEuroInputToCents } from "@/utils/money";
@@ -306,10 +310,10 @@ export default function ItemEditRoute() {
   ]);
 
   const fieldErrors = useMemo(() => {
-    const grouped: Record<string, string> = {};
+    const grouped: Record<string, ItemValidationError> = {};
     for (const issue of validation.errors) {
       if (!grouped[issue.field]) {
-        grouped[issue.field] = issue.message;
+        grouped[issue.field] = issue;
       }
     }
     return grouped;
@@ -321,13 +325,21 @@ export default function ItemEditRoute() {
       purchaseDate: fieldErrors.purchaseDate
         ? purchaseDate.trim().length === 0
           ? requiredPurchaseDateMessage
-          : fieldErrors.purchaseDate
+          : resolveItemValidationMessage(fieldErrors.purchaseDate, t)
         : undefined,
       totalCents: fieldErrors.totalCents ? requiredTotalCentsMessage : undefined,
-      workPercent: fieldErrors.workPercent,
-      billingCadence: fieldErrors.billingCadence,
-      subscriptionEndDate: fieldErrors.subscriptionEndDate,
-      warrantyMonths: fieldErrors.warrantyMonths,
+      workPercent: fieldErrors.workPercent
+        ? resolveItemValidationMessage(fieldErrors.workPercent, t)
+        : undefined,
+      billingCadence: fieldErrors.billingCadence
+        ? resolveItemValidationMessage(fieldErrors.billingCadence, t)
+        : undefined,
+      subscriptionEndDate: fieldErrors.subscriptionEndDate
+        ? resolveItemValidationMessage(fieldErrors.subscriptionEndDate, t)
+        : undefined,
+      warrantyMonths: fieldErrors.warrantyMonths
+        ? resolveItemValidationMessage(fieldErrors.warrantyMonths, t)
+        : undefined,
     };
   }, [
     fieldErrors,
@@ -335,6 +347,7 @@ export default function ItemEditRoute() {
     requiredPurchaseDateMessage,
     requiredTitleMessage,
     requiredTotalCentsMessage,
+    t,
   ]);
 
   const selectedCategoryName = useMemo(() => {
