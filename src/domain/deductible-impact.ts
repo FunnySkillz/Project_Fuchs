@@ -29,6 +29,9 @@ export function computeDeductibleImpactCents(
       workPercent: item.workPercent,
       purchaseDate: item.purchaseDate,
       usefulLifeMonths: resolveUsefulLifeMonths(item, categoryMap),
+      purchaseKind: item.purchaseKind,
+      billingCadence: item.billingCadence,
+      subscriptionEndDate: item.subscriptionEndDate,
     },
     {
       gwgThresholdCents: settings.gwgThresholdCents,
