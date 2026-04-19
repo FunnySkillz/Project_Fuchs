@@ -91,6 +91,29 @@ function resolveCalculationWorkPercent(item: Item, defaultWorkPercent: number): 
   return resolveWorkPercent(item.usageType, item.workPercent);
 }
 
+function resolvePurchaseKindLabel(item: Item, t: ReturnType<typeof useI18n>["t"]): string {
+  return item.purchaseKind === "SUBSCRIPTION"
+    ? t("item.form.purchaseKind.subscription")
+    : t("item.form.purchaseKind.oneTime");
+}
+
+function resolveBillingCadenceLabel(item: Item, t: ReturnType<typeof useI18n>["t"]): string {
+  if (item.purchaseKind !== "SUBSCRIPTION" || !item.billingCadence) {
+    return t("item.detail.none");
+  }
+  return item.billingCadence === "YEARLY"
+    ? t("item.form.billingCadence.yearly")
+    : t("item.form.billingCadence.monthly");
+}
+
+function resolveSubscriptionPeriodLabel(item: Item, t: ReturnType<typeof useI18n>["t"]): string {
+  if (item.purchaseKind !== "SUBSCRIPTION") {
+    return t("item.detail.none");
+  }
+  const endLabel = item.subscriptionEndDate ?? t("item.form.subscriptionOngoing");
+  return `${item.purchaseDate} -> ${endLabel}`;
+}
+
 interface InfoRowProps {
   label: string;
   value: string;
@@ -306,6 +329,9 @@ export default function ItemDetailRoute() {
         workPercent: item.workPercent,
         purchaseDate: item.purchaseDate,
         usefulLifeMonths,
+        purchaseKind: item.purchaseKind,
+        billingCadence: item.billingCadence,
+        subscriptionEndDate: item.subscriptionEndDate,
       },
       {
         gwgThresholdCents: settings.gwgThresholdCents,
@@ -488,6 +514,22 @@ export default function ItemDetailRoute() {
                 <InfoRow label={t("item.detail.info.labelTitle")} value={item.title} />
                 <InfoRow label={t("item.detail.info.labelCategory")} value={categoryName} />
                 <InfoRow label={t("item.detail.info.labelPurchaseDate")} value={item.purchaseDate} />
+                <InfoRow
+                  label={t("item.detail.info.labelPurchaseKind")}
+                  value={resolvePurchaseKindLabel(item, t)}
+                />
+                {item.purchaseKind === "SUBSCRIPTION" && (
+                  <>
+                    <InfoRow
+                      label={t("item.detail.info.labelBillingCadence")}
+                      value={resolveBillingCadenceLabel(item, t)}
+                    />
+                    <InfoRow
+                      label={t("item.detail.info.labelSubscriptionPeriod")}
+                      value={resolveSubscriptionPeriodLabel(item, t)}
+                    />
+                  </>
+                )}
                 <InfoRow
                   label={t("item.detail.info.labelVendor")}
                   value={item.vendor?.trim() ? item.vendor : "-"}
