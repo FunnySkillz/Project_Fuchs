@@ -5,6 +5,7 @@ import { MIGRATION_0004_CATEGORY_PRESETS } from "@/db/migrations/0004-category-p
 import { applyMigration0005ThemeModePreference } from "@/db/migrations/0005-theme-mode-preference";
 import { applyMigration0006TaxProfileFields } from "@/db/migrations/0006-tax-profile-fields";
 import { applyMigration0007LanguagePreference } from "@/db/migrations/0007-language-preference";
+import { applyMigration0008ItemSubscriptions } from "@/db/migrations/0008-item-subscriptions";
 import type { DbMigration } from "@/db/migrations/types";
 
 export const DB_MIGRATIONS: DbMigration[] = [
@@ -55,6 +56,13 @@ export const DB_MIGRATIONS: DbMigration[] = [
     name: "profile-settings-language-preference",
     up: async (db) => {
       await applyMigration0007LanguagePreference(db);
+    },
+  },
+  {
+    version: 8,
+    name: "item-subscriptions",
+    up: async (db) => {
+      await applyMigration0008ItemSubscriptions(db);
     },
   },
 ];
