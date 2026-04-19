@@ -430,6 +430,12 @@ export const deMessages: Partial<typeof enMessages> = {
   "item.form.required.title": "Titel ist erforderlich.",
   "item.form.required.purchaseDate": "Kaufdatum ist erforderlich.",
   "item.form.required.totalCents": "Preis ist erforderlich und muss größer als 0 sein.",
+  "item.validation.billingCadenceRequiredForSubscription":
+    "Wähle ein Abrechnungsintervall für Abonnements.",
+  "item.validation.subscriptionEndDateInvalid":
+    "Gib ein gültiges Abo-Enddatum ein (JJJJ-MM-TT).",
+  "item.validation.subscriptionEndDateBeforeStart":
+    "Das Abo-Enddatum muss am oder nach dem Startdatum liegen.",
   "item.form.usefulLife.errorPositiveMonths":
     "Nutzungsdauer-Überschreibung muss eine positive Monatszahl sein.",
   "item.form.category": "Kategorie",
