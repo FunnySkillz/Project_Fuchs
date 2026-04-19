@@ -36,7 +36,12 @@ import { Calendar } from "lucide-react-native";
 
 import type { Attachment } from "@/models/attachment";
 import type { Category } from "@/models/category";
-import type { Item, ItemUsageType } from "@/models/item";
+import type {
+  Item,
+  ItemPurchaseKind,
+  ItemUsageType,
+  SubscriptionBillingCadence,
+} from "@/models/item";
 import {
   getAttachmentRepository,
   getCategoryRepository,
@@ -126,11 +131,23 @@ const usageOptions: { value: ItemUsageType; label: string }[] = [
   { value: "OTHER", label: "OTHER" },
 ];
 
+const purchaseKindOptions: { value: ItemPurchaseKind; key: string }[] = [
+  { value: "ONE_TIME", key: "oneTime" },
+  { value: "SUBSCRIPTION", key: "subscription" },
+];
+
+const billingCadenceOptions: { value: SubscriptionBillingCadence; key: string }[] = [
+  { value: "MONTHLY", key: "monthly" },
+  { value: "YEARLY", key: "yearly" },
+];
+
 type FieldKey =
   | "title"
   | "purchaseDate"
   | "totalCents"
   | "workPercent"
+  | "billingCadence"
+  | "subscriptionEndDate"
   | "warrantyMonths"
   | "usefulLifeMonthsOverride";
 
@@ -140,6 +157,10 @@ interface InitialSnapshot {
   totalPrice: string;
   categoryId: string | null;
   usageType: ItemUsageType;
+  purchaseKind: ItemPurchaseKind;
+  billingCadence: SubscriptionBillingCadence;
+  subscriptionEndDate: string;
+  subscriptionOngoing: boolean;
   workPercent: string;
   warrantyMonths: string;
   vendor: string;
@@ -194,6 +215,10 @@ export default function ItemEditRoute() {
   const [totalPrice, setTotalPrice] = useState("");
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [usageType, setUsageType] = useState<ItemUsageType>("WORK");
+  const [purchaseKind, setPurchaseKind] = useState<ItemPurchaseKind>("ONE_TIME");
+  const [billingCadence, setBillingCadence] = useState<SubscriptionBillingCadence>("MONTHLY");
+  const [subscriptionEndDate, setSubscriptionEndDate] = useState("");
+  const [subscriptionOngoing, setSubscriptionOngoing] = useState(true);
   const [workPercent, setWorkPercent] = useState("");
   const [warrantyMonths, setWarrantyMonths] = useState("");
   const [vendor, setVendor] = useState("");
@@ -230,12 +255,22 @@ export default function ItemEditRoute() {
     const parsed = Number.parseInt(trimmed, 10);
     return Number.isFinite(parsed) ? parsed : null;
   }, [usefulLifeMonthsOverride]);
+  const normalizedSubscriptionEndDate = useMemo(() => {
+    if (purchaseKind !== "SUBSCRIPTION" || subscriptionOngoing) {
+      return null;
+    }
+    const trimmed = subscriptionEndDate.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  }, [purchaseKind, subscriptionEndDate, subscriptionOngoing]);
 
   const requiredTitleMessage = t("item.form.required.title");
   const requiredPurchaseDateMessage = t("item.form.required.purchaseDate");
   const requiredTotalCentsMessage = t("item.form.required.totalCents");
 
   const usefulLifeMonthsOverrideError = useMemo(() => {
+    if (purchaseKind !== "ONE_TIME") {
+      return null;
+    }
     const trimmed = usefulLifeMonthsOverride.trim();
     if (trimmed.length === 0) {
       return null;
@@ -244,7 +279,7 @@ export default function ItemEditRoute() {
       return t("item.form.usefulLife.errorPositiveMonths");
     }
     return null;
-  }, [parsedUsefulLifeMonthsOverride, t, usefulLifeMonthsOverride]);
+  }, [parsedUsefulLifeMonthsOverride, purchaseKind, t, usefulLifeMonthsOverride]);
 
   const validation = useMemo(() => {
     return validateItemInput({
@@ -254,8 +289,21 @@ export default function ItemEditRoute() {
       usageType,
       workPercent: parsedWorkPercent,
       warrantyMonths: parsedWarrantyMonths,
+      purchaseKind,
+      billingCadence: purchaseKind === "SUBSCRIPTION" ? billingCadence : null,
+      subscriptionEndDate: normalizedSubscriptionEndDate,
     });
-  }, [parsedTotalCents, parsedWarrantyMonths, parsedWorkPercent, purchaseDate, title, usageType]);
+  }, [
+    parsedTotalCents,
+    parsedWarrantyMonths,
+    parsedWorkPercent,
+    purchaseDate,
+    title,
+    usageType,
+    purchaseKind,
+    billingCadence,
+    normalizedSubscriptionEndDate,
+  ]);
 
   const fieldErrors = useMemo(() => {
     const grouped: Record<string, string> = {};
@@ -277,6 +325,8 @@ export default function ItemEditRoute() {
         : undefined,
       totalCents: fieldErrors.totalCents ? requiredTotalCentsMessage : undefined,
       workPercent: fieldErrors.workPercent,
+      billingCadence: fieldErrors.billingCadence,
+      subscriptionEndDate: fieldErrors.subscriptionEndDate,
       warrantyMonths: fieldErrors.warrantyMonths,
     };
   }, [
@@ -305,6 +355,10 @@ export default function ItemEditRoute() {
       totalPrice !== initial.totalPrice ||
       categoryId !== initial.categoryId ||
       usageType !== initial.usageType ||
+      purchaseKind !== initial.purchaseKind ||
+      billingCadence !== initial.billingCadence ||
+      subscriptionEndDate !== initial.subscriptionEndDate ||
+      subscriptionOngoing !== initial.subscriptionOngoing ||
       workPercent !== initial.workPercent ||
       warrantyMonths !== initial.warrantyMonths ||
       vendor !== initial.vendor ||
@@ -317,6 +371,10 @@ export default function ItemEditRoute() {
     newCategoryName,
     notes,
     purchaseDate,
+    purchaseKind,
+    billingCadence,
+    subscriptionEndDate,
+    subscriptionOngoing,
     title,
     totalPrice,
     usageType,
@@ -333,6 +391,13 @@ export default function ItemEditRoute() {
   useEffect(() => {
     isDiscardModalOpenRef.current = isDiscardModalOpen;
   }, [isDiscardModalOpen]);
+
+  useEffect(() => {
+    if (purchaseKind !== "SUBSCRIPTION") {
+      setSubscriptionOngoing(true);
+      setSubscriptionEndDate("");
+    }
+  }, [purchaseKind]);
 
   const isFormValid = validation.valid && usefulLifeMonthsOverrideError === null;
   const isActionBusy = isSaving || isAttachmentBusy || isCreatingCategory;
@@ -421,6 +486,14 @@ export default function ItemEditRoute() {
       setTotalPrice((loadedItem.totalCents / 100).toFixed(2));
       setCategoryId(loadedItem.categoryId);
       setUsageType(loadedItem.usageType);
+      const normalizedPurchaseKind =
+        loadedItem.purchaseKind === "SUBSCRIPTION" ? "SUBSCRIPTION" : "ONE_TIME";
+      setPurchaseKind(normalizedPurchaseKind);
+      setBillingCadence(loadedItem.billingCadence ?? "MONTHLY");
+      setSubscriptionEndDate(loadedItem.subscriptionEndDate ?? "");
+      setSubscriptionOngoing(
+        normalizedPurchaseKind !== "SUBSCRIPTION" || loadedItem.subscriptionEndDate === null
+      );
       setWorkPercent(loadedItem.workPercent !== null ? String(loadedItem.workPercent) : "");
       setWarrantyMonths(loadedItem.warrantyMonths !== null ? String(loadedItem.warrantyMonths) : "");
       setVendor(loadedItem.vendor ?? "");
@@ -454,6 +527,10 @@ export default function ItemEditRoute() {
       totalPrice,
       categoryId,
       usageType,
+      purchaseKind,
+      billingCadence,
+      subscriptionEndDate,
+      subscriptionOngoing,
       workPercent,
       warrantyMonths,
       vendor,
@@ -467,6 +544,10 @@ export default function ItemEditRoute() {
     item,
     notes,
     purchaseDate,
+    purchaseKind,
+    billingCadence,
+    subscriptionEndDate,
+    subscriptionOngoing,
     title,
     totalPrice,
     usageType,
@@ -663,6 +744,12 @@ export default function ItemEditRoute() {
     if (fieldErrors.workPercent) {
       return "workPercent";
     }
+    if (fieldErrors.billingCadence) {
+      return "billingCadence";
+    }
+    if (fieldErrors.subscriptionEndDate) {
+      return "subscriptionEndDate";
+    }
     if (fieldErrors.warrantyMonths) {
       return "warrantyMonths";
     }
@@ -693,12 +780,16 @@ export default function ItemEditRoute() {
         purchaseDate,
         totalCents: parsedTotalCents,
         usageType,
+        purchaseKind,
+        billingCadence: purchaseKind === "SUBSCRIPTION" ? billingCadence : null,
+        subscriptionEndDate: normalizedSubscriptionEndDate,
         workPercent: usageType === "MIXED" ? parsedWorkPercent : null,
         categoryId,
         vendor: vendor.trim().length > 0 ? vendor.trim() : null,
         warrantyMonths: parsedWarrantyMonths,
         notes: notes.trim().length > 0 ? notes.trim() : null,
         usefulLifeMonthsOverride:
+          purchaseKind === "ONE_TIME" &&
           parsedUsefulLifeMonthsOverride !== null && parsedUsefulLifeMonthsOverride > 0
             ? parsedUsefulLifeMonthsOverride
             : null,
@@ -1166,6 +1257,151 @@ export default function ItemEditRoute() {
                 </HStack>
               </VStack>
 
+              <VStack space="xs" testID="edititem-input-purchasekind">
+                <Text bold size="sm">
+                  {t("item.form.purchaseKind")}
+                </Text>
+                <HStack space="sm" flexWrap="wrap">
+                  {purchaseKindOptions.map((option) => (
+                    <Button
+                      key={option.value}
+                      size="sm"
+                      variant={purchaseKind === option.value ? "solid" : "outline"}
+                      action={purchaseKind === option.value ? "primary" : "secondary"}
+                      onPress={() => setPurchaseKind(option.value)}
+                      testID={`item-edit-kind-${option.key}`}
+                    >
+                      <ButtonText>
+                        {option.value === "ONE_TIME"
+                          ? t("item.form.purchaseKind.oneTime")
+                          : t("item.form.purchaseKind.subscription")}
+                      </ButtonText>
+                    </Button>
+                  ))}
+                </HStack>
+              </VStack>
+
+              {purchaseKind === "SUBSCRIPTION" ? (
+                <VStack space="md">
+                  <Box
+                    testID="edititem-input-billingcadence"
+                    onLayout={(event) => {
+                      fieldYRef.current.billingCadence = event.nativeEvent.layout.y;
+                    }}
+                  >
+                    <VStack space="xs">
+                      <Text bold size="sm">
+                        {t("item.form.billingCadence")}
+                      </Text>
+                      <HStack space="sm" flexWrap="wrap">
+                        {billingCadenceOptions.map((option) => (
+                          <Button
+                            key={option.value}
+                            size="sm"
+                            variant={billingCadence === option.value ? "solid" : "outline"}
+                            action={billingCadence === option.value ? "primary" : "secondary"}
+                            onPress={() => setBillingCadence(option.value)}
+                            testID={`item-edit-cadence-${option.key}`}
+                          >
+                            <ButtonText>
+                              {option.value === "MONTHLY"
+                                ? t("item.form.billingCadence.monthly")
+                                : t("item.form.billingCadence.yearly")}
+                            </ButtonText>
+                          </Button>
+                        ))}
+                      </HStack>
+                      {shouldShowFieldError("billingCadence") ? (
+                        <Text
+                          size="xs"
+                          color="$error600"
+                          testID="edititem-error-billingcadence"
+                          accessibilityLiveRegion="polite"
+                        >
+                          {validationMessages.billingCadence}
+                        </Text>
+                      ) : null}
+                    </VStack>
+                  </Box>
+
+                  <Box
+                    testID="edititem-input-subscriptionend"
+                    onLayout={(event) => {
+                      fieldYRef.current.subscriptionEndDate = event.nativeEvent.layout.y;
+                    }}
+                  >
+                    <VStack space="xs">
+                      <Text bold size="sm">
+                        {t("item.form.subscriptionEndDate")}
+                      </Text>
+                      <HStack space="sm" alignItems="center">
+                        <Input
+                          variant="outline"
+                          flex={1}
+                          borderColor={
+                            shouldShowFieldError("subscriptionEndDate")
+                              ? "$error600"
+                              : "$border200"
+                          }
+                        >
+                          <InputField
+                            ref={(node) => {
+                              inputRef.current.subscriptionEndDate = node as FocusTarget | null;
+                            }}
+                            value={subscriptionEndDate}
+                            onChangeText={setSubscriptionEndDate}
+                            placeholder={t("item.form.subscriptionEndDatePlaceholder")}
+                            editable={!subscriptionOngoing}
+                            onBlur={() => setFieldTouched("subscriptionEndDate")}
+                            testID="item-edit-subscription-end-input"
+                            accessibilityLabel={t("item.form.accessibility.subscriptionEndDate")}
+                            accessibilityState={
+                              ({ invalid: shouldShowFieldError("subscriptionEndDate") } as any)
+                            }
+                          />
+                        </Input>
+                        <Button
+                          size="sm"
+                          variant={subscriptionOngoing ? "solid" : "outline"}
+                          action={subscriptionOngoing ? "primary" : "secondary"}
+                          onPress={() => {
+                            setSubscriptionOngoing((current) => {
+                              const next = !current;
+                              if (next) {
+                                setSubscriptionEndDate("");
+                              }
+                              return next;
+                            });
+                          }}
+                          testID="item-edit-subscription-ongoing-toggle"
+                        >
+                          <ButtonText>
+                            {subscriptionOngoing
+                              ? t("item.form.subscriptionOngoing")
+                              : t("item.form.subscriptionHasEnd")}
+                          </ButtonText>
+                        </Button>
+                      </HStack>
+                      <Text size="xs" color="$textLight500">
+                        {subscriptionOngoing
+                          ? t("item.form.subscriptionOngoingHint")
+                          : t("item.form.subscriptionEndDateHint")}
+                      </Text>
+                      {shouldShowFieldError("subscriptionEndDate") ? (
+                        <Text
+                          size="xs"
+                          color="$error600"
+                          testID="edititem-error-subscriptionend"
+                          accessibilityLiveRegion="polite"
+                        >
+                          {validationMessages.subscriptionEndDate}
+                        </Text>
+                      ) : null}
+                    </VStack>
+                  </Box>
+                </VStack>
+              ) : null}
+
               <VStack space="xs" testID="edititem-input-usageType">
                 <Text bold size="sm">
                   {t("item.form.usageTypeRequired")}
@@ -1306,48 +1542,50 @@ export default function ItemEditRoute() {
                 </Input>
               </VStack>
 
-              <Box
-                testID="edititem-input-usefullife"
-                onLayout={(event) => {
-                  fieldYRef.current.usefulLifeMonthsOverride = event.nativeEvent.layout.y;
-                }}
-              >
-              <VStack space="xs">
-                <Text bold size="sm">
-                  {t("item.form.usefulLifeOverride")}
-                </Text>
-                <Input
-                  variant="outline"
-                  borderColor={showUsefulLifeError ? "$error600" : "$border200"}
+              {purchaseKind === "ONE_TIME" ? (
+                <Box
+                  testID="edititem-input-usefullife"
+                  onLayout={(event) => {
+                    fieldYRef.current.usefulLifeMonthsOverride = event.nativeEvent.layout.y;
+                  }}
                 >
-                  <InputField
-                    ref={(node) => {
-                      inputRef.current.usefulLifeMonthsOverride = node as FocusTarget | null;
-                    }}
-                    value={usefulLifeMonthsOverride}
-                    onChangeText={setUsefulLifeMonthsOverride}
-                    keyboardType="number-pad"
-                    placeholder={t("item.form.usefulLifePlaceholder")}
-                    onBlur={() => setFieldTouched("usefulLifeMonthsOverride")}
-                    testID="item-edit-useful-life-input"
-                    accessibilityLabel={t("item.form.accessibility.usefulLifeOverride")}
-                    accessibilityState={
-                      ({ invalid: showUsefulLifeError } as any)
-                    }
-                  />
-                </Input>
-                {showUsefulLifeError ? (
-                  <Text
-                    size="xs"
-                    color="$error600"
-                    testID="edititem-error-usefullife"
-                    accessibilityLiveRegion="polite"
-                  >
-                    {usefulLifeMonthsOverrideError}
-                  </Text>
-                ) : null}
-              </VStack>
-              </Box>
+                  <VStack space="xs">
+                    <Text bold size="sm">
+                      {t("item.form.usefulLifeOverride")}
+                    </Text>
+                    <Input
+                      variant="outline"
+                      borderColor={showUsefulLifeError ? "$error600" : "$border200"}
+                    >
+                      <InputField
+                        ref={(node) => {
+                          inputRef.current.usefulLifeMonthsOverride = node as FocusTarget | null;
+                        }}
+                        value={usefulLifeMonthsOverride}
+                        onChangeText={setUsefulLifeMonthsOverride}
+                        keyboardType="number-pad"
+                        placeholder={t("item.form.usefulLifePlaceholder")}
+                        onBlur={() => setFieldTouched("usefulLifeMonthsOverride")}
+                        testID="item-edit-useful-life-input"
+                        accessibilityLabel={t("item.form.accessibility.usefulLifeOverride")}
+                        accessibilityState={
+                          ({ invalid: showUsefulLifeError } as any)
+                        }
+                      />
+                    </Input>
+                    {showUsefulLifeError ? (
+                      <Text
+                        size="xs"
+                        color="$error600"
+                        testID="edititem-error-usefullife"
+                        accessibilityLiveRegion="polite"
+                      >
+                        {usefulLifeMonthsOverrideError}
+                      </Text>
+                    ) : null}
+                  </VStack>
+                </Box>
+              ) : null}
 
               <VStack space="xs" testID="edititem-input-notes">
                 <Text bold size="sm">
