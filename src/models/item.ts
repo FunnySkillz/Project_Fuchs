@@ -1,6 +1,8 @@
 import type { RecordMetadata } from "@/models/record-metadata";
 
 export type ItemUsageType = "WORK" | "PRIVATE" | "MIXED" | "OTHER";
+export type ItemPurchaseKind = "ONE_TIME" | "SUBSCRIPTION";
+export type SubscriptionBillingCadence = "MONTHLY" | "YEARLY";
 
 export interface Item extends RecordMetadata {
   id: string;
@@ -15,4 +17,7 @@ export interface Item extends RecordMetadata {
   warrantyMonths: number | null;
   notes: string | null;
   usefulLifeMonthsOverride: number | null;
+  purchaseKind: ItemPurchaseKind;
+  billingCadence: SubscriptionBillingCadence | null;
+  subscriptionEndDate: string | null;
 }
