@@ -35,6 +35,8 @@ describe("runMigrations integration", () => {
           "IX_Item_PurchaseDate",
           "IX_Item_CategoryId",
           "IX_Item_UsageType",
+          "IX_Item_PurchaseKind",
+          "IX_Item_SubscriptionEndDate",
           "IX_Item_NotDeleted",
           "IX_Attachment_ItemId",
           "IX_Attachment_NotDeleted",
