@@ -33,6 +33,27 @@ describe("i18n translate safety", () => {
     });
   });
 
+  it("falls back safely when Intl.PluralRules is unavailable", () => {
+    (globalThis as Record<string, unknown>).__DEV__ = true;
+
+    jest.isolateModules(() => {
+      const originalIntl = globalThis.Intl;
+      const nextIntl = {
+        ...(originalIntl ?? {}),
+        PluralRules: undefined,
+      } as unknown as typeof Intl;
+      (globalThis as { Intl?: typeof Intl }).Intl = nextIntl;
+
+      try {
+        const { translatePlural } = require("@/i18n/translate");
+        expect(translatePlural("en", "items.list.itemCount", 1)).toBe("1 item");
+        expect(translatePlural("en", "items.list.itemCount", 2)).toBe("2 items");
+      } finally {
+        (globalThis as { Intl?: typeof Intl }).Intl = originalIntl;
+      }
+    });
+  });
+
   it("fails hard in development when interpolation params are missing", () => {
     (globalThis as Record<string, unknown>).__DEV__ = true;
 
