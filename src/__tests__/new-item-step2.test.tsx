@@ -328,6 +328,28 @@ describe("NewItemRoute save and validation", () => {
     });
   });
 
+  it("shows localized subscription end-date validation message", async () => {
+    render(<NewItemRoute />);
+
+    expect(await screen.findByText("Attachments")).toBeTruthy();
+    fireEvent.changeText(screen.getByTestId("additem-input-title"), "ChatGPT Plus");
+    fireEvent.changeText(screen.getByTestId("additem-input-purchaseDate"), "2026-01-15");
+    fireEvent.changeText(screen.getByTestId("additem-input-price"), "19.99");
+    fireEvent.press(screen.getByTestId("additem-seg-kind-subscription"));
+    fireEvent.press(screen.getByTestId("additem-btn-subscription-ongoing"));
+    fireEvent.changeText(screen.getByTestId("additem-input-subscriptionend"), "2026-13-40");
+
+    fireEvent.press(screen.getByTestId("additem-btn-save"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("additem-error-subscriptionend")).toBeTruthy();
+      expect(
+        screen.getByText("Enter a valid subscription end date (YYYY-MM-DD).")
+      ).toBeTruthy();
+      expect(mockCreateItem).not.toHaveBeenCalled();
+    });
+  });
+
   it("does not scroll to top on warranty focus", async () => {
     const addListenerSpy = jest.spyOn(Keyboard, "addListener");
 
