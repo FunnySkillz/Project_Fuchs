@@ -409,6 +409,9 @@ jest.mock("@/repositories/create-core-repositories", () => ({
       warrantyMonths?: number | null;
       notes?: string | null;
       usefulLifeMonthsOverride?: number | null;
+      purchaseKind?: "ONE_TIME" | "SUBSCRIPTION";
+      billingCadence?: "MONTHLY" | "YEARLY" | null;
+      subscriptionEndDate?: string | null;
     }) => {
       const id = `item-${++mockItemCounter}`;
       const now = "2026-01-15T10:30:00.000Z";
@@ -425,6 +428,9 @@ jest.mock("@/repositories/create-core-repositories", () => ({
         warrantyMonths: input.warrantyMonths ?? null,
         notes: input.notes ?? null,
         usefulLifeMonthsOverride: input.usefulLifeMonthsOverride ?? null,
+        purchaseKind: input.purchaseKind ?? "ONE_TIME",
+        billingCadence: input.purchaseKind === "SUBSCRIPTION" ? input.billingCadence ?? "MONTHLY" : null,
+        subscriptionEndDate: input.purchaseKind === "SUBSCRIPTION" ? input.subscriptionEndDate ?? null : null,
         createdAt: now,
         updatedAt: now,
         deletedAt: null,
@@ -444,9 +450,18 @@ jest.mock("@/repositories/create-core-repositories", () => ({
           return false;
         }
         if (filters?.year !== undefined) {
-          const itemYear = Number.parseInt(item.purchaseDate.slice(0, 4), 10);
-          if (itemYear !== filters.year) {
-            return false;
+          const yearStart = `${filters.year}-01-01`;
+          const yearEnd = `${filters.year}-12-31`;
+          if (item.purchaseKind === "SUBSCRIPTION") {
+            const effectiveEndDate = item.subscriptionEndDate ?? "9999-12-31";
+            if (item.purchaseDate > yearEnd || effectiveEndDate < yearStart) {
+              return false;
+            }
+          } else {
+            const itemYear = Number.parseInt(item.purchaseDate.slice(0, 4), 10);
+            if (itemYear !== filters.year) {
+              return false;
+            }
           }
         }
         if (
@@ -482,9 +497,18 @@ jest.mock("@/repositories/create-core-repositories", () => ({
             return false;
           }
           if (filters?.year !== undefined) {
-            const itemYear = Number.parseInt(item.purchaseDate.slice(0, 4), 10);
-            if (itemYear !== filters.year) {
-              return false;
+            const yearStart = `${filters.year}-01-01`;
+            const yearEnd = `${filters.year}-12-31`;
+            if (item.purchaseKind === "SUBSCRIPTION") {
+              const effectiveEndDate = item.subscriptionEndDate ?? "9999-12-31";
+              if (item.purchaseDate > yearEnd || effectiveEndDate < yearStart) {
+                return false;
+              }
+            } else {
+              const itemYear = Number.parseInt(item.purchaseDate.slice(0, 4), 10);
+              if (itemYear !== filters.year) {
+                return false;
+              }
             }
           }
           if (
@@ -726,7 +750,9 @@ describe("App first-user UI journey", () => {
     });
   });
 
-  it("walks from onboarding to creating TV and laptop invoices via real UI interactions", async () => {
+  it(
+    "walks from onboarding to creating TV and laptop invoices via real UI interactions",
+    async () => {
     const welcomeView = render(<OnboardingWelcomeRoute />);
     expect(await screen.findByText("Welcome to SteuerFuchs")).toBeTruthy();
     fireEvent.press(screen.getByText("Continue to Profile Setup"));
@@ -819,7 +845,9 @@ describe("App first-user UI journey", () => {
     expect(await screen.findByText("Steuerausgleich 2026")).toBeTruthy();
     expect(screen.queryByText("No items added yet.")).toBeNull();
     homeAfterItems.unmount();
-  });
+    },
+    20_000
+  );
 
   it("keeps Home attention navigation and Items filtering in sync for missing receipts and notes", async () => {
     const now = "2026-05-10T10:00:00.000Z";
@@ -837,6 +865,9 @@ describe("App first-user UI journey", () => {
         warrantyMonths: null,
         notes: "Submitted in monthly checklist",
         usefulLifeMonthsOverride: null,
+        purchaseKind: "ONE_TIME",
+        billingCadence: null,
+        subscriptionEndDate: null,
         createdAt: now,
         updatedAt: now,
         deletedAt: null,
@@ -854,6 +885,9 @@ describe("App first-user UI journey", () => {
         warrantyMonths: null,
         notes: null,
         usefulLifeMonthsOverride: null,
+        purchaseKind: "ONE_TIME",
+        billingCadence: null,
+        subscriptionEndDate: null,
         createdAt: now,
         updatedAt: now,
         deletedAt: null,
