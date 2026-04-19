@@ -62,7 +62,11 @@ import { useTheme } from "@/hooks/use-theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import type { AttachmentType } from "@/models/attachment";
 import type { Category } from "@/models/category";
-import type { ItemUsageType } from "@/models/item";
+import type {
+  ItemPurchaseKind,
+  ItemUsageType,
+  SubscriptionBillingCadence,
+} from "@/models/item";
 import {
   getCategoryRepository,
   getItemRepository,
@@ -164,11 +168,23 @@ const usageOptions: { value: ItemUsageType; label: string; key: string }[] = [
   { value: "OTHER", label: "OTHER", key: "other" },
 ];
 
+const purchaseKindOptions: { value: ItemPurchaseKind; key: string }[] = [
+  { value: "ONE_TIME", key: "oneTime" },
+  { value: "SUBSCRIPTION", key: "subscription" },
+];
+
+const billingCadenceOptions: { value: SubscriptionBillingCadence; key: string }[] = [
+  { value: "MONTHLY", key: "monthly" },
+  { value: "YEARLY", key: "yearly" },
+];
+
 type FieldKey =
   | "title"
   | "purchaseDate"
   | "totalCents"
   | "workPercent"
+  | "billingCadence"
+  | "subscriptionEndDate"
   | "warrantyMonths"
   | "usefulLifeMonthsOverride";
 
@@ -178,6 +194,10 @@ interface InitialSnapshot {
   totalPrice: string;
   categoryId: string | null;
   usageType: ItemUsageType;
+  purchaseKind: ItemPurchaseKind;
+  billingCadence: SubscriptionBillingCadence;
+  subscriptionEndDate: string;
+  subscriptionOngoing: boolean;
   workPercent: string;
   warrantyMonths: string;
   vendor: string;
@@ -238,6 +258,10 @@ export default function NewItemRoute() {
   const [totalPrice, setTotalPrice] = useState("");
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [usageType, setUsageType] = useState<ItemUsageType>("WORK");
+  const [purchaseKind, setPurchaseKind] = useState<ItemPurchaseKind>("ONE_TIME");
+  const [billingCadence, setBillingCadence] = useState<SubscriptionBillingCadence>("MONTHLY");
+  const [subscriptionEndDate, setSubscriptionEndDate] = useState("");
+  const [subscriptionOngoing, setSubscriptionOngoing] = useState(true);
   const [workPercent, setWorkPercent] = useState("");
   const [warrantyMonths, setWarrantyMonths] = useState("");
   const [vendor, setVendor] = useState("");
@@ -305,12 +329,22 @@ export default function NewItemRoute() {
     }
     return parsed;
   }, [usefulLifeMonthsOverride]);
+  const normalizedSubscriptionEndDate = useMemo(() => {
+    if (purchaseKind !== "SUBSCRIPTION" || subscriptionOngoing) {
+      return null;
+    }
+    const trimmed = subscriptionEndDate.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  }, [purchaseKind, subscriptionEndDate, subscriptionOngoing]);
 
   const requiredTitleMessage = t("item.form.required.title");
   const requiredPurchaseDateMessage = t("item.form.required.purchaseDate");
   const requiredTotalCentsMessage = t("item.form.required.totalCents");
 
   const usefulLifeMonthsOverrideError = useMemo(() => {
+    if (purchaseKind !== "ONE_TIME") {
+      return null;
+    }
     const trimmed = usefulLifeMonthsOverride.trim();
     if (trimmed.length === 0) {
       return null;
@@ -322,7 +356,7 @@ export default function NewItemRoute() {
       return t("item.form.usefulLife.errorPositiveMonths");
     }
     return null;
-  }, [parsedUsefulLifeMonthsOverride, t, usefulLifeMonthsOverride]);
+  }, [parsedUsefulLifeMonthsOverride, purchaseKind, t, usefulLifeMonthsOverride]);
 
   const validation = useMemo(() => {
     return validateItemInput({
@@ -332,6 +366,9 @@ export default function NewItemRoute() {
       usageType,
       workPercent: parsedWorkPercent,
       warrantyMonths: parsedWarrantyMonths,
+      purchaseKind,
+      billingCadence: purchaseKind === "SUBSCRIPTION" ? billingCadence : null,
+      subscriptionEndDate: normalizedSubscriptionEndDate,
     });
   }, [
     title,
@@ -340,6 +377,9 @@ export default function NewItemRoute() {
     usageType,
     parsedWorkPercent,
     parsedWarrantyMonths,
+    purchaseKind,
+    billingCadence,
+    normalizedSubscriptionEndDate,
   ]);
 
   const fieldErrors = useMemo(() => {
@@ -364,6 +404,8 @@ export default function NewItemRoute() {
         ? requiredTotalCentsMessage
         : undefined,
       workPercent: fieldErrors.workPercent,
+      billingCadence: fieldErrors.billingCadence,
+      subscriptionEndDate: fieldErrors.subscriptionEndDate,
       warrantyMonths: fieldErrors.warrantyMonths,
     };
   }, [
@@ -407,6 +449,10 @@ export default function NewItemRoute() {
       totalPrice !== initial.totalPrice ||
       categoryId !== initial.categoryId ||
       usageType !== initial.usageType ||
+      purchaseKind !== initial.purchaseKind ||
+      billingCadence !== initial.billingCadence ||
+      subscriptionEndDate !== initial.subscriptionEndDate ||
+      subscriptionOngoing !== initial.subscriptionOngoing ||
       workPercent !== initial.workPercent ||
       warrantyMonths !== initial.warrantyMonths ||
       vendor !== initial.vendor ||
@@ -421,6 +467,10 @@ export default function NewItemRoute() {
     newCategoryName,
     notes,
     purchaseDate,
+    purchaseKind,
+    billingCadence,
+    subscriptionEndDate,
+    subscriptionOngoing,
     title,
     totalPrice,
     usageType,
@@ -437,6 +487,13 @@ export default function NewItemRoute() {
   useEffect(() => {
     isDiscardModalOpenRef.current = isDiscardModalOpen;
   }, [isDiscardModalOpen]);
+
+  useEffect(() => {
+    if (purchaseKind !== "SUBSCRIPTION") {
+      setSubscriptionOngoing(true);
+      setSubscriptionEndDate("");
+    }
+  }, [purchaseKind]);
 
   const setFieldTouched = useCallback((field: FieldKey) => {
     setTouchedFields((current) => ({ ...current, [field]: true }));
@@ -507,6 +564,10 @@ export default function NewItemRoute() {
       totalPrice,
       categoryId,
       usageType,
+      purchaseKind,
+      billingCadence,
+      subscriptionEndDate,
+      subscriptionOngoing,
       workPercent,
       warrantyMonths,
       vendor,
@@ -519,6 +580,10 @@ export default function NewItemRoute() {
     attachmentFingerprint,
     categoryId,
     activeDraftId,
+    purchaseKind,
+    billingCadence,
+    subscriptionEndDate,
+    subscriptionOngoing,
     isInitializing,
     notes,
     purchaseDate,
@@ -936,6 +1001,12 @@ export default function NewItemRoute() {
     if (fieldErrors.workPercent) {
       return "workPercent";
     }
+    if (fieldErrors.billingCadence) {
+      return "billingCadence";
+    }
+    if (fieldErrors.subscriptionEndDate) {
+      return "subscriptionEndDate";
+    }
     if (fieldErrors.warrantyMonths) {
       return "warrantyMonths";
     }
@@ -960,12 +1031,16 @@ export default function NewItemRoute() {
         purchaseDate,
         totalCents: parsedTotalCents,
         usageType,
+        purchaseKind,
+        billingCadence: purchaseKind === "SUBSCRIPTION" ? billingCadence : null,
+        subscriptionEndDate: normalizedSubscriptionEndDate,
         workPercent: usageType === "MIXED" ? parsedWorkPercent : null,
         categoryId,
         vendor: vendor.trim().length > 0 ? vendor.trim() : null,
         warrantyMonths: parsedWarrantyMonths,
         notes: notes.trim().length > 0 ? notes.trim() : null,
         usefulLifeMonthsOverride:
+          purchaseKind === "ONE_TIME" &&
           parsedUsefulLifeMonthsOverride !== null &&
           parsedUsefulLifeMonthsOverride > 0
             ? parsedUsefulLifeMonthsOverride
@@ -1542,6 +1617,151 @@ export default function NewItemRoute() {
 
                   <GVStack space="xs">
                     <GText bold size="sm">
+                      {t("item.form.purchaseKind")}
+                    </GText>
+                    <GHStack space="sm" flexWrap="wrap">
+                      {purchaseKindOptions.map((option) => (
+                        <GButton
+                          key={option.value}
+                          size="sm"
+                          variant={purchaseKind === option.value ? "solid" : "outline"}
+                          action={purchaseKind === option.value ? "primary" : "secondary"}
+                          onPress={() => setPurchaseKind(option.value)}
+                          testID={`additem-seg-kind-${option.key}`}
+                        >
+                          <GButtonText>
+                            {option.value === "ONE_TIME"
+                              ? t("item.form.purchaseKind.oneTime")
+                              : t("item.form.purchaseKind.subscription")}
+                          </GButtonText>
+                        </GButton>
+                      ))}
+                    </GHStack>
+                  </GVStack>
+
+                  {purchaseKind === "SUBSCRIPTION" && (
+                    <GVStack space="md">
+                      <GBox
+                        onLayout={(event) => {
+                          fieldYRef.current.billingCadence = event.nativeEvent.layout.y;
+                        }}
+                      >
+                        <GVStack space="xs">
+                          <GText bold size="sm">
+                            {t("item.form.billingCadence")}
+                          </GText>
+                          <GHStack space="sm" flexWrap="wrap">
+                            {billingCadenceOptions.map((option) => (
+                              <GButton
+                                key={option.value}
+                                size="sm"
+                                variant={billingCadence === option.value ? "solid" : "outline"}
+                                action={billingCadence === option.value ? "primary" : "secondary"}
+                                onPress={() => setBillingCadence(option.value)}
+                                testID={`additem-seg-cadence-${option.key}`}
+                              >
+                                <GButtonText>
+                                  {option.value === "MONTHLY"
+                                    ? t("item.form.billingCadence.monthly")
+                                    : t("item.form.billingCadence.yearly")}
+                                </GButtonText>
+                              </GButton>
+                            ))}
+                          </GHStack>
+                          {shouldShowFieldError("billingCadence") && (
+                            <GText
+                              size="xs"
+                              color="$error600"
+                              accessibilityLiveRegion="polite"
+                              testID="additem-error-billingcadence"
+                            >
+                              {validationMessages.billingCadence}
+                            </GText>
+                          )}
+                        </GVStack>
+                      </GBox>
+
+                      <GBox
+                        onLayout={(event) => {
+                          fieldYRef.current.subscriptionEndDate = event.nativeEvent.layout.y;
+                        }}
+                      >
+                        <GVStack space="xs">
+                          <GText bold size="sm">
+                            {t("item.form.subscriptionEndDate")}
+                          </GText>
+                          <GHStack space="sm" alignItems="center">
+                            <GInput
+                              variant="outline"
+                              flex={1}
+                              borderColor={
+                                shouldShowFieldError("subscriptionEndDate")
+                                  ? "$error600"
+                                  : "$border200"
+                              }
+                            >
+                              <GInputField
+                                ref={(node) => {
+                                  inputRef.current.subscriptionEndDate = node as FocusTarget | null;
+                                }}
+                                value={subscriptionEndDate}
+                                onChangeText={setSubscriptionEndDate}
+                                placeholder={t("item.form.subscriptionEndDatePlaceholder")}
+                                editable={!subscriptionOngoing}
+                                onBlur={() => setFieldTouched("subscriptionEndDate")}
+                                testID="additem-input-subscriptionend"
+                                accessibilityLabel={t("item.form.accessibility.subscriptionEndDate")}
+                                accessibilityState={
+                                  {
+                                    invalid: shouldShowFieldError("subscriptionEndDate"),
+                                  } as any
+                                }
+                              />
+                            </GInput>
+                            <GButton
+                              size="sm"
+                              variant={subscriptionOngoing ? "solid" : "outline"}
+                              action={subscriptionOngoing ? "primary" : "secondary"}
+                              onPress={() => {
+                                setSubscriptionOngoing((current) => {
+                                  const next = !current;
+                                  if (next) {
+                                    setSubscriptionEndDate("");
+                                  }
+                                  return next;
+                                });
+                              }}
+                              testID="additem-btn-subscription-ongoing"
+                            >
+                              <GButtonText>
+                                {subscriptionOngoing
+                                  ? t("item.form.subscriptionOngoing")
+                                  : t("item.form.subscriptionHasEnd")}
+                              </GButtonText>
+                            </GButton>
+                          </GHStack>
+                          <GText size="xs" color="$textLight500">
+                            {subscriptionOngoing
+                              ? t("item.form.subscriptionOngoingHint")
+                              : t("item.form.subscriptionEndDateHint")}
+                          </GText>
+                          {shouldShowFieldError("subscriptionEndDate") && (
+                            <GText
+                              size="xs"
+                              color="$error600"
+                              accessibilityLiveRegion="polite"
+                              testID="additem-error-subscriptionend"
+                            >
+                              {validationMessages.subscriptionEndDate}
+                            </GText>
+                          )}
+                        </GVStack>
+                      </GBox>
+                    </GVStack>
+                  )}
+
+                  <GVStack space="xs">
+                    <GText bold size="sm">
                       {t("item.form.usageType")}
                     </GText>
                     <GHStack space="sm" flexWrap="wrap">
@@ -1751,93 +1971,95 @@ export default function NewItemRoute() {
                 </GVStack>
               </GCard>
 
-              <GCard
-                borderWidth="$1"
-                borderColor="$border200"
-                style={{
-                  backgroundColor: theme.backgroundElement,
-                  borderRadius: 16,
-                }}
-              >
-                <GVStack space="md">
-                  <Pressable
-                    onPress={() => setIsAdvancedOpen((current) => !current)}
-                    testID="additem-advanced-toggle"
-                    accessibilityRole="button"
-                    accessibilityLabel={t("item.form.accessibility.toggleAdvanced")}
-                    accessibilityState={{ expanded: isAdvancedOpen }}
-                  >
-                    <GHStack alignItems="center" justifyContent="space-between">
-                      <GHStack alignItems="center" space="sm">
-                        {isAdvancedOpen ? (
-                          <ChevronDown size={16} color={theme.textSecondary} />
-                        ) : (
-                          <ChevronRight size={16} color={theme.textSecondary} />
-                        )}
-                        <GHeading size="md">{t("item.form.advancedSection")}</GHeading>
-                      </GHStack>
-                      <GText size="xs" color="$textLight500">
-                        {isAdvancedOpen
-                          ? t("settings.taxCalculation.collapse")
-                          : t("settings.taxCalculation.expand")}
-                      </GText>
-                    </GHStack>
-                  </Pressable>
-
-                  {isAdvancedOpen && (
-                    <GBox
-                      onLayout={(event) => {
-                        fieldYRef.current.usefulLifeMonthsOverride =
-                          event.nativeEvent.layout.y;
-                      }}
+              {purchaseKind === "ONE_TIME" && (
+                <GCard
+                  borderWidth="$1"
+                  borderColor="$border200"
+                  style={{
+                    backgroundColor: theme.backgroundElement,
+                    borderRadius: 16,
+                  }}
+                >
+                  <GVStack space="md">
+                    <Pressable
+                      onPress={() => setIsAdvancedOpen((current) => !current)}
+                      testID="additem-advanced-toggle"
+                      accessibilityRole="button"
+                      accessibilityLabel={t("item.form.accessibility.toggleAdvanced")}
+                      accessibilityState={{ expanded: isAdvancedOpen }}
                     >
-                      <GVStack space="xs">
-                        <GText bold size="sm">
-                          {t("item.form.usefulLifeOverride")}
-                        </GText>
-                        <GInput
-                          variant="outline"
-                          borderColor={
-                            showUsefulLifeError ? "$error600" : "$border200"
-                          }
-                        >
-                          <GInputField
-                            ref={(node) => {
-                              inputRef.current.usefulLifeMonthsOverride =
-                                node as FocusTarget | null;
-                            }}
-                            value={usefulLifeMonthsOverride}
-                            onChangeText={setUsefulLifeMonthsOverride}
-                            keyboardType="number-pad"
-                            placeholder={t("item.form.usefulLifePlaceholder")}
-                            onBlur={() =>
-                              setFieldTouched("usefulLifeMonthsOverride")
-                            }
-                            testID="additem-input-usefullife"
-                            accessibilityLabel={t("item.form.accessibility.usefulLifeOverride")}
-                            accessibilityState={
-                              { invalid: showUsefulLifeError } as any
-                            }
-                          />
-                        </GInput>
+                      <GHStack alignItems="center" justifyContent="space-between">
+                        <GHStack alignItems="center" space="sm">
+                          {isAdvancedOpen ? (
+                            <ChevronDown size={16} color={theme.textSecondary} />
+                          ) : (
+                            <ChevronRight size={16} color={theme.textSecondary} />
+                          )}
+                          <GHeading size="md">{t("item.form.advancedSection")}</GHeading>
+                        </GHStack>
                         <GText size="xs" color="$textLight500">
-                          {t("item.form.usefulLifeHint")}
+                          {isAdvancedOpen
+                            ? t("settings.taxCalculation.collapse")
+                            : t("settings.taxCalculation.expand")}
                         </GText>
-                        {showUsefulLifeError && (
-                          <GText
-                            size="xs"
-                            color="$error600"
-                            accessibilityLiveRegion="polite"
-                            testID="additem-error-usefullife"
-                          >
-                            {usefulLifeMonthsOverrideError}
+                      </GHStack>
+                    </Pressable>
+
+                    {isAdvancedOpen && (
+                      <GBox
+                        onLayout={(event) => {
+                          fieldYRef.current.usefulLifeMonthsOverride =
+                            event.nativeEvent.layout.y;
+                        }}
+                      >
+                        <GVStack space="xs">
+                          <GText bold size="sm">
+                            {t("item.form.usefulLifeOverride")}
                           </GText>
-                        )}
-                      </GVStack>
-                    </GBox>
-                  )}
-                </GVStack>
-              </GCard>
+                          <GInput
+                            variant="outline"
+                            borderColor={
+                              showUsefulLifeError ? "$error600" : "$border200"
+                            }
+                          >
+                            <GInputField
+                              ref={(node) => {
+                                inputRef.current.usefulLifeMonthsOverride =
+                                  node as FocusTarget | null;
+                              }}
+                              value={usefulLifeMonthsOverride}
+                              onChangeText={setUsefulLifeMonthsOverride}
+                              keyboardType="number-pad"
+                              placeholder={t("item.form.usefulLifePlaceholder")}
+                              onBlur={() =>
+                                setFieldTouched("usefulLifeMonthsOverride")
+                              }
+                              testID="additem-input-usefullife"
+                              accessibilityLabel={t("item.form.accessibility.usefulLifeOverride")}
+                              accessibilityState={
+                                { invalid: showUsefulLifeError } as any
+                              }
+                            />
+                          </GInput>
+                          <GText size="xs" color="$textLight500">
+                            {t("item.form.usefulLifeHint")}
+                          </GText>
+                          {showUsefulLifeError && (
+                            <GText
+                              size="xs"
+                              color="$error600"
+                              accessibilityLiveRegion="polite"
+                              testID="additem-error-usefullife"
+                            >
+                              {usefulLifeMonthsOverrideError}
+                            </GText>
+                          )}
+                        </GVStack>
+                      </GBox>
+                    )}
+                  </GVStack>
+                </GCard>
+              )}
 
               <GVStack space="xs">
                 {saveFeedbackMessage && (
