@@ -287,6 +287,25 @@ describe("ItemEditRoute", () => {
     });
   });
 
+  it("shows localized subscription end-date validation message", async () => {
+    render(<ItemEditRoute />);
+
+    expect(await screen.findByText("Edit Item")).toBeTruthy();
+    fireEvent.press(screen.getByTestId("item-edit-kind-subscription"));
+    fireEvent.press(screen.getByTestId("item-edit-subscription-ongoing-toggle"));
+    fireEvent.changeText(screen.getByTestId("item-edit-subscription-end-input"), "2026-13-01");
+
+    fireEvent.press(screen.getByTestId("item-edit-save"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("edititem-error-subscriptionend")).toBeTruthy();
+      expect(
+        screen.getByText("Enter a valid subscription end date (YYYY-MM-DD).")
+      ).toBeTruthy();
+      expect(mockUpdateItem).not.toHaveBeenCalled();
+    });
+  });
+
   it("shows discard confirmation on cancel when form is dirty", async () => {
     render(<ItemEditRoute />);
 
