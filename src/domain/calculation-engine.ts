@@ -155,6 +155,10 @@ function nextYearMonth(value: YearMonth): YearMonth {
   return { year: value.year, month: value.month + 1 };
 }
 
+function minYearMonth(left: YearMonth, right: YearMonth): YearMonth {
+  return compareYearMonth(left, right) <= 0 ? left : right;
+}
+
 function monthlyShareForYearlyCadence(totalCents: number, monthOffset: number): number {
   const monthIndex = monthOffset % 12;
   const from = Math.floor((totalCents * monthIndex) / 12);
@@ -192,9 +196,11 @@ function buildSubscriptionScheduleByYear(
   taxYear: number
 ): YearlyDeduction[] {
   const startMonth: YearMonth = { year: purchase.year, month: purchase.month };
-  const endMonth: YearMonth = subscriptionEndDate
+  const selectedTaxYearEndMonth: YearMonth = { year: taxYear, month: 12 };
+  const rawEndMonth: YearMonth = subscriptionEndDate
     ? { year: subscriptionEndDate.year, month: subscriptionEndDate.month }
-    : { year: taxYear, month: 12 };
+    : selectedTaxYearEndMonth;
+  const endMonth = minYearMonth(rawEndMonth, selectedTaxYearEndMonth);
   if (compareYearMonth(endMonth, startMonth) < 0) {
     return [];
   }
