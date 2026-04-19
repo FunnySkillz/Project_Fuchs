@@ -1,4 +1,8 @@
-import { validateItemInput } from "@/domain/item-validation";
+import {
+  resolveItemValidationMessage,
+  validateItemInput,
+} from "@/domain/item-validation";
+import { translate } from "@/i18n/translate";
 
 describe("validateItemInput", () => {
   const baseInput = {
@@ -195,5 +199,40 @@ describe("validateItemInput", () => {
       code: "SUBSCRIPTION_END_DATE_BEFORE_START",
       message: "Subscription end date cannot be before start date.",
     });
+  });
+});
+
+describe("resolveItemValidationMessage", () => {
+  it("uses localized translation for subscription validation codes", () => {
+    const messageEn = resolveItemValidationMessage(
+      {
+        code: "BILLING_CADENCE_REQUIRED_FOR_SUBSCRIPTION",
+        message: "Billing cadence is required for subscriptions.",
+      },
+      (key) => translate("en", key)
+    );
+    const messageDe = resolveItemValidationMessage(
+      {
+        code: "BILLING_CADENCE_REQUIRED_FOR_SUBSCRIPTION",
+        message: "Billing cadence is required for subscriptions.",
+      },
+      (key) => translate("de", key)
+    );
+
+    expect(messageEn).toBe("Select a billing cadence for subscriptions.");
+    expect(messageDe).toBe("Wähle ein Abrechnungsintervall für Abonnements.");
+  });
+
+  it("falls back to domain message when code has no dedicated translation mapping", () => {
+    const fallbackMessage = "Work percent must be between 0 and 100.";
+    const result = resolveItemValidationMessage(
+      {
+        code: "WORK_PERCENT_OUT_OF_RANGE",
+        message: fallbackMessage,
+      },
+      () => "unused"
+    );
+
+    expect(result).toBe(fallbackMessage);
   });
 });
