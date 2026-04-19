@@ -286,6 +286,87 @@ describe("estimateTaxImpact", () => {
     expect(result.estimatedRefundThisYearCents).toBe(0);
   });
 
+  it("supports monthly subscriptions with month-inclusive bounds", () => {
+    const result = estimateTaxImpact(
+      {
+        totalCents: 2_000,
+        usageType: "WORK",
+        workPercent: null,
+        purchaseDate: "2026-01-01",
+        subscriptionEndDate: "2026-07-31",
+        purchaseKind: "SUBSCRIPTION",
+        billingCadence: "MONTHLY",
+        usefulLifeMonths: 36,
+      },
+      {
+        gwgThresholdCents: 100_000,
+        applyHalfYearRule: true,
+        marginalRateBps: 4_000,
+        defaultWorkPercent: 100,
+      },
+      2026
+    );
+
+    expect(result.scheduleByYear).toEqual([{ year: 2026, deductibleCents: 14_000 }]);
+    expect(result.deductibleThisYearCents).toBe(14_000);
+  });
+
+  it("counts only selected year months for ongoing subscriptions", () => {
+    const result = estimateTaxImpact(
+      {
+        totalCents: 1_000,
+        usageType: "WORK",
+        workPercent: null,
+        purchaseDate: "2025-09-01",
+        subscriptionEndDate: null,
+        purchaseKind: "SUBSCRIPTION",
+        billingCadence: "MONTHLY",
+        usefulLifeMonths: 36,
+      },
+      {
+        gwgThresholdCents: 100_000,
+        applyHalfYearRule: false,
+        marginalRateBps: 4_000,
+        defaultWorkPercent: 100,
+      },
+      2026
+    );
+
+    expect(result.scheduleByYear).toEqual([
+      { year: 2025, deductibleCents: 4_000 },
+      { year: 2026, deductibleCents: 12_000 },
+    ]);
+    expect(result.deductibleThisYearCents).toBe(12_000);
+  });
+
+  it("prorates yearly subscription amount across years by covered months", () => {
+    const result = estimateTaxImpact(
+      {
+        totalCents: 120_000,
+        usageType: "WORK",
+        workPercent: null,
+        purchaseDate: "2025-07-01",
+        subscriptionEndDate: "2026-06-30",
+        purchaseKind: "SUBSCRIPTION",
+        billingCadence: "YEARLY",
+        usefulLifeMonths: 36,
+      },
+      {
+        gwgThresholdCents: 100_000,
+        applyHalfYearRule: false,
+        marginalRateBps: 4_000,
+        defaultWorkPercent: 100,
+      },
+      2026
+    );
+
+    expect(result.scheduleByYear).toEqual([
+      { year: 2025, deductibleCents: 60_000 },
+      { year: 2026, deductibleCents: 60_000 },
+    ]);
+    expect(result.deductibleThisYearCents).toBe(60_000);
+  });
+
   it("throws on invalid purchase date", () => {
     expect(() =>
       estimateTaxImpact(
@@ -340,6 +421,9 @@ describe("computeDeductibleImpactCents", () => {
     warrantyMonths: null,
     notes: null,
     usefulLifeMonthsOverride: null,
+    purchaseKind: "ONE_TIME",
+    billingCadence: null,
+    subscriptionEndDate: null,
     createdAt: "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-01T00:00:00.000Z",
     deletedAt: null,
