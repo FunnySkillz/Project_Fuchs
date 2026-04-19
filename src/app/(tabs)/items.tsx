@@ -163,6 +163,33 @@ function parseYearInput(rawYear: string): number | undefined {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
+function parseYearFromYmd(value: string): number | null {
+  const parsed = Number.parseInt(value.slice(0, 4), 10);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function addItemYearsToSet(item: Item, target: Set<number>, ongoingYearLimit: number): void {
+  const startYear = parseYearFromYmd(item.purchaseDate);
+  if (!startYear) {
+    return;
+  }
+
+  if (item.purchaseKind !== "SUBSCRIPTION") {
+    target.add(startYear);
+    return;
+  }
+
+  const subscriptionEndYear = item.subscriptionEndDate ? parseYearFromYmd(item.subscriptionEndDate) : null;
+  const endYear = subscriptionEndYear ?? ongoingYearLimit;
+  if (!endYear || endYear < startYear) {
+    return;
+  }
+
+  for (let year = startYear; year <= endYear; year += 1) {
+    target.add(year);
+  }
+}
+
 function missingNotesForItem(item: Item): boolean {
   return (item.usageType === "WORK" || item.usageType === "MIXED") && !item.notes?.trim();
 }
@@ -299,11 +326,9 @@ export default function ItemsRoute() {
         ]);
 
       const discoveredYears = new Set<number>([loadedSettings.taxYearDefault]);
+      const ongoingYearLimit = Math.max(new Date().getFullYear(), loadedSettings.taxYearDefault);
       for (const item of allUnfilteredItems) {
-        const itemYear = Number.parseInt(item.purchaseDate.slice(0, 4), 10);
-        if (Number.isFinite(itemYear)) {
-          discoveredYears.add(itemYear);
-        }
+        addItemYearsToSet(item, discoveredYears, ongoingYearLimit);
       }
 
       setAllItems(loadedItems);
@@ -388,7 +413,16 @@ export default function ItemsRoute() {
     const categoryName = item.categoryId
       ? categoryMap.get(item.categoryId)?.name ?? t("items.category.unknown")
       : t("items.category.none");
-    return `${categoryName} \u2022 ${item.purchaseDate}`;
+    if (item.purchaseKind !== "SUBSCRIPTION") {
+      return `${categoryName} \u2022 ${item.purchaseDate}`;
+    }
+    const periodLabel = item.subscriptionEndDate
+      ? `${item.purchaseDate} -> ${item.subscriptionEndDate}`
+      : `${item.purchaseDate} -> ${t("item.form.subscriptionOngoing")}`;
+    const cadenceLabel = item.billingCadence === "YEARLY"
+      ? t("item.form.billingCadence.yearly")
+      : t("item.form.billingCadence.monthly");
+    return `${categoryName} \u2022 ${periodLabel} \u2022 ${cadenceLabel}`;
   };
   const listBottomPadding = tabBarHeight + insets.bottom + 24;
 
