@@ -1,12 +1,18 @@
-import type { ItemUsageType } from "@/models/item";
-import { isValidYmd } from "@/utils/date";
+import type {
+  ItemPurchaseKind,
+  ItemUsageType,
+  SubscriptionBillingCadence,
+} from "@/models/item";
+import { isValidYmd, parseYmd } from "@/utils/date";
 
 export type ItemValidationField =
   | "title"
   | "purchaseDate"
   | "totalCents"
   | "workPercent"
-  | "warrantyMonths";
+  | "warrantyMonths"
+  | "billingCadence"
+  | "subscriptionEndDate";
 
 export type ItemValidationCode =
   | "TITLE_REQUIRED"
@@ -14,7 +20,10 @@ export type ItemValidationCode =
   | "TOTAL_CENTS_INVALID"
   | "WORK_PERCENT_REQUIRED_FOR_MIXED"
   | "WORK_PERCENT_OUT_OF_RANGE"
-  | "WARRANTY_MONTHS_NEGATIVE";
+  | "WARRANTY_MONTHS_NEGATIVE"
+  | "BILLING_CADENCE_REQUIRED_FOR_SUBSCRIPTION"
+  | "SUBSCRIPTION_END_DATE_INVALID"
+  | "SUBSCRIPTION_END_DATE_BEFORE_START";
 
 export interface ItemValidationError {
   field: ItemValidationField;
@@ -29,6 +38,9 @@ export interface ValidateItemInput {
   usageType: ItemUsageType;
   workPercent: number | null;
   warrantyMonths: number | null;
+  purchaseKind: ItemPurchaseKind;
+  billingCadence: SubscriptionBillingCadence | null;
+  subscriptionEndDate: string | null;
 }
 
 export interface ItemValidationResult {
@@ -45,6 +57,21 @@ function resolveWorkPercent(usageType: ItemUsageType, workPercent: number | null
     return 0;
   }
   return workPercent ?? 0;
+}
+
+function compareDateStrings(left: string, right: string): number {
+  const leftParsed = parseYmd(left);
+  const rightParsed = parseYmd(right);
+  if (!leftParsed || !rightParsed) {
+    return 0;
+  }
+  if (leftParsed.year !== rightParsed.year) {
+    return leftParsed.year - rightParsed.year;
+  }
+  if (leftParsed.month !== rightParsed.month) {
+    return leftParsed.month - rightParsed.month;
+  }
+  return leftParsed.day - rightParsed.day;
 }
 
 export function validateItemInput(input: ValidateItemInput): ItemValidationResult {
@@ -96,6 +123,33 @@ export function validateItemInput(input: ValidateItemInput): ItemValidationResul
       code: "WARRANTY_MONTHS_NEGATIVE",
       message: "Warranty months must be 0 or higher.",
     });
+  }
+
+  if (input.purchaseKind === "SUBSCRIPTION") {
+    if (!input.billingCadence) {
+      errors.push({
+        field: "billingCadence",
+        code: "BILLING_CADENCE_REQUIRED_FOR_SUBSCRIPTION",
+        message: "Billing cadence is required for subscriptions.",
+      });
+    }
+
+    if (input.subscriptionEndDate && input.subscriptionEndDate.trim().length > 0) {
+      const endDate = input.subscriptionEndDate.trim();
+      if (!isValidYmd(endDate)) {
+        errors.push({
+          field: "subscriptionEndDate",
+          code: "SUBSCRIPTION_END_DATE_INVALID",
+          message: "Subscription end date must be valid (YYYY-MM-DD).",
+        });
+      } else if (isValidYmd(input.purchaseDate) && compareDateStrings(endDate, input.purchaseDate) < 0) {
+        errors.push({
+          field: "subscriptionEndDate",
+          code: "SUBSCRIPTION_END_DATE_BEFORE_START",
+          message: "Subscription end date cannot be before start date.",
+        });
+      }
+    }
   }
 
   return {
