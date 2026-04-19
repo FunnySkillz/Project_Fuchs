@@ -49,6 +49,37 @@ export interface ItemValidationResult {
   resolvedWorkPercent: number;
 }
 
+type SubscriptionValidationMessageKey =
+  | "item.validation.billingCadenceRequiredForSubscription"
+  | "item.validation.subscriptionEndDateInvalid"
+  | "item.validation.subscriptionEndDateBeforeStart";
+
+function getSubscriptionValidationMessageKey(
+  code: ItemValidationCode
+): SubscriptionValidationMessageKey | null {
+  if (code === "BILLING_CADENCE_REQUIRED_FOR_SUBSCRIPTION") {
+    return "item.validation.billingCadenceRequiredForSubscription";
+  }
+  if (code === "SUBSCRIPTION_END_DATE_INVALID") {
+    return "item.validation.subscriptionEndDateInvalid";
+  }
+  if (code === "SUBSCRIPTION_END_DATE_BEFORE_START") {
+    return "item.validation.subscriptionEndDateBeforeStart";
+  }
+  return null;
+}
+
+export function resolveItemValidationMessage(
+  error: Pick<ItemValidationError, "code" | "message">,
+  translate: (key: SubscriptionValidationMessageKey) => string
+): string {
+  const key = getSubscriptionValidationMessageKey(error.code);
+  if (!key) {
+    return error.message;
+  }
+  return translate(key);
+}
+
 function resolveWorkPercent(usageType: ItemUsageType, workPercent: number | null): number {
   if (usageType === "WORK") {
     return 100;
