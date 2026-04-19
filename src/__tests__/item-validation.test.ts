@@ -8,6 +8,9 @@ describe("validateItemInput", () => {
     usageType: "WORK" as const,
     workPercent: null,
     warrantyMonths: 24,
+    purchaseKind: "ONE_TIME" as const,
+    billingCadence: null,
+    subscriptionEndDate: null,
   };
 
   it("returns invalid when title is missing", () => {
@@ -148,5 +151,49 @@ describe("validateItemInput", () => {
     expect(otherResult.valid).toBe(true);
     expect(privateResult.resolvedWorkPercent).toBe(0);
     expect(otherResult.resolvedWorkPercent).toBe(0);
+  });
+
+  it("requires billing cadence for subscriptions", () => {
+    const result = validateItemInput({
+      ...baseInput,
+      purchaseKind: "SUBSCRIPTION",
+      billingCadence: null,
+    });
+
+    expect(result.valid).toBe(false);
+    expect(result.errors).toContainEqual({
+      field: "billingCadence",
+      code: "BILLING_CADENCE_REQUIRED_FOR_SUBSCRIPTION",
+      message: "Billing cadence is required for subscriptions.",
+    });
+  });
+
+  it("validates subscription end date format and ordering", () => {
+    const invalidFormat = validateItemInput({
+      ...baseInput,
+      purchaseKind: "SUBSCRIPTION",
+      billingCadence: "MONTHLY",
+      subscriptionEndDate: "2026-13-01",
+    });
+    const beforeStart = validateItemInput({
+      ...baseInput,
+      purchaseKind: "SUBSCRIPTION",
+      billingCadence: "MONTHLY",
+      subscriptionEndDate: "2026-03-01",
+      purchaseDate: "2026-04-01",
+    });
+
+    expect(invalidFormat.valid).toBe(false);
+    expect(invalidFormat.errors).toContainEqual({
+      field: "subscriptionEndDate",
+      code: "SUBSCRIPTION_END_DATE_INVALID",
+      message: "Subscription end date must be valid (YYYY-MM-DD).",
+    });
+    expect(beforeStart.valid).toBe(false);
+    expect(beforeStart.errors).toContainEqual({
+      field: "subscriptionEndDate",
+      code: "SUBSCRIPTION_END_DATE_BEFORE_START",
+      message: "Subscription end date cannot be before start date.",
+    });
   });
 });
