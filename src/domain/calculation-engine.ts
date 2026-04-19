@@ -1,4 +1,8 @@
-import type { ItemUsageType } from "@/models/item";
+import type {
+  ItemPurchaseKind,
+  ItemUsageType,
+  SubscriptionBillingCadence,
+} from "@/models/item";
 import { parseYmd } from "@/utils/date";
 
 export interface TaxEstimateSettings {
@@ -14,6 +18,9 @@ export interface TaxEstimateInput {
   workPercent: number | null;
   purchaseDate: string;
   usefulLifeMonths: number;
+  purchaseKind?: ItemPurchaseKind;
+  billingCadence?: SubscriptionBillingCadence | null;
+  subscriptionEndDate?: string | null;
 }
 
 export interface YearlyDeduction {
@@ -28,13 +35,33 @@ export interface TaxEstimateResult {
   explanations: string[];
 }
 
-function parsePurchaseDate(value: string): { year: number; month: number; day: number } {
+interface YearMonth {
+  year: number;
+  month: number;
+}
+
+function parseDateOrThrow(
+  fieldName: "purchaseDate" | "subscriptionEndDate",
+  value: string
+): { year: number; month: number; day: number } {
   const parsed = parseYmd(value);
   if (!parsed) {
-    throw new Error(`Invalid purchaseDate value: ${value}`);
+    throw new Error(`Invalid ${fieldName} value: ${value}`);
   }
-
   return parsed;
+}
+
+function compareYmd(
+  left: { year: number; month: number; day: number },
+  right: { year: number; month: number; day: number }
+): number {
+  if (left.year !== right.year) {
+    return left.year - right.year;
+  }
+  if (left.month !== right.month) {
+    return left.month - right.month;
+  }
+  return left.day - right.day;
 }
 
 function resolveWorkSharePercent(
@@ -80,7 +107,7 @@ function buildYearMonthAllocations(
   return allocations;
 }
 
-function buildScheduleByYear(
+function buildOneTimeScheduleByYear(
   workRelevantCents: number,
   purchaseYear: number,
   purchaseMonth: number,
@@ -114,33 +141,88 @@ function buildScheduleByYear(
   return schedule.filter((entry) => entry.deductibleCents > 0);
 }
 
-export function estimateTaxImpact(
-  input: TaxEstimateInput,
-  settings: TaxEstimateSettings,
+function compareYearMonth(left: YearMonth, right: YearMonth): number {
+  if (left.year !== right.year) {
+    return left.year - right.year;
+  }
+  return left.month - right.month;
+}
+
+function nextYearMonth(value: YearMonth): YearMonth {
+  if (value.month === 12) {
+    return { year: value.year + 1, month: 1 };
+  }
+  return { year: value.year, month: value.month + 1 };
+}
+
+function monthlyShareForYearlyCadence(totalCents: number, monthOffset: number): number {
+  const monthIndex = monthOffset % 12;
+  const from = Math.floor((totalCents * monthIndex) / 12);
+  const to = Math.floor((totalCents * (monthIndex + 1)) / 12);
+  return to - from;
+}
+
+function buildSubscriptionRawAmountsByYear(
+  totalCents: number,
+  billingCadence: SubscriptionBillingCadence,
+  startMonth: YearMonth,
+  endMonth: YearMonth
+): Map<number, number> {
+  const rawByYear = new Map<number, number>();
+  let cursor = { ...startMonth };
+  let offset = 0;
+  while (compareYearMonth(cursor, endMonth) <= 0) {
+    const monthChargeCents =
+      billingCadence === "MONTHLY"
+        ? totalCents
+        : monthlyShareForYearlyCadence(totalCents, offset);
+    rawByYear.set(cursor.year, (rawByYear.get(cursor.year) ?? 0) + monthChargeCents);
+    cursor = nextYearMonth(cursor);
+    offset += 1;
+  }
+  return rawByYear;
+}
+
+function buildSubscriptionScheduleByYear(
+  totalCents: number,
+  workSharePercent: number,
+  billingCadence: SubscriptionBillingCadence,
+  purchase: { year: number; month: number; day: number },
+  subscriptionEndDate: { year: number; month: number; day: number } | null,
   taxYear: number
-): TaxEstimateResult {
-  const purchase = parsePurchaseDate(input.purchaseDate);
-  const workSharePercent = resolveWorkSharePercent(
-    input.usageType,
-    input.workPercent,
-    settings.defaultWorkPercent
-  );
-  const workRelevantCents = Math.round((input.totalCents * workSharePercent) / 100);
-
-  const explanations: string[] = [];
-  explanations.push(`Usage type ${input.usageType} resolved to ${workSharePercent}% work share.`);
-  explanations.push(`Deductible base amount: ${workRelevantCents} cents.`);
-
-  if (workRelevantCents <= 0) {
-    explanations.push("No work-relevant amount. Deduction is 0.");
-    return {
-      deductibleThisYearCents: 0,
-      scheduleByYear: [],
-      estimatedRefundThisYearCents: 0,
-      explanations,
-    };
+): YearlyDeduction[] {
+  const startMonth: YearMonth = { year: purchase.year, month: purchase.month };
+  const endMonth: YearMonth = subscriptionEndDate
+    ? { year: subscriptionEndDate.year, month: subscriptionEndDate.month }
+    : { year: taxYear, month: 12 };
+  if (compareYearMonth(endMonth, startMonth) < 0) {
+    return [];
   }
 
+  const rawByYear = buildSubscriptionRawAmountsByYear(
+    totalCents,
+    billingCadence,
+    startMonth,
+    endMonth
+  );
+
+  return Array.from(rawByYear.entries())
+    .sort(([leftYear], [rightYear]) => leftYear - rightYear)
+    .map(([year, rawCents]) => ({
+      year,
+      deductibleCents: Math.round((rawCents * workSharePercent) / 100),
+    }))
+    .filter((entry) => entry.deductibleCents > 0);
+}
+
+function estimateOneTimeImpact(
+  input: TaxEstimateInput,
+  settings: TaxEstimateSettings,
+  taxYear: number,
+  purchase: { year: number; month: number; day: number },
+  workRelevantCents: number,
+  explanations: string[]
+): TaxEstimateResult {
   let scheduleByYear: YearlyDeduction[] = [];
   if (workRelevantCents <= settings.gwgThresholdCents) {
     explanations.push(
@@ -161,7 +243,7 @@ export function estimateTaxImpact(
     } else {
       explanations.push("Half-year rule disabled.");
     }
-    scheduleByYear = buildScheduleByYear(
+    scheduleByYear = buildOneTimeScheduleByYear(
       workRelevantCents,
       purchase.year,
       purchase.month,
@@ -177,9 +259,7 @@ export function estimateTaxImpact(
   );
 
   explanations.push(`Tax year ${taxYear}: deductible ${deductibleThisYearCents} cents.`);
-  explanations.push(
-    `Estimated refund uses marginal rate ${settings.marginalRateBps} bps.`
-  );
+  explanations.push(`Estimated refund uses marginal rate ${settings.marginalRateBps} bps.`);
 
   return {
     deductibleThisYearCents,
@@ -187,4 +267,104 @@ export function estimateTaxImpact(
     estimatedRefundThisYearCents,
     explanations,
   };
+}
+
+function estimateSubscriptionImpact(
+  input: TaxEstimateInput,
+  settings: TaxEstimateSettings,
+  taxYear: number,
+  purchase: { year: number; month: number; day: number },
+  workSharePercent: number,
+  explanations: string[]
+): TaxEstimateResult {
+  if (!input.billingCadence) {
+    throw new Error("billingCadence is required for SUBSCRIPTION items.");
+  }
+  const subscriptionEndDate = input.subscriptionEndDate
+    ? parseDateOrThrow("subscriptionEndDate", input.subscriptionEndDate)
+    : null;
+  if (subscriptionEndDate && compareYmd(subscriptionEndDate, purchase) < 0) {
+    throw new Error("subscriptionEndDate cannot be before purchaseDate.");
+  }
+
+  explanations.push(`Subscription mode active with ${input.billingCadence} cadence.`);
+  if (subscriptionEndDate) {
+    explanations.push(`Subscription period: ${input.purchaseDate} to ${input.subscriptionEndDate}.`);
+  } else {
+    explanations.push(`Subscription ongoing from ${input.purchaseDate}.`);
+    explanations.push(`Ongoing schedule truncated at tax year ${taxYear}.`);
+  }
+
+  const scheduleByYear = buildSubscriptionScheduleByYear(
+    input.totalCents,
+    workSharePercent,
+    input.billingCadence,
+    purchase,
+    subscriptionEndDate,
+    taxYear
+  );
+  const deductibleThisYearCents =
+    scheduleByYear.find((entry) => entry.year === taxYear)?.deductibleCents ?? 0;
+  const estimatedRefundThisYearCents = Math.round(
+    (deductibleThisYearCents * settings.marginalRateBps) / 10_000
+  );
+
+  explanations.push(`Tax year ${taxYear}: deductible ${deductibleThisYearCents} cents.`);
+  explanations.push(`Estimated refund uses marginal rate ${settings.marginalRateBps} bps.`);
+
+  return {
+    deductibleThisYearCents,
+    scheduleByYear,
+    estimatedRefundThisYearCents,
+    explanations,
+  };
+}
+
+export function estimateTaxImpact(
+  input: TaxEstimateInput,
+  settings: TaxEstimateSettings,
+  taxYear: number
+): TaxEstimateResult {
+  const purchase = parseDateOrThrow("purchaseDate", input.purchaseDate);
+  const workSharePercent = resolveWorkSharePercent(
+    input.usageType,
+    input.workPercent,
+    settings.defaultWorkPercent
+  );
+  const workRelevantCents = Math.round((input.totalCents * workSharePercent) / 100);
+
+  const explanations: string[] = [];
+  explanations.push(`Usage type ${input.usageType} resolved to ${workSharePercent}% work share.`);
+  explanations.push(`Deductible base amount: ${workRelevantCents} cents.`);
+
+  if (workRelevantCents <= 0 || input.totalCents <= 0) {
+    explanations.push("No work-relevant amount. Deduction is 0.");
+    return {
+      deductibleThisYearCents: 0,
+      scheduleByYear: [],
+      estimatedRefundThisYearCents: 0,
+      explanations,
+    };
+  }
+
+  const purchaseKind: ItemPurchaseKind = input.purchaseKind === "SUBSCRIPTION" ? "SUBSCRIPTION" : "ONE_TIME";
+  if (purchaseKind === "SUBSCRIPTION") {
+    return estimateSubscriptionImpact(
+      input,
+      settings,
+      taxYear,
+      purchase,
+      workSharePercent,
+      explanations
+    );
+  }
+
+  return estimateOneTimeImpact(
+    input,
+    settings,
+    taxYear,
+    purchase,
+    workRelevantCents,
+    explanations
+  );
 }
