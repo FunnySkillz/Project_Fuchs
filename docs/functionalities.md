@@ -9,7 +9,7 @@ It is intended for product, QA, and engineering alignment.
 
 ### Startup
 
-- App boot initializes local database and applies migrations (`v1` to `v7`).
+- App boot initializes local database and applies migrations (`v1` to `v8`).
 - App boot restores language preference before first visible render:
   - Supported languages are `en` and `de`.
   - If no saved preference exists, device locale is resolved (`de*` -> `de`, otherwise `en`) and persisted.
@@ -79,6 +79,7 @@ It is intended for product, QA, and engineering alignment.
 
 - Supports mandatory and optional fields:
   - Title, purchase date, total amount
+  - Purchase type (`ONE_TIME` or `SUBSCRIPTION`) with optional subscription end date
   - Category, usage type, work %
   - Warranty months, vendor, notes
   - Useful life override
@@ -131,6 +132,7 @@ It is intended for product, QA, and engineering alignment.
 ## 5) Tax Calculation Behavior
 
 - Core deduction logic:
+  - Subscriptions are included when their active period overlaps the selected tax year
   - Work share resolution by usage type (`WORK`, `PRIVATE`, `MIXED`, `OTHER`)
   - GWG immediate deduction threshold
   - AfA spreading over useful life (with optional half-year rule)
