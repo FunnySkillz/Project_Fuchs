@@ -105,6 +105,17 @@ function missingNotesForItem(item: Item): boolean {
   return (item.usageType === "WORK" || item.usageType === "MIXED") && !item.notes?.trim();
 }
 
+function formatItemPeriodForExport(item: Item, t: ReturnType<typeof useI18n>["t"]): string {
+  if (item.purchaseKind !== "SUBSCRIPTION") {
+    return item.purchaseDate;
+  }
+  const endLabel = item.subscriptionEndDate ?? t("item.form.subscriptionOngoing");
+  const cadenceLabel = item.billingCadence === "YEARLY"
+    ? t("item.form.billingCadence.yearly")
+    : t("item.form.billingCadence.monthly");
+  return `${item.purchaseDate} -> ${endLabel} | ${cadenceLabel}`;
+}
+
 interface ExportItemRowProps {
   item: Item;
   categoryName: string;
@@ -136,7 +147,7 @@ const ExportItemRow = React.memo(function ExportItemRow({
               {item.title}
             </Text>
             <Text size="sm" color={theme.textSecondary}>
-              {categoryName} | {item.purchaseDate}
+              {categoryName} | {formatItemPeriodForExport(item, t)}
             </Text>
             <Text size="sm" color={theme.textSecondary}>
               {t("items.row.deductibleThisYear", { amount: formatCents(deductibleThisYearCents) })}
