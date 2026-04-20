@@ -54,6 +54,13 @@ Devices:
 - [ ] Save succeeds, values persist after reopen.
 - [ ] Unsaved changes block accidental back navigation and show discard confirmation.
 
+### Subscription scenarios
+- [ ] Create/edit both `ONE_TIME` and `SUBSCRIPTION` items successfully.
+- [ ] Finite monthly subscription in selected year shows expected selected-year amount and schedule.
+- [ ] Ongoing subscription started in a prior year is included for the selected current year in Home/Items/Export.
+- [ ] Yearly subscription cadence is prorated across years and reflected correctly in selected-year view.
+- [ ] Subscription labels (period/cadence/ongoing) are visible and correct in Items, Detail, Export, and PDF.
+
 ### Delete item
 - [ ] Delete from list/detail succeeds.
 - [ ] With attachments: confirm dialog appears and delete completes.
