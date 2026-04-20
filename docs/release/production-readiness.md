@@ -4,9 +4,11 @@
 Define a binary release gate for V1. V1 ships only when all must-have checks are `PASS`.
 
 ## Gate Status
-- Release target: `V1.0.0`
+- Release target: `V1 (current candidate: 1.0.5)`
 - Gate owner: `Maintainer`
-- Current status: `BLOCKED` until all checklist items are `PASS`
+- Policy/build gate status: `PASS` when `npm run release:preflight` and `npm run release:policy` succeed on the release commit.
+- Manual hardware sign-off status: `PENDING` until `docs/release/final-qa-hardware-checklist.md` is fully executed and signed.
+- Submission readiness source of truth: `docs/release/release-gate-policy.json`.
 
 ## Must-Have Checklist (Pass/Fail)
 
@@ -42,12 +44,12 @@ Define a binary release gate for V1. V1 ships only when all must-have checks are
 ### 3) Build and CI Baseline
 - [ ] PASS: Type check and tests are green.
   Exit criteria:
-  - `npx tsc --noEmit` passes.
+  - `npm run typecheck` passes.
   - Required unit/integration tests pass in CI.
 - [ ] PASS: i18n dictionary parity check is green.
   Exit criteria:
   - EN is treated as master dictionary.
-  - `npm run i18n:parity` passes (DE keys exactly match EN keys).
+  - `npm run i18n:parity:ci` passes (DE keys exactly match EN keys).
 - [ ] PASS: UTF-8 encoding guard is green.
   Exit criteria:
   - `npm run encoding:check` passes.
@@ -124,16 +126,23 @@ Define a binary release gate for V1. V1 ships only when all must-have checks are
 
 ### Core User Journey
 - [ ] Fresh install: onboarding completes, profile settings persist.
-- [ ] Add item flow: attachment step, required fields, validation, save success.
+- [ ] Add item flow: attachment step, required fields, validation, save success for both one-time and subscription purchase types.
 - [ ] Add flow cancel/back cleanup: no staged files remain after exit.
 - [ ] Item detail: calculations render, missing file placeholders do not crash.
-- [ ] Edit item: add/remove attachment works and remains consistent.
+- [ ] Edit item: add/remove attachment works and remains consistent across one-time and subscription items.
+- [ ] Subscription validation: billing cadence is required; subscription end date format/order rules are enforced.
+- [ ] Year-overlap behavior: subscriptions active in the selected year are included in Home/Items/Export (including prior-year starts still active this year).
 - [ ] iOS stack-header spacing is consistent (no extra top gap below native header).
 - [ ] iOS swipe-back works on read-only/detail routes with history.
 - [ ] Unsaved edit/create flows require explicit discard confirmation before exit.
 - [ ] Delete attachment and delete item paths complete safely.
-- [ ] Export: PDF/ZIP generation and progress UI complete.
 - [ ] Settings: appearance/language changes persist; backup create/import overwrite confirmation and restore reinit work.
+
+### Export Verification
+- [ ] Export: PDF/ZIP generation and progress UI complete.
+- [ ] Subscription period/cadence/ongoing labels are visible and correct in export selection and generated PDF.
+- [ ] Subscription yearly detail schedule is truncated at the selected tax year.
+- [ ] Monthly/yearly subscription calculations in exports match selected-year allocation expectations.
 
 ### Localization Matrix (Manual, Required)
 - [ ] Device locale German -> first launch resolves DE.
@@ -153,20 +162,22 @@ Define a binary release gate for V1. V1 ships only when all must-have checks are
    - Update `package.json` version and `expo.version` in `app.json`.
    - Keep EAS remote versioning enabled (`eas.json > cli.appVersionSource = remote`).
    - Keep profile `autoIncrement` enabled for native build numbers.
-3. Run local gate commands:
-   - `npx tsc --noEmit`
-   - `npm test`
-   - `npm run lint` (or project lint command)
+3. Run canonical local gate:
+   - `npm run release:preflight`
+4. Optional troubleshooting (if preflight fails):
+   - `npm run lint`
+   - `npm run typecheck`
    - `npm run encoding:check`
-   - `npm run i18n:parity`
+   - `npm run i18n:parity:ci`
    - `npm run legal:de:freeze`
+   - `npm run test:ci`
    - `npm run release:policy`
-4. Run manual QA checklist above on a release candidate build.
-5. Build artifacts:
+5. Run manual QA checklist above on a release candidate build.
+6. Build artifacts:
    - `eas build --platform android --profile production`
    - `eas build --platform ios --profile production`
-6. Smoke-test produced binaries.
-7. Tag release commit (`v1.0.0`) and publish release notes.
+7. Smoke-test produced binaries.
+8. Tag release commit (`v${package.version}`) and publish release notes.
 
 ## Open-Issue to Checklist Mapping
 
