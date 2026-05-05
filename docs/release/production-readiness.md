@@ -4,7 +4,7 @@
 Define a binary release gate for V1. V1 ships only when all must-have checks are `PASS`.
 
 ## Gate Status
-- Release target: `V1 (current candidate: 1.0.5)`
+- Release target: `V1 (current candidate: 1.0.7)`
 - Gate owner: `Maintainer`
 - Policy/build gate status: `PASS` when `npm run release:preflight` and `npm run release:policy` succeed on the release commit.
 - Manual hardware sign-off status: `PENDING` until `docs/release/final-qa-hardware-checklist.md` is fully executed and signed.

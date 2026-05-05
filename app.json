@@ -2,7 +2,7 @@
   "expo": {
     "name": "SteuerFuchs",
     "slug": "SteuerFuchs",
-    "version": "1.0.5",
+    "version": "1.0.7",
     "runtimeVersion": {
       "policy": "appVersion"
     },
